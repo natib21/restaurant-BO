@@ -1,0 +1,293 @@
+[
+    {
+      "order_id": 101,
+      "user_id": 1,
+      "order_date": "2024-10-03T12:34:56Z",
+      "total_amount": 32.97,
+      "status": "completed",  
+      "waiter_id": 3, 
+      "kitchen_id": 1, 
+      "items": [
+        {
+          "order_item_id": 1,
+          "menu_id": 5,
+          "name": "Cheeseburger",
+          "quantity": 2,
+          "price": 9.99,
+          "subtotal": 19.98
+        },
+        {
+          "order_item_id": 2,
+          "menu_id": 10,
+          "name": "Lemonade",
+          "quantity": 1,
+          "price": 2.99,
+          "subtotal": 2.99
+        }
+      ],
+      "created_at": "2024-10-03T12:34:56Z",
+      "updated_at": "2024-10-03T12:45:00Z"
+    },
+    {
+      "order_id": 102,
+      "user_id": 2,
+      "order_date": "2024-10-03T13:15:00Z",
+      "total_amount": 22.50,
+      "status": "pending", 
+      "waiter_id": null, 
+      "kitchen_id": null, 
+      "items": [
+        {
+          "order_item_id": 3,
+          "menu_id": 6,
+          "name": "Veggie Burger",
+          "quantity": 1,
+          "price": 10.50,
+          "subtotal": 10.50
+        },
+        {
+          "order_item_id": 4,
+          "menu_id": 10,
+          "name": "Lemonade",
+          "quantity": 2,
+          "price": 2.99,
+          "subtotal": 5.98
+        }
+      ],
+      "created_at": "2024-10-03T13:15:00Z",
+      "updated_at": "2024-10-03T13:30:00Z"
+    },
+    {
+      "order_id": 103,
+      "user_id": 3,
+      "order_date": "2024-10-03T14:00:00Z",
+      "total_amount": 40.99,
+      "status": "in progress", 
+      "waiter_id": 2, 
+      "kitchen_id": 1, 
+      "items": [
+        {
+          "order_item_id": 5,
+          "menu_id": 7,
+          "name": "Steak",
+          "quantity": 1,
+          "price": 25.00,
+          "subtotal": 25.00
+        },
+        {
+          "order_item_id": 6,
+          "menu_id": 11,
+          "name": "Red Wine",
+          "quantity": 1,
+          "price": 15.99,
+          "subtotal": 15.99
+        }
+      ],
+      "created_at": "2024-10-03T14:00:00Z",
+      "updated_at": "2024-10-03T14:15:00Z"
+    },
+    {
+      "order_id": 104,
+      "user_id": 4,
+      "order_date": "2024-10-03T15:45:00Z",
+      "total_amount": 27.00,
+      "status": "canceled", 
+      "waiter_id": 1, 
+      "kitchen_id": null, 
+      "items": [
+        {
+          "order_item_id": 7,
+          "menu_id": 5,
+          "name": "Cheeseburger",
+          "quantity": 1,
+          "price": 9.99,
+          "subtotal": 9.99
+        },
+        {
+          "order_item_id": 8,
+          "menu_id": 12,
+          "name": "Chocolate Cake",
+          "quantity": 1,
+          "price": 7.00,
+          "subtotal": 7.00
+        }
+      ],
+      "created_at": "2024-10-03T15:45:00Z",
+      "updated_at": "2024-10-03T16:00:00Z"
+    },
+    {
+      "order_id": 105,
+      "user_id": 5,
+      "order_date": "2024-10-03T16:30:00Z",
+      "total_amount": 35.50,
+      "status": "completed", 
+      "waiter_id": 3, 
+      "kitchen_id": 2, 
+      "items": [
+        {
+          "order_item_id": 9,
+          "menu_id": 6,
+          "name": "Veggie Burger",
+          "quantity": 2,
+          "price": 10.50,
+          "subtotal": 21.00
+        },
+        {
+          "order_item_id": 10,
+          "menu_id": 11,
+          "name": "Red Wine",
+          "quantity": 1,
+          "price": 15.99,
+          "subtotal": 15.99
+        }
+      ],
+      "created_at": "2024-10-03T16:30:00Z",
+      "updated_at": "2024-10-03T16:45:00Z"
+    },
+    {
+      "order_id": 106,
+      "user_id": 1,
+      "order_date": "2024-10-03T17:15:00Z",
+      "total_amount": 19.00,
+      "status": "pending", 
+      "waiter_id": null,
+      "kitchen_id": null,
+      "items": [
+        {
+          "order_item_id": 11,
+          "menu_id": 8,
+          "name": "French Fries",
+          "quantity": 1,
+          "price": 3.00,
+          "subtotal": 3.00
+        },
+        {
+          "order_item_id": 12,
+          "menu_id": 7,
+          "name": "Steak",
+          "quantity": 1,
+          "price": 16.00,
+          "subtotal": 16.00
+        }
+      ],
+      "created_at": "2024-10-03T17:15:00Z",
+      "updated_at": "2024-10-03T17:30:00Z"
+    },
+    {
+      "order_id": 107,
+      "user_id": 2,
+      "order_date": "2024-10-03T18:00:00Z",
+      "total_amount": 24.00,
+      "status": "in progress", 
+      "waiter_id": 2,
+      "kitchen_id": 1, 
+      "items": [
+        {
+          "order_item_id": 13,
+          "menu_id": 10,
+          "name": "Lemonade",
+          "quantity": 2,
+          "price": 2.99,
+          "subtotal": 5.98
+        },
+        {
+          "order_item_id": 14,
+          "menu_id": 9,
+          "name": "Garden Salad",
+          "quantity": 1,
+          "price": 5.00,
+          "subtotal": 5.00
+        }
+      ],
+      "created_at": "2024-10-03T18:00:00Z",
+      "updated_at": "2024-10-03T18:15:00Z"
+    },
+    {
+      "order_id": 108,
+      "user_id": 3,
+      "order_date": "2024-10-03T19:30:00Z",
+      "total_amount": 29.99,
+      "status": "completed", 
+      "waiter_id": 1,
+      "kitchen_id": 2, 
+      "items": [
+        {
+          "order_item_id": 15,
+          "menu_id": 5,
+          "name": "Cheeseburger",
+          "quantity": 1,
+          "price": 9.99,
+          "subtotal": 9.99
+        },
+        {
+          "order_item_id": 16,
+          "menu_id": 12,
+          "name": "Chocolate Cake",
+          "quantity": 1,
+          "price": 7.00,
+          "subtotal": 7.00
+        }
+      ],
+      "created_at": "2024-10-03T19:30:00Z",
+      "updated_at": "2024-10-03T19:45:00Z"
+    },
+    {
+      "order_id": 109,
+      "user_id": 4,
+      "order_date": "2024-10-03T20:15:00Z",
+      "total_amount": 38.75,
+      "status": "canceled", 
+      "waiter_id": 3, 
+      "kitchen_id": null, 
+      "items": [
+        {
+          "order_item_id": 17,
+          "menu_id": 7,
+          "name": "Steak",
+          "quantity": 1,
+          "price": 25.00,
+          "subtotal": 25.00
+        },
+        {
+          "order_item_id": 18,
+          "menu_id": 11,
+          "name": "Red Wine",
+          "quantity": 1,
+          "price": 15.99,
+          "subtotal": 15.99
+        }
+      ],
+      "created_at": "2024-10-03T20:15:00Z",
+      "updated_at": "2024-10-03T20:30:00Z"
+    },
+    {
+      "order_id": 110,
+      "user_id": 5,
+      "order_date": "2024-10-03T21:00:00Z",
+      "total_amount": 18.50,
+      "status": "completed", 
+      "waiter_id": 1,
+      "kitchen_id": 1, 
+      "items": [
+        {
+          "order_item_id": 19,
+          "menu_id": 10,
+          "name": "Lemonade",
+          "quantity": 2,
+          "price": 2.99,
+          "subtotal": 5.98
+        },
+        {
+          "order_item_id": 20,
+          "menu_id": 6,
+          "name": "Veggie Burger",
+          "quantity": 1,
+          "price": 10.50,
+          "subtotal": 10.50
+        }
+      ],
+      "created_at": "2024-10-03T21:00:00Z",
+      "updated_at": "2024-10-03T21:15:00Z"
+    }
+  ]
+  
