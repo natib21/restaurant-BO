@@ -1,19 +1,20 @@
 
    [
       {
-        "id": 1,
         "name": "Cheeseburger",
         "description": "A juicy cheeseburger with lettuce, tomato, and cheese.",
         "price": 9.99,
         "available": true,
         "category": "Main Course",
         "ingredients": ["beef patty", "cheddar cheese", "lettuce", "tomato", "burger bun"],
-        "calories": 500,
-        "spice_level": "medium",
         "image_url": "https://example.com/images/cheeseburger.jpg",
-        "dietary_restrictions": ["gluten", "dairy"],
         "portion_size": "1 burger",
-        "prep_time": "15 mins"
+        "prep_time": "15 mins",
+        "sizes": [
+          { "size": "Small", "price": 8.99 },
+          { "size": "Medium", "price": 9.99 },
+          { "size": "Large", "price": 10.99 }
+        ]
       },
       {
         "id": 2,
@@ -23,10 +24,7 @@
         "available": true,
         "category": "Main Course",
         "ingredients": ["mozzarella", "tomatoes", "basil", "pizza dough"],
-        "calories": 800,
-        "spice_level": "none",
         "image_url": "https://example.com/images/margherita_pizza.jpg",
-        "dietary_restrictions": ["gluten", "dairy"],
         "portion_size": "1 large slice",
         "prep_time": "20 mins"
       },

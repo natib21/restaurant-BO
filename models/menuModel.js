@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+const sizeSchema = mongoose.Schema({
+  size: { type: String, required: true },
+  price: { type: Number, required: true },
+});
 const menuSchema = mongoose.Schema({
   name: {
     type: String,
@@ -16,12 +20,12 @@ const menuSchema = mongoose.Schema({
   },
   ingredients: [String],
   categories: String,
-  spice_level: String,
   image: String,
   prep_time: {
     type: String,
     required: [true, 'Time Must Be Included'],
   },
+  sizes: { type: [sizeSchema], required: true },
 });
 
 const Menu = mongoose.model('Menu', menuSchema);
