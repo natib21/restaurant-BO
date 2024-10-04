@@ -1,61 +1,81 @@
-const fs = require('fs');
+const Menu = require('../models/menuModel');
 
-const menu = JSON.parse(fs.readFileSync(`${__dirname}/../dev-doc/menu.json`));
+exports.getAllMenu = async (req, res) => {
+  try {
+    const allMenu = await Menu.find();
 
-exports.checkId = (req, res, next, val) => {
-  if (req.params.id * 1 > menu.length) {
-    console.log(`Menu Id Is:- ${val}`);
-    return res.status(404).json({
-      status: 'Failed',
-      message: 'Invalid Id',
+    res.status(200).json({
+      status: 'success',
+      requestedAt: req.requestTime,
+      result: allMenu.length,
+      menu: allMenu,
+    });
+  } catch (err) {
+    res.status(404).json({
+      status: 'Fail',
+      message: 'it is empty',
     });
   }
-  next();
 };
 
-exports.checkBody = (req, res, next) => {
-  const { name, price } = req.body;
-
-  if (!name || !price) {
-    return res
-      .status(400)
-      .json({ status: 'Failed', message: 'pls Enter name and price' });
+exports.getMenu = async (req, res) => {
+  try {
+    const menu = await Menu.findById(req.params.id);
+    res.status(200).json({
+      status: 'success',
+      menu,
+    });
+  } catch (err) {
+    res.status(404).json({
+      status: 'fail',
+      message: 'Not Found',
+    });
   }
-  next();
 };
 
-exports.getAllMenu = (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    requestedAt: req.requestTime,
-    result: menu.length,
-    menu: menu,
-  });
+exports.createNewMenu = async (req, res) => {
+  try {
+    const newMenu = await Menu.create(req.body);
+    res.status(201).json({
+      status: 'success',
+      menu: newMenu,
+    });
+  } catch (err) {
+    res.status(400).json({
+      status: 'Fail',
+      message: err,
+    });
+  }
 };
 
-exports.getMenu = (req, res) => {
-  const id = req.params.id * 1;
-  const menuItem = menu.find((item) => item.id === id);
-
-  res.status(200).json({ status: 'success', menuItem });
+exports.updateMenu = async (req, res) => {
+  try {
+    const menu = await Menu.findByIdAndUpdate(req.params.id, req.body, {
+      runValidators: true,
+      new: true,
+    });
+    res.status(200).json({
+      status: 'success',
+      menu,
+    });
+  } catch (err) {
+    res.status(400).json({
+      status: 'Fail',
+      message: err,
+    });
+  }
 };
-
-exports.createNewMenu = (req, res) => {};
-
-exports.updateMenu = (req, res) => {
-  const id = req.params.id * 1;
-  const menuItem = menu.find((item) => item.id === id);
-
-  res
-    .status(200)
-    .json({ status: 'success', data: { tour: '<Update tour here ... />' } });
-};
-exports.deleteMenu = (req, res) => {
-  const id = req.params.id * 1;
-  const menuItem = menu.find((item) => item.id === id);
-
-  res.status(204).json({
-    status: 'success',
-    menu: null,
-  });
+exports.deleteMenu = async (req, res) => {
+  try {
+    await Menu.findOneAndDelete(req.params.id);
+    res.status(204).json({
+      status: 'success',
+      menu: null,
+    });
+  } catch (err) {
+    res.status(400).json({
+      status: 'Fail',
+      message: err,
+    });
+  }
 };

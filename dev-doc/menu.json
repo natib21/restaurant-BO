@@ -4,7 +4,7 @@
         "id": 1,
         "name": "Cheeseburger",
         "description": "A juicy cheeseburger with lettuce, tomato, and cheese.",
-        "": 9.99,
+        "price": 9.99,
         "available": true,
         "category": "Main Course",
         "ingredients": ["beef patty", "cheddar cheese", "lettuce", "tomato", "burger bun"],
