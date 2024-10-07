@@ -14,7 +14,15 @@ exports.getAllMenu = async (req, res) => {
 
     console.log(JSON.parse(queryStr));
 
-    const query = Menu.find(JSON.parse(queryStr));
+    let query = Menu.find(JSON.parse(queryStr));
+
+    if (req.query.sort) {
+      const sortBy = req.query.sort.split(',').join(' ');
+      console.log(sortBy);
+      query = query.sort(sortBy);
+    } else {
+      query = query.sort('-createdAt');
+    }
 
     const allMenu = await query;
 
