@@ -7,7 +7,7 @@
     "category": "Main Course",
     "averageRating": 4.3,
     "ingredients": ["beef patty", "cheddar cheese", "lettuce", "tomato", "burger bun"],
-    "image_url": "https://example.com/images/cheeseburger.jpg",
+    "image": "https://example.com/images/cheeseburger.jpg",
     "portion_size": "1 burger",
     "prep_time": "15 mins",
     "sizes": [
@@ -24,7 +24,7 @@
     "category": "Main Course",
     "averageRating": 4.5,
     "ingredients": ["mozzarella", "tomatoes", "basil", "pizza dough"],
-    "image_url": "https://example.com/images/margherita_pizza.jpg",
+    "image": "https://example.com/images/margherita_pizza.jpg",
     "portion_size": "1 large slice",
     "prep_time": "20 mins",
     "sizes": [
@@ -41,7 +41,7 @@
     "category": "Salad",
     "averageRating": 4.1,
     "ingredients": ["romaine lettuce", "Caesar dressing", "croutons", "parmesan cheese"],
-    "image_url": "https://example.com/images/caesar_salad.jpg",
+    "image": "https://example.com/images/caesar_salad.jpg",
     "portion_size": "1 bowl",
     "prep_time": "10 mins",
     "sizes": [
@@ -58,7 +58,7 @@
     "category": "Appetizers",
     "averageRating": null,
     "ingredients": ["chicken breast", "bread crumbs", "honey mustard"],
-    "image_url": "https://example.com/images/chicken_tenders.jpg",
+    "image": "https://example.com/images/chicken_tenders.jpg",
     "portion_size": "5 tenders",
     "prep_time": "15 mins",
     "sizes": [
@@ -73,7 +73,7 @@
     "category": "Dessert",
     "averageRating": null,
     "ingredients": ["flour", "cocoa powder", "sugar", "eggs", "butter"],
-    "image_url": "https://example.com/images/chocolate_cake.jpg",
+    "image": "https://example.com/images/chocolate_cake.jpg",
     "portion_size": "1 slice",
     "prep_time": "30 mins",
     "sizes": [
@@ -88,7 +88,7 @@
     "category": "Beverage",
     "averageRating": null,
     "ingredients": ["lemons", "sugar", "water"],
-    "image_url": "https://example.com/images/lemonade.jpg",
+    "image": "https://example.com/images/lemonade.jpg",
     "portion_size": "1 glass",
     "prep_time": "5 mins",
     "sizes": [
@@ -103,7 +103,7 @@
     "category": "Beverage",
     "averageRating": null,
     "ingredients": ["black tea", "ice", "lemon"],
-    "image_url": "https://example.com/images/iced_tea.jpg",
+    "image": "https://example.com/images/iced_tea.jpg",
     "portion_size": "1 glass",
     "prep_time": "5 mins",
     "sizes": [
@@ -118,7 +118,7 @@
     "category": "Cocktail",
     "averageRating": null,
     "ingredients": ["rum", "mint leaves", "lime", "soda water", "sugar"],
-    "image_url": "https://example.com/images/mojito.jpg",
+    "image": "https://example.com/images/mojito.jpg",
     "portion_size": "1 cocktail",
     "prep_time": "10 mins",
     "sizes": [
@@ -133,7 +133,7 @@
     "category": "Beverage",
     "averageRating": null,
     "ingredients": ["coffee beans", "water"],
-    "image_url": "https://example.com/images/coffee.jpg",
+    "image": "https://example.com/images/coffee.jpg",
     "portion_size": "1 cup",
     "prep_time": "5 mins",
     "sizes": [
@@ -148,7 +148,7 @@
     "category": "Beverage",
     "averageRating": null,
     "ingredients": ["sparkling water", "lime"],
-    "image_url": "https://example.com/images/sparkling_water.jpg",
+    "image": "https://example.com/images/sparkling_water.jpg",
     "portion_size": "1 glass",
     "prep_time": "2 mins",
     "sizes": [
@@ -163,7 +163,7 @@
     "category": "Beverage",
     "averageRating": null,
     "ingredients": ["banana", "strawberries", "yogurt", "orange juice"],
-    "image_url": "https://example.com/images/fruit_smoothie.jpg",
+    "image": "https://example.com/images/fruit_smoothie.jpg",
     "portion_size": "1 cup",
     "prep_time": "5 mins",
     "sizes": [
@@ -178,7 +178,7 @@
     "category": "Beverage",
     "averageRating": null,
     "ingredients": ["cocoa powder", "milk", "sugar", "whipped cream"],
-    "image_url": "https://example.com/images/hot_chocolate.jpg",
+    "image": "https://example.com/images/hot_chocolate.jpg",
     "portion_size": "1 cup",
     "prep_time": "10 mins",
     "sizes": [
@@ -193,7 +193,7 @@
     "category": "Main Course",
     "averageRating": null,
     "ingredients": ["broccoli", "bell peppers", "carrots", "soy sauce", "garlic"],
-    "image_url": "https://example.com/images/vegetable_stir_fry.jpg",
+    "image": "https://example.com/images/vegetable_stir_fry.jpg",
     "portion_size": "1 plate",
     "prep_time": "15 mins",
     "sizes": [
@@ -210,13 +210,241 @@
     "category": "Main Course",
     "averageRating": null,
     "ingredients": ["pasta", "zucchini", "bell peppers", "olive oil"],
-    "image_url": "https://example.com/images/pasta_primavera.jpg",
+    "image": "https://example.com/images/pasta_primavera.jpg",
     "portion_size": "1 bowl",
     "prep_time": "20 mins",
     "sizes": [
       { "size": "Small", "price": 9.50 },
       { "size": "Medium", "price": 10.50 },
       { "size": "Large", "price": 12.50 }
+    ]
+  },
+  {
+    "name": "Beef Tacos",
+    "description": "Soft tacos filled with seasoned beef and fresh toppings.",
+    "price": 9.50,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["taco shells", "ground beef", "lettuce", "cheese", "salsa"],
+    "image": "https://example.com/images/beef_tacos.jpg",
+    "portion_size": "2 tacos",
+    "prep_time": "15 mins",
+    "sizes": [
+      { "size": "Small", "price": 8.50 },
+      { "size": "Medium", "price": 9.50 },
+      { "size": "Large", "price": 11.50 }
+    ]
+  },
+  {
+    "name": "Grilled Salmon",
+    "description": "Delicious salmon fillet grilled to perfection.",
+    "price": 14.99,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["salmon fillet", "olive oil", "lemon", "herbs"],
+    "image": "https://example.com/images/grilled_salmon.jpg",
+    "portion_size": "1 fillet",
+    "prep_time": "20 mins",
+    "sizes": [
+      { "size": "Small", "price": 13.99 },
+      { "size": "Medium", "price": 14.99 },
+      { "size": "Large", "price": 16.99 }
+    ]
+  },
+  {
+    "name": "Chicken Alfredo",
+    "description": "Creamy Alfredo sauce over fettuccine and grilled chicken.",
+    "price": 12.00,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["fettuccine", "chicken", "Alfredo sauce", "parmesan"],
+    "image": "https://example.com/images/chicken_alfredo.jpg",
+    "portion_size": "1 plate",
+    "prep_time": "15 mins",
+    "sizes": [
+      { "size": "Small", "price": 11.00 },
+      { "size": "Medium", "price": 12.00 },
+      { "size": "Large", "price": 14.00 }
+    ]
+  },
+  {
+    "name": "BBQ Ribs",
+    "description": "Tender pork ribs slathered in BBQ sauce.",
+    "price": 15.99,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["pork ribs", "BBQ sauce"],
+    "image": "https://example.com/images/bbq_ribs.jpg",
+    "portion_size": "1 rack",
+    "prep_time": "30 mins",
+    "sizes": [
+      { "size": "Small", "price": 14.99 },
+      { "size": "Medium", "price": 15.99 },
+      { "size": "Large", "price": 17.99 }
+    ]
+  },
+  {
+    "name": "Shrimp Scampi",
+    "description": "Sautéed shrimp in garlic butter sauce over pasta.",
+    "price": 13.50,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["shrimp", "garlic", "butter", "pasta"],
+    "image": "https://example.com/images/shrimp_scampi.jpg",
+    "portion_size": "1 plate",
+    "prep_time": "20 mins",
+    "sizes": [
+      { "size": "Small", "price": 12.50 },
+      { "size": "Medium", "price": 13.50 },
+      { "size": "Large", "price": 15.50 }
+    ]
+  },
+  {
+    "name": "Stuffed Peppers",
+    "description": "Bell peppers stuffed with rice, beans, and cheese.",
+    "price": 10.00,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["bell peppers", "rice", "black beans", "cheese"],
+    "image": "https://example.com/images/stuffed_peppers.jpg",
+    "portion_size": "2 peppers",
+    "prep_time": "25 mins",
+    "sizes": [
+      { "size": "Small", "price": 9.00 },
+      { "size": "Medium", "price": 10.00 },
+      { "size": "Large", "price": 12.00 }
+    ]
+  },
+  {
+    "name": "Eggplant Parmesan",
+    "description": "Breaded and baked eggplant layered with marinara and cheese.",
+    "price": 11.50,
+    "available": true,
+    "category": "Main Course",
+    "averageRating": null,
+    "ingredients": ["eggplant", "marinara sauce", "mozzarella cheese", "parmesan cheese"],
+    "image": "https://example.com/images/eggplant_parmesan.jpg",
+    "portion_size": "1 plate",
+    "prep_time": "30 mins",
+    "sizes": [
+      { "size": "Small", "price": 10.50 },
+      { "size": "Medium", "price": 11.50 },
+      { "size": "Large", "price": 13.50 }
+    ]
+  },
+  {
+    "name": "Caprese Salad",
+    "description": "Fresh mozzarella, tomatoes, and basil drizzled with balsamic glaze.",
+    "price": 9.50,
+    "available": true,
+    "category": "Salad",
+    "averageRating": null,
+    "ingredients": ["mozzarella", "tomatoes", "basil", "balsamic glaze"],
+    "image": "https://example.com/images/caprese_salad.jpg",
+    "portion_size": "1 bowl",
+    "prep_time": "10 mins",
+    "sizes": [
+      { "size": "Small", "price": 8.50 },
+      { "size": "Medium", "price": 9.50 },
+      { "size": "Large", "price": 11.50 }
+    ]
+  },
+  {
+    "name": "Garlic Bread",
+    "description": "Toasted bread topped with garlic butter and herbs.",
+    "price": 4.00,
+    "available": true,
+    "category": "Appetizers",
+    "averageRating": null,
+    "ingredients": ["bread", "garlic", "butter", "herbs"],
+    "image": "https://example.com/images/garlic_bread.jpg",
+    "portion_size": "4 slices",
+    "prep_time": "10 mins",
+    "sizes": [
+      { "size": "Regular", "price": 4.00 }
+    ]
+  },
+  {
+    "name": "Potato Wedges",
+    "description": "Crispy potato wedges served with dipping sauce.",
+    "price": 5.00,
+    "available": true,
+    "category": "Appetizers",
+    "averageRating": null,
+    "ingredients": ["potatoes", "oil", "seasoning"],
+    "image": "https://example.com/images/potato_wedges.jpg",
+    "portion_size": "1 plate",
+    "prep_time": "15 mins",
+    "sizes": [
+      { "size": "Small", "price": 4.00 },
+      { "size": "Medium", "price": 5.00 },
+      { "size": "Large", "price": 6.00 }
+    ]
+  },
+  {
+    "name": "Tiramisu",
+    "description": "Classic Italian dessert made with coffee and mascarpone.",
+    "price": 6.50,
+    "available": true,
+    "category": "Dessert",
+    "averageRating": null,
+    "ingredients": ["mascarpone", "coffee", "ladyfingers", "cocoa powder"],
+    "image": "https://example.com/images/tiramisu.jpg",
+    "portion_size": "1 slice",
+    "prep_time": "30 mins",
+    "sizes": [
+      { "size": "Regular", "price": 6.50 }
+    ]
+  },
+  {
+    "name": "Panna Cotta",
+    "description": "Creamy dessert made from sweetened cream thickened with gelatin.",
+    "price": 6.00,
+    "available": true,
+    "category": "Dessert",
+    "averageRating": null,
+    "ingredients": ["cream", "sugar", "gelatin", "vanilla"],
+    "image": "https://example.com/images/panna_cotta.jpg",
+    "portion_size": "1 cup",
+    "prep_time": "20 mins",
+    "sizes": [
+      { "size": "Regular", "price": 6.00 }
+    ]
+  },
+  {
+    "name": "Cheesecake",
+    "description": "Rich and creamy cheesecake topped with fresh fruit.",
+    "price": 7.00,
+    "available": true,
+    "category": "Dessert",
+    "averageRating": null,
+    "ingredients": ["cream cheese", "sugar", "graham cracker crust"],
+    "image": "https://example.com/images/cheesecake.jpg",
+    "portion_size": "1 slice",
+    "prep_time": "30 mins",
+    "sizes": [
+      { "size": "Regular", "price": 7.00 }
+    ]
+  },
+  {
+    "name": "Fruit Salad",
+    "description": "A mix of seasonal fresh fruits.",
+    "price": 4.50,
+    "available": true,
+    "category": "Dessert",
+    "averageRating": null,
+    "ingredients": ["various fruits"],
+    "image": "https://example.com/images/fruit_salad.jpg",
+    "portion_size": "1 cup",
+    "prep_time": "10 mins",
+    "sizes": [
+      { "size": "Regular", "price": 4.50 }
     ]
   }
 ]
