@@ -1,5 +1,10 @@
 const Menu = require('../models/menuModel');
 
+exports.getAllBeverage = (req, res, next) => {
+  req.query.category = 'Beverage';
+  next();
+};
+
 exports.getAllMenu = async (req, res) => {
   try {
     const queryObj = { ...req.query };
@@ -11,8 +16,6 @@ exports.getAllMenu = async (req, res) => {
     let queryStr = JSON.stringify(queryObj);
 
     queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
-
-    console.log(JSON.parse(queryStr));
 
     let query = Menu.find(JSON.parse(queryStr));
 

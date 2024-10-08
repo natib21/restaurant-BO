@@ -4,7 +4,9 @@ const menuController = require('../controllers/menuController');
 
 const router = express.Router();
 
-// router.param('id', menuController.checkId);
+router
+  .route('/beverage')
+  .get(menuController.getAllBeverage, menuController.getAllMenu);
 
 router
   .route('/')
