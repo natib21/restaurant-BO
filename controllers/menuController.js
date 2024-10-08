@@ -6,6 +6,29 @@ exports.getAllBeverage = (req, res, next) => {
   next();
 };
 
+exports.getAppetizers = (req, res, next) => {
+  req.query.category = 'Appetizers';
+  next();
+};
+
+exports.getSpecials = (req, res, next) => {
+  req.params.isSpecial = true;
+  next();
+};
+
+exports.searchMenu = async (req, res, next) => {
+  const query = req.query.query;
+  if (!query) {
+    return next();
+  }
+  const searchRegex = new RegExp(query, 'i');
+  req.query = {
+    $or: [{ name: searchRegex }, { description: searchRegex }],
+  };
+
+  next(); // Move to the next middleware
+};
+
 exports.getAllMenu = async (req, res) => {
   try {
     const features = new ApiFeatures(Menu.find(), req.query)
@@ -77,6 +100,7 @@ exports.updateMenu = async (req, res) => {
     });
   }
 };
+
 exports.deleteMenu = async (req, res) => {
   try {
     await Menu.findOneAndDelete(req.params.id);

@@ -5,9 +5,20 @@ const menuController = require('../controllers/menuController');
 const router = express.Router();
 
 router
+  .route('/search')
+  .get(menuController.searchMenu, menuController.getAllMenu);
+
+router
   .route('/beverage')
   .get(menuController.getAllBeverage, menuController.getAllMenu);
 
+router
+  .route('/Appetizers')
+  .get(menuController.getAppetizers, menuController.getAllMenu);
+
+router
+  .route('/specials')
+  .get(menuController.getSpecials, menuController.getAllMenu);
 router
   .route('/')
   .get(menuController.getAllMenu)
