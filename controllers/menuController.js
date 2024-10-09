@@ -1,5 +1,6 @@
 const Menu = require('../models/menuModel');
 const ApiFeatures = require('../utils/apiFeatures');
+const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
 exports.getAllBeverage = (req, res, next) => {
@@ -27,7 +28,7 @@ exports.searchMenu = async (req, res, next) => {
     $or: [{ name: searchRegex }, { description: searchRegex }],
   };
 
-  next(); // Move to the next middleware
+  next();
 };
 
 exports.getAllMenu = catchAsync(async (req, res) => {
@@ -47,8 +48,13 @@ exports.getAllMenu = catchAsync(async (req, res) => {
   });
 });
 
-exports.getMenu = catchAsync(async (req, res) => {
+exports.getMenu = catchAsync(async (req, res, next) => {
   const menu = await Menu.findById(req.params.id);
+
+  if (!menu) {
+    return next(new AppError('No Menu item Found with that ID', 404));
+  }
+
   res.status(200).json({
     status: 'success',
     menu,
@@ -63,19 +69,25 @@ exports.createNewMenu = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.updateMenu = catchAsync(async (req, res) => {
+exports.updateMenu = catchAsync(async (req, res, next) => {
   const menu = await Menu.findByIdAndUpdate(req.params.id, req.body, {
     runValidators: true,
     new: true,
   });
+  if (!menu) {
+    return next(new AppError('No Menu item Found with that ID', 404));
+  }
   res.status(200).json({
     status: 'success',
     menu,
   });
 });
 
-exports.deleteMenu = catchAsync(async (req, res) => {
-  await Menu.findOneAndDelete(req.params.id);
+exports.deleteMenu = catchAsync(async (req, res, next) => {
+  const menu = await Menu.findOneAndDelete(req.params.id);
+  if (!menu) {
+    return next(new AppError('No Menu item Found with that ID', 404));
+  }
   res.status(204).json({
     status: 'success',
     menu: null,
