@@ -11,9 +11,15 @@ const handleDuplicationErrorDb = (err) => {
 
   const match = errmMsg.match(regex);
 
-  console.log(match);
   const duplicateName = match[0];
   const message = `Duplicate field Values: ${duplicateName} `;
+  return new AppError(message, 400);
+};
+
+const handleValidationError = (err) => {
+  const errors = Object.values(err.errors).map((el) => el.message);
+
+  const message = `Invalid input Data ${errors.join(', ')}`;
   return new AppError(message, 400);
 };
 
@@ -52,7 +58,7 @@ module.exports = (err, req, res, next) => {
 
     if (error.name === 'CastError') error = handleCastErrorDb(error);
     if (error.code === 11000) error = handleDuplicationErrorDb(error);
-
+    if (error.name === 'ValidationError') error = handleValidationError(error);
     sendErrorProd(error, res);
   }
 };
