@@ -1,0 +1,8 @@
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T14:59:31.464Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T15:00:53.081Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T15:01:28.602Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T15:02:10.867Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T15:04:17.330Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T15:04:27.768Z"}
+error: UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed {"timestamp":"2024-10-09T15:08:06.117Z"}
+error: UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed {"timestamp":"2024-10-09T15:11:50.800Z"}
