@@ -1,5 +1,6 @@
 [
   {
+    "id": "001",
     "name": "Cheeseburger",
     "description": "A juicy cheeseburger with lettuce, tomato, and cheese.",
     "price": 9.99,
@@ -17,6 +18,7 @@
     ]
   },
   {
+    "id": "002",
     "name": "Margherita Pizza",
     "description": "Classic pizza with fresh mozzarella, tomatoes, and basil.",
     "price": 12.50,

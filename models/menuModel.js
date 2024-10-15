@@ -46,6 +46,7 @@ const menuSchema = mongoose.Schema({
   category: String,
   image: {
     type: String,
+    default: 'defaultFood.jpg',
     required: [true, 'Menu Item Must Have Image'],
   },
   prep_time: {

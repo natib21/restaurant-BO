@@ -22,12 +22,20 @@ router
 router
   .route('/')
   .get(menuController.getAllMenu)
-  .post(menuController.createNewMenu);
+  .post(
+    menuController.uploadMenuPhoto,
+    menuController.resizeMenuPhoto,
+    menuController.createNewMenu
+  );
 
 router
   .route('/:id')
   .get(menuController.getMenu)
-  .patch(menuController.updateMenu)
+  .patch(
+    menuController.uploadMenuPhoto,
+    menuController.resizeMenuPhoto,
+    menuController.updateMenu
+  )
   .delete(menuController.deleteMenu);
 
 module.exports = router;

@@ -6,3 +6,14 @@
 {"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2024-10-09T15:04:27.768Z"}
 error: UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed {"timestamp":"2024-10-09T15:08:06.117Z"}
 error: UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed {"timestamp":"2024-10-09T15:11:50.800Z"}
+error: UNHANDLED EXCEPTION: TypeError - file.mimetype.startWith is not a function {"timestamp":"2024-10-15T06:42:08.168Z"}
+error: UNHANDLED EXCEPTION: TypeError - Cannot read properties of undefined (reading 'id') {"timestamp":"2024-10-15T06:43:09.173Z"}
+error: UNHANDLED EXCEPTION: TypeError - Cannot read properties of undefined (reading '_id') {"timestamp":"2024-10-15T06:43:33.874Z"}
+error: UNHANDLED EXCEPTION: TypeError - Cannot read properties of undefined (reading 'id') {"timestamp":"2024-10-15T06:45:18.275Z"}
+error: UNHANDLED EXCEPTION: TypeError - Cannot read properties of undefined (reading 'id') {"timestamp":"2024-10-15T07:00:39.611Z"}
+error: UNHANDLED REJECTION: Error - public/img/menu/menu-Fruit panch -1728982588206.jpeg: unable to open for write
+windows error: The system cannot find the file specified. {"timestamp":"2024-10-15T08:56:28.219Z"}
+error: UNHANDLED REJECTION: Error - public/img/menu/menu-Fruit panch -1728987016998.jpeg: unable to open for write
+windows error: The system cannot find the file specified. {"timestamp":"2024-10-15T10:10:17.006Z"}
+error: UNHANDLED REJECTION: Error - public/img/menu/menu-FruitPanch -1728988201121.jpeg: unable to open for write
+windows error: The system cannot find the file specified. {"timestamp":"2024-10-15T10:30:01.129Z"}
