@@ -4,13 +4,12 @@ const slugify = require('slugify');
 const sizeSchema = mongoose.Schema({
   size: {
     type: String,
-    required: true,
     enum: {
       values: ['small', 'medium', 'large'],
       message: 'Size is either: small,medium or large',
     },
   },
-  price: { type: Number, required: true },
+  price: { type: Number },
 });
 const menuSchema = mongoose.Schema({
   name: {
@@ -56,13 +55,6 @@ const menuSchema = mongoose.Schema({
   },
   sizes: {
     type: [sizeSchema],
-    required: true,
-  },
-  averageRating: {
-    type: Number,
-    default: 0,
-    min: [1, 'Ratting Must Be above 1.0 '],
-    max: [5, 'Ratting Must Be below 5.0 '],
   },
   ratingQuantity: {
     type: Number,

@@ -109,6 +109,9 @@ exports.getMenu = catchAsync(async (req, res, next) => {
 });
 
 exports.createNewMenu = catchAsync(async (req, res, next) => {
+  if (req.file) {
+    req.body.image = req.file.filename;
+  }
   console.log(req.body);
   const newMenu = await Menu.create({
     ...req.body,

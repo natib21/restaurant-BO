@@ -17,3 +17,8 @@ error: UNHANDLED REJECTION: Error - public/img/menu/menu-Fruit panch -1728987016
 windows error: The system cannot find the file specified. {"timestamp":"2024-10-15T10:10:17.006Z"}
 error: UNHANDLED REJECTION: Error - public/img/menu/menu-FruitPanch -1728988201121.jpeg: unable to open for write
 windows error: The system cannot find the file specified. {"timestamp":"2024-10-15T10:30:01.129Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-16T10:35:42.072Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-16T10:36:23.474Z"}
+error: UNHANDLED REJECTION: Error - uploads/img/menu/menu-Pasta Primavera"-1729089441469.jpeg: unable to open for write
+windows error: The device does not recognize the command. {"timestamp":"2024-10-16T14:37:21.486Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-17T10:40:22.982Z"}
