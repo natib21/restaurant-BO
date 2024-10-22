@@ -1,7 +1,7 @@
 const express = require('express');
 
 const menuController = require('../controllers/menuController');
-
+const authController = require('../controllers/authController');
 const router = express.Router();
 
 router
@@ -23,6 +23,7 @@ router
   .route('/')
   .get(menuController.getAllMenu)
   .post(
+    authController.protect,
     menuController.uploadMenuPhoto,
     menuController.resizeMenuPhoto,
     menuController.createNewMenu
@@ -32,10 +33,11 @@ router
   .route('/:id')
   .get(menuController.getMenu)
   .patch(
+    authController.protect,
     menuController.uploadMenuPhoto,
     menuController.resizeMenuPhoto,
     menuController.updateMenu
   )
-  .delete(menuController.deleteMenu);
+  .delete(authController.protect, menuController.deleteMenu);
 
 module.exports = router;

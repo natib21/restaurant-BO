@@ -7,21 +7,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
     required: [true, 'User Must Have Name'],
   },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true,
-    validate: {
-      validator: (value) => validator.isEmail(value),
-      message: 'Please provide a valid email address',
-    },
-  },
   password: {
     type: String,
     required: [true, 'Please provide a password'],
     minlength: 6,
+    select: false,
   },
   passwordConfirm: {
     type: String,
@@ -53,6 +43,7 @@ const userSchema = new mongoose.Schema({
     default: true,
   },
   photo: String,
+  passwordChangedAt: Date,
 });
 
 userSchema.pre('save', async function (next) {
@@ -63,6 +54,23 @@ userSchema.pre('save', async function (next) {
   this.passwordConfirm = undefined;
   next();
 });
+
+userSchema.methods.correctPassword = async function (
+  candidatePassword,
+  userPassword
+) {
+  return await bcrypt.compare(candidatePassword, userPassword);
+};
+
+userSchema.method.changedPasswordAfter = function (JWTTimestamp) {
+  if (this.passwordChangedAt) {
+    const changedTimeStamp = parseInt(this.passwordChangedAt.getTime() / 1000);
+    console.log(changedTimeStamp, JWTTimestamp);
+  }
+
+  return false;
+};
+
 const User = mongoose.model('user', userSchema);
 
 module.exports = User;
