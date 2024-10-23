@@ -24,6 +24,7 @@ router
   .get(menuController.getAllMenu)
   .post(
     authController.protect,
+    authController.restrictTo('admin'),
     menuController.uploadMenuPhoto,
     menuController.resizeMenuPhoto,
     menuController.createNewMenu
@@ -34,10 +35,15 @@ router
   .get(menuController.getMenu)
   .patch(
     authController.protect,
+    authController.restrictTo('admin', 'kitchen'),
     menuController.uploadMenuPhoto,
     menuController.resizeMenuPhoto,
     menuController.updateMenu
   )
-  .delete(authController.protect, menuController.deleteMenu);
+  .delete(
+    authController.protect,
+    authController.restrictTo('admin'),
+    menuController.deleteMenu
+  );
 
 module.exports = router;
