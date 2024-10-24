@@ -33,6 +33,7 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     trim: true,
+    unique: true,
     validate: [validator.isEmail, 'Please provide a valid email'],
     required: function () {
       // Only require email if the role is 'admin'
@@ -87,7 +88,7 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 
   return false;
 };
-userSchema.methods.createPasswordResetToken = function () {
+/* userSchema.methods.createPasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString('hex');
   this.passwordResetToken = crypto
     .createHash('sha256')
@@ -98,7 +99,7 @@ userSchema.methods.createPasswordResetToken = function () {
   this.passwordResetTokenExpires = Date.now() + 10 * 60 * 1000;
 
   return resetToken;
-};
+}; */
 const User = mongoose.model('user', userSchema);
 
 module.exports = User;

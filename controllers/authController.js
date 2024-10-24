@@ -10,11 +10,22 @@ const signToken = (id) => {
   });
 };
 
+const createSendToken = (user, statusCode, res) => {
+  const token = signToken(user._id);
+  res.status(statusCode).json({
+    status: 'success',
+    token,
+    data: {
+      user,
+    },
+  });
+};
+
 exports.signup = catchAsync(async (req, res, next) => {
   console.log(req.body);
   const newUser = await User.create(req.body);
-
-  const token = signToken(newUser._id);
+  createSendToken(newUser, 201, res);
+  /*  const token = signToken(newUser._id);
 
   res.status(201).json({
     status: 'success',
@@ -22,7 +33,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     data: {
       user: newUser,
     },
-  });
+  }); */
 });
 
 exports.login = catchAsync(async (req, res, next) => {
@@ -35,14 +46,14 @@ exports.login = catchAsync(async (req, res, next) => {
   const user = await User.findOne({ name }).select('+password');
 
   if (!user || !(await user.correctPassword(password, user.password)))
-    return next(new AppError('Incorrect email or password', 401));
-
-  const token = signToken(user._id);
+    return next(new AppError('Incorrect name or password', 401));
+  createSendToken(user, 200, res);
+  /*   const token = signToken(user._id);
   console.log(user);
   res.status(200).json({
     status: 'success',
     token,
-  });
+  }); */
 });
 
 exports.protect = catchAsync(async (req, res, next) => {
@@ -81,6 +92,7 @@ exports.protect = catchAsync(async (req, res, next) => {
 
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
+    console.log(req.user);
     if (!roles.includes(req.user.role)) {
       return next(
         new AppError(
@@ -92,41 +104,64 @@ exports.restrictTo = (...roles) => {
     next();
   };
 };
-/* 
-exports.forgetPassword = catchAsync(async (req, res, next) => {
-  // get user based on Phone number
-  const user = await User.findOne({ phone: req.body.phone });
-  if (!user) {
-    return next(new AppError('There is no user with that phone number', 404));
-  }
-  // Generate the random reset token
-  const resetToken = user.createPasswordResetToken();
-  await user.save({ validateBeforeSave: false });
-  //send it to Admin email
-}); */
 
 exports.adminResetPassword = catchAsync(async (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  const { phone, password, passwordConfirm } = req.body;
+
+  if (!phone || !password || !passwordConfirm) {
     return next(
-      new AppError('You do not have permission to perform this action', 403)
+      new AppError(
+        'Please provide phone, password, and password confirmation',
+        400
+      )
     );
   }
 
-  // Find the user to reset
-  const user = await User.findById(req.params.userId); // Assume userId is passed in the request
+  if (password !== passwordConfirm) {
+    return next(new AppError('Passwords do not match', 400));
+  }
+
+  // Find the user to reset password for
+  const user = await User.findOne({ phone });
+
   if (!user) {
-    return next(new AppError('No user found with that ID', 404));
+    return next(new AppError('No user found with that phone number', 404));
   }
 
   // Update the user's password
-  user.password = req.body.newPassword; // New password from admin
+  user.password = password;
+  user.passwordConfirm = undefined;
 
-  user.passwordConfirm = req.body.newPasswordConfirm; // Validate confirmation
+  // Save the updated user document, which should trigger password hashing
+  await user.save();
 
-  await user.save(); // Save the updated user document
-
-  res.status(200).json({
+  /*   res.status(200).json({
     status: 'success',
     message: 'Password has been reset successfully!',
-  });
+  }); */
+  createSendToken(user, 200, res);
+});
+
+exports.changePassword = catchAsync(async (req, res, next) => {
+  const { password, newPassword, confirmNewPassword } = req.body;
+  if (!newPassword || !password || !confirmNewPassword) {
+    return next(new AppError('Please provide passwords', 404));
+  }
+
+  const user = await User.findOne({ name: req.user.id }).select('+password');
+
+  if (!user || !(await user.correctPassword(password, user.password))) {
+    return next(new AppError('Incorrect name or password', 401));
+  }
+
+  user.password = newPassword;
+  user.passwordConfirm = confirmNewPassword;
+
+  await user.save();
+
+  /*   res.status(200).json({
+    status: 'success',
+    message: 'Password Successfully Changed',
+  }); */
+  createSendToken(user, 200, res);
 });
