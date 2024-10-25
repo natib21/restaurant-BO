@@ -53,6 +53,7 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true,
+    select: false,
   },
   photo: String,
   passwordChangedAt: Date,
@@ -100,6 +101,10 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 
   return resetToken;
 }; */
+userSchema.pre(/^find/, function (next) {
+  this.find({ isActive: { $ne: false } });
+  next();
+});
 const User = mongoose.model('user', userSchema);
 
 module.exports = User;

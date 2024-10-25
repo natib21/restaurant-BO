@@ -147,9 +147,9 @@ exports.changePassword = catchAsync(async (req, res, next) => {
   if (!newPassword || !password || !confirmNewPassword) {
     return next(new AppError('Please provide passwords', 404));
   }
-
-  const user = await User.findOne({ name: req.user.id }).select('+password');
-
+  console.log(req.user.id);
+  const user = await User.findOne({ _id: req.user.id }).select('+password');
+  console.log(user);
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError('Incorrect name or password', 401));
   }
