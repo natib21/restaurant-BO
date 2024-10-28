@@ -3,6 +3,9 @@ const cors = require('cors');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss-filters');
+const hpp = require('hpp');
 const path = require('path');
 const AppError = require('./utils/appError');
 const GlobalErrorHandler = require('./controllers/errorController');
@@ -34,6 +37,21 @@ app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 app.use(cors());
 
 app.use(express.json({ limit: '10kb' }));
+
+// Data Sanitization agains NoSQL injection
+app.use(mongoSanitize());
+
+// Data Sanitization agains XSS
+app.use((req, res, next) => {
+  if (req.body) {
+    Object.keys(req.body).forEach((key) => {
+      req.body[key] = xss.inHTMLData(req.body[key]); // Sanitize input
+    });
+  }
+  next();
+});
+// Data security with parameter polution
+app.use(hpp());
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
