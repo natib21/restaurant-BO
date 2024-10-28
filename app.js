@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 const path = require('path');
 const AppError = require('./utils/appError');
 const GlobalErrorHandler = require('./controllers/errorController');
@@ -12,10 +14,26 @@ const tableRouter = require('./routes/tableRouter');
 
 const app = express();
 
+//1) Global MiddleWare
+
+// Security HTTP headers
+
+app.use(helmet());
+
+// limit requist from the same app
+
+const limiter = rateLimit({
+  max: 100,
+  windowMs: 60 * 60 * 1000,
+  message: ' Too Many Requist from this Ip,please try again in an hour',
+});
+app.use('/api', limiter);
+
 app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 
 app.use(cors());
-app.use(express.json());
+
+app.use(express.json({ limit: '10kb' }));
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
