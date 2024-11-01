@@ -22,3 +22,7 @@ error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k
 error: UNHANDLED REJECTION: Error - uploads/img/menu/menu-Pasta Primavera"-1729089441469.jpeg: unable to open for write
 windows error: The device does not recognize the command. {"timestamp":"2024-10-16T14:37:21.486Z"}
 error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-17T10:40:22.982Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-29T11:42:14.311Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-29T11:42:29.915Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-10-30T11:46:59.243Z"}
+error: UNHANDLED REJECTION: Error - queryTxt ESERVFAIL restaurant.k0gc3.mongodb.net {"timestamp":"2024-11-01T14:59:09.390Z"}

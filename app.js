@@ -17,10 +17,11 @@ const tableRouter = require('./routes/tableRouter');
 
 const app = express();
 
+app.use(cors());
 //1) Global MiddleWare
 
 // Security HTTP headers
-
+/* 
 app.use(helmet());
 
 // limit requist from the same app
@@ -30,13 +31,11 @@ const limiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   message: ' Too Many Requist from this Ip,please try again in an hour',
 });
-app.use('/api', limiter);
+app.use('/api', limiter); */
 
 app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 
-app.use(cors());
-
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '100mb' }));
 
 // Data Sanitization agains NoSQL injection
 app.use(mongoSanitize());

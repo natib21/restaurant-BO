@@ -50,7 +50,7 @@ exports.signup = catchAsync(async (req, res, next) => {
 
 exports.login = catchAsync(async (req, res, next) => {
   const { name, password } = req.body;
-
+  console.log(name, password);
   if (!name || !password) {
     return next(new AppError('Please provide Name or Password', 404));
   }
@@ -60,12 +60,6 @@ exports.login = catchAsync(async (req, res, next) => {
   if (!user || !(await user.correctPassword(password, user.password)))
     return next(new AppError('Incorrect name or password', 401));
   createSendToken(user, 200, res);
-  /*   const token = signToken(user._id);
-  console.log(user);
-  res.status(200).json({
-    status: 'success',
-    token,
-  }); */
 });
 
 exports.protect = catchAsync(async (req, res, next) => {
