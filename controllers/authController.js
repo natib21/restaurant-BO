@@ -35,6 +35,9 @@ const createSendToken = (user, statusCode, res) => {
 
 exports.signup = catchAsync(async (req, res, next) => {
   console.log(req.body);
+  if (req.body.role === 'admin' && !req.body.email) {
+    return next(new AppError('Email is required for admin users.'), 404);
+  }
   const newUser = await User.create(req.body);
   createSendToken(newUser, 201, res);
   /*  const token = signToken(newUser._id);
@@ -49,13 +52,13 @@ exports.signup = catchAsync(async (req, res, next) => {
 });
 
 exports.login = catchAsync(async (req, res, next) => {
-  const { name, password } = req.body;
-  console.log(name, password);
-  if (!name || !password) {
+  const { firstName, password } = req.body;
+  console.log(firstName, password);
+  if (!firstName || !password) {
     return next(new AppError('Please provide Name or Password', 404));
   }
 
-  const user = await User.findOne({ name }).select('+password');
+  const user = await User.findOne({ firstName }).select('+password');
 
   if (!user || !(await user.correctPassword(password, user.password)))
     return next(new AppError('Incorrect name or password', 401));
@@ -98,7 +101,6 @@ exports.protect = catchAsync(async (req, res, next) => {
 
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
-    console.log(req.user);
     if (!roles.includes(req.user.role)) {
       return next(
         new AppError(

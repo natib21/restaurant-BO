@@ -6,17 +6,23 @@ const waiterSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
-  shifts: [
-    {
-      date: { type: Date, required: true },
-      hoursWorked: { type: Number, required: true },
-    },
-  ],
+
   ordersHandled: [
     {
-      orderId: { type: mongoose.Schema.ObjectId, ref: 'Order' },
-      date: { type: Date, required: true },
+      orderId: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'Order',
+      },
+      date: {
+        type: Date,
+        required: true,
+      },
       totalAmount: Number,
+      status: {
+        type: String,
+        enum: ['completed', 'pending', 'cancelled'], // Add order status
+        required: true,
+      },
     },
   ],
 });

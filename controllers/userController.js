@@ -34,7 +34,7 @@ exports.updateMe = catchAsync(async (req, res, next) => {
   }
 
   // update Document
-  const filterdBody = filterObj(req.body, 'name', 'phone');
+  const filterdBody = filterObj(req.body, 'firstName', 'lastName', 'phone');
 
   const updatedUser = await User.findByIdAndUpdate(req.user.id, filterdBody, {
     new: true,
@@ -70,15 +70,53 @@ exports.getUser = (req, res) => {
     message: 'This route is not defined',
   });
 };
-exports.updateUser = (req, res) => {
-  res.status(500).json({
-    status: 'Error',
-    message: 'This route is not defined',
+exports.updateUser = catchAsync(async (req, res, next) => {
+  console.log(req.body, req.params.id);
+
+  if (req.body.password || req.body.passwordConfirm) {
+    return next(
+      new AppError(
+        'This is Not for Password update pls use /changePassword route',
+        400
+      )
+    );
+  }
+
+  // update Document
+  const filterdBody = filterObj(
+    req.body,
+    'firstName',
+    'lastName',
+    'email',
+    'phone',
+    'role'
+  );
+
+  console.log(filterdBody);
+
+  const updatedUser = await User.findByIdAndUpdate(req.params.id, filterdBody, {
+    new: true,
+    runValidators: true,
   });
-};
-exports.deleteUser = (req, res) => {
-  res.status(500).json({
-    status: 'Error',
-    message: 'This route is not defined',
+  if (!updatedUser) {
+    return next(new AppError('User Not Update', 404));
+  }
+  res.status(200).json({
+    status: 'success',
+    data: {
+      updatedUser,
+    },
   });
-};
+});
+
+exports.deleteUser = catchAsync(async (req, res) => {
+  console.log(req);
+  const user = await User.findByIdAndUpdate(req.params.id, { isActive: false });
+  if (!user) {
+    return next(new AppError('No User Found with that ID', 404));
+  }
+  res.status(204).json({
+    status: 'success',
+    menu: null,
+  });
+});
