@@ -26,3 +26,5 @@ error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k
 error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-10-29T11:42:29.915Z"}
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-10-30T11:46:59.243Z"}
 error: UNHANDLED REJECTION: Error - queryTxt ESERVFAIL restaurant.k0gc3.mongodb.net {"timestamp":"2024-11-01T14:59:09.390Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-12-05T12:48:42.835Z"}
+error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2024-12-05T13:04:18.677Z"}

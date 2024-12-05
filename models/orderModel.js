@@ -1,47 +1,64 @@
-// models/Order.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const orderSchema = new Schema(
-  {
-    customerName: {
-      type: String,
-    },
-    customerPhone: {
-      type: Number,
-      required: false, // optional for guest users
-    },
-    status: {
-      type: String,
-      enum: ['pending', 'preparing', 'served', 'completed'],
-      default: 'pending',
-    },
-    tableNumber: {
-      type: String,
-      required: false, // for dine-in orders
-    },
-    totalAmount: {
-      type: Number,
-      required: true,
-    },
-    subtotal: {
-      type: Number,
-      required: true,
-    },
-    items: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'OrderItem',
-        required: true,
-      },
-    ],
-    createdAt: {
-      type: Date,
-      default: Date.now(),
-    },
+// Embedded schema for order items
+const orderItemSchema = new Schema({
+  menuItemId: {
+    type: mongoose.Schema.ObjectId,
+    ref: 'Menu',
+    required: true,
   },
-  { timestamps: true }
-);
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1,
+  },
+  price: {
+    type: Number,
+    required: true,
+  },
+  total: {
+    type: Number,
+    required: true,
+  },
+});
+
+// Main order schema
+const orderSchema = new Schema({
+  customerName: {
+    type: String,
+  },
+  customerPhone: {
+    type: String,
+    required: false, // optional for guest users
+    unique: true,
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'preparing', 'served', 'completed'],
+    default: 'pending',
+  },
+  tableNumber: {
+    type: String,
+    required: false, // for dine-in orders
+  },
+  totalAmount: {
+    type: Number,
+    required: true,
+  },
+  subtotal: {
+    type: Number,
+    required: true,
+  },
+  items: {
+    type: [orderItemSchema],
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now(),
+  },
+});
 
 const Order = mongoose.model('Order', orderSchema);
 

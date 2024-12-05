@@ -7,11 +7,13 @@ exports.getAllOrder = (req, res) => {
   });
 };
 exports.createNewOrder = catchAsync(async (req, res, next) => {
+  // Only if items is coming in as a string
+
   console.log(req.body);
   const newOrder = await Order.create(req.body);
   res.status(201).json({
     status: 'success',
-    menu: newOrder,
+    order: newOrder,
   });
 });
 exports.getOrder = (req, res) => {
