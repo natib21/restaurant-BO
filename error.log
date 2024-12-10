@@ -28,3 +28,11 @@ error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:
 error: UNHANDLED REJECTION: Error - queryTxt ESERVFAIL restaurant.k0gc3.mongodb.net {"timestamp":"2024-11-01T14:59:09.390Z"}
 error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-12-05T12:48:42.835Z"}
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2024-12-05T13:04:18.677Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T10:56:51.938Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T11:03:45.709Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T11:04:16.652Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T11:12:44.621Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T11:14:28.549Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T12:09:16.607Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T12:15:41.884Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T12:18:29.373Z"}

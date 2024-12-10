@@ -8,6 +8,9 @@ exports.getAllOrder = (req, res) => {
 };
 exports.createNewOrder = catchAsync(async (req, res, next) => {
   // Only if items is coming in as a string
+  /*  if (typeof req.body.items === 'string') {
+    req.body.items = JSON.parse(req.body.items);
+  } */
 
   console.log(req.body);
   const newOrder = await Order.create(req.body);
