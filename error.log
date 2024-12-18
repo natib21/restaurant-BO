@@ -36,3 +36,6 @@ error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T12:09:16.607Z"}
 error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T12:15:41.884Z"}
 error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-10T12:18:29.373Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-16T11:39:42.374Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-16T11:53:05.416Z"}
+error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-12-18T12:35:01.719Z"}

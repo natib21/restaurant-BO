@@ -3,7 +3,7 @@ const Schema = mongoose.Schema;
 
 // Embedded schema for order items
 const orderItemSchema = new Schema({
-  menuItem: {
+  name: {
     type: String, // Menu item name (not a reference)
     required: true,
   },
@@ -24,14 +24,14 @@ const orderItemSchema = new Schema({
 
 // Main order schema
 const orderSchema = new Schema({
-  customerName: {
+  name: {
     type: String,
   },
-  customerPhone: {
+  phone: {
     type: String,
     required: false, // optional for guest users
   },
-  tableNumber: {
+  table: {
     type: String,
     required: false, // for dine-in orders
   },
@@ -40,11 +40,11 @@ const orderSchema = new Schema({
     enum: ['pending', 'preparing', 'served', 'completed'],
     default: 'pending',
   },
-  items: {
+  cart: {
     type: [orderItemSchema],
     require: true,
   },
-  totalAmount: {
+  totalPrice: {
     type: Number,
     require: [true, 'total amount must be set'],
   },
