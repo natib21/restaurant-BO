@@ -39,3 +39,16 @@ error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 16.
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-16T11:39:42.374Z"}
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 16.24.41.122:27017 {"timestamp":"2024-12-16T11:53:05.416Z"}
 error: UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net {"timestamp":"2024-12-18T12:35:01.719Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T11:42:25.041Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T12:44:19.006Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T12:45:20.978Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T12:51:44.586Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T12:57:56.204Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:08:30.625Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:08:57.031Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:11:32.394Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:12:52.318Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:13:51.523Z"}
+error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:16:18.251Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:17:24.391Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:20:57.073Z"}
