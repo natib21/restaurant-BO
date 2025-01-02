@@ -20,9 +20,7 @@ const app = express();
 app.use(cors());
 //1) Global MiddleWare
 
-// Security HTTP headers
-/* 
-app.use(helmet());
+/* app.use(helmet());
 
 // limit requist from the same app
 
@@ -35,20 +33,20 @@ app.use('/api', limiter); */
 
 app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 
-app.use(express.json({ limit: '100mb' }));
+app.use(express.json(/* { limit: '100mb' } */));
 
 // Data Sanitization agains NoSQL injection
 app.use(mongoSanitize());
 
 // Data Sanitization agains XSS
-app.use((req, res, next) => {
+/* app.use((req, res, next) => {
   if (req.body) {
     Object.keys(req.body).forEach((key) => {
       req.body[key] = xss.inHTMLData(req.body[key]); // Sanitize input
     });
   }
   next();
-});
+}); */
 // Data security with parameter polution
 app.use(hpp());
 

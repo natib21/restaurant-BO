@@ -4,6 +4,8 @@ const logger = require('./utils/logger');
 
 const dotenv = require('dotenv');
 
+const { createSocketServer } = require('./socket');
+
 process.on('uncaughtException', (err) => {
   logger.error(`UNHANDLED EXCEPTION: ${err.name} - ${err.message}`);
   process.exit(1);
@@ -11,6 +13,8 @@ process.on('uncaughtException', (err) => {
 
 dotenv.config({ path: './config.env' });
 const app = require('./app');
+
+const server = createSocketServer(app);
 
 const DB = process.env.DATABASE.replace(
   '<PASSWORD>',

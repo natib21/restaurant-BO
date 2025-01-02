@@ -124,6 +124,7 @@ exports.createNewMenu = catchAsync(async (req, res, next) => {
 });
 
 exports.updateMenu = catchAsync(async (req, res, next) => {
+  console.log(req.body);
   if (req.file) {
     req.body.image = req.file.filename; // Save filename to the 'photo' field
   }

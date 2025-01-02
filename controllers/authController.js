@@ -35,6 +35,9 @@ const createSendToken = (user, statusCode, res) => {
 
 exports.signup = catchAsync(async (req, res, next) => {
   console.log(req.body);
+  if (req.body.role === 'admin' && !req.body.email) {
+    return next(new AppError('Email is required for admin users.'), 404);
+  }
   const newUser = await User.create(req.body);
   createSendToken(newUser, 201, res);
   /*  const token = signToken(newUser._id);
@@ -98,7 +101,6 @@ exports.protect = catchAsync(async (req, res, next) => {
 
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
-    console.log(req.user);
     if (!roles.includes(req.user.role)) {
       return next(
         new AppError(
