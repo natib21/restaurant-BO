@@ -14,10 +14,6 @@ const sizeSchema = mongoose.Schema({
 const menuSchema = mongoose.Schema({
   name: {
     type: String,
-<<<<<<< HEAD
-    required: [true, 'Name Must Be State'],
-    unique: true 
-=======
     required: [true, 'Menu Item Must Have Name'],
     unique: true,
     trim: true,
@@ -26,47 +22,16 @@ const menuSchema = mongoose.Schema({
   description: {
     type: String,
     trim: true,
->>>>>>> e9875a42fd4fb105e576b93c6a71c2b733fc6e82
   },
   price: {
     type: Number,
-<<<<<<< HEAD
-    required: [true, 'Price Must be set'],
-=======
     required: [true, 'Menu Item Must Have Price'],
->>>>>>> e9875a42fd4fb105e576b93c6a71c2b733fc6e82
     default: 0,
   },
   available: {
     type: Boolean,
     required: [true, 'Availability Must Be Stated'],
     default: true,
-<<<<<<< HEAD
-  },
-  ingredients: [String],
-  categories: String,
-  image: {
-    type: String,
-    required: [true, 'Food Must Have An Image'],
-  },
-  prep_time: {
-    type: String,
-    required: [true, 'Time Must Be Included'],
-    default: '20 min',
-  },
-  sizes: {
-    type: [sizeSchema],
-    required: true,
-  },
-  averageRating: {
-    type: Number,
-    default: 0,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now(),
-  },
-=======
   },
   isSpecial: {
     type: Boolean,
@@ -105,7 +70,6 @@ const menuSchema = mongoose.Schema({
 menuSchema.pre('save', function (next) {
   this.slug = slugify(this.name, { lower: true });
   next();
->>>>>>> e9875a42fd4fb105e576b93c6a71c2b733fc6e82
 });
 
 const Menu = mongoose.model('Menu', menuSchema);
