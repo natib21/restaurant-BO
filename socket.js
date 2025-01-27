@@ -1,4 +1,4 @@
-// socket.js
+const logger = require('./utils/logger');
 const http = require('http');
 const socketIo = require('socket.io');
 
@@ -6,7 +6,12 @@ let io;
 
 const createSocketServer = (app) => {
   const server = http.createServer(app);
-  io = socketIo(server);
+  io = socketIo(server, {
+    cors: {
+      origin: '*', // Replace '*' with the allowed origin(s) if necessary
+      methods: ['GET', 'POST'], // Specify allowed HTTP methods
+    },
+  });
 
   io.on('connection', (socket) => {
     logger.info(`Socket.Io connected: ${socket.id}`);

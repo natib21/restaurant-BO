@@ -37,7 +37,7 @@ const orderSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'preparing', 'served', 'completed'],
+    enum: ['pending', 'preparing', 'served', 'completed', 'canceled'],
     default: 'pending',
   },
   cart: {

@@ -37,7 +37,10 @@ exports.updateOrder = async (req, res, next) => {
   const updatedOrder = await Order.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
   });
-
+  console.log(updatedOrder);
+  if (!updatedOrder) {
+    return next(new AppError('No Menu item Found with that ID', 404));
+  }
   // Emit the updated order event
   io.emit('update-order', updatedOrder);
 

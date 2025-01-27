@@ -52,3 +52,5 @@ error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:
 error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:16:18.251Z"}
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:17:24.391Z"}
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:20:57.073Z"}
+error: UNHANDLED EXCEPTION: ReferenceError - logger is not defined {"timestamp":"2024-12-20T12:29:35.060Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-23T11:28:27.323Z"}
