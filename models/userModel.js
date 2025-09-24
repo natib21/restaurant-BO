@@ -95,7 +95,18 @@ const userSchema = new mongoose.Schema({
       message: 'History is allowed only for waiters and kitchen staff',
     },
   },
+  merchant: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Merchant",
+  required: function () {
+    // Only required if the role is not super-admin (your SaaS back office)
+    return this.role !== "super-admin";
+  },
+}
+
 });
+
+
 userSchema.pre('save', function (next) {
   // Remove history if the role is not waiter or kitchen
   if (this.role !== 'waiter' && this.role !== 'kitchen') {
