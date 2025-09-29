@@ -52,6 +52,7 @@ error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:
 error: UNHANDLED REJECTION: MongooseServerSelectionError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:16:18.251Z"}
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:17:24.391Z"}
 error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-19T13:20:57.073Z"}
+<<<<<<< HEAD
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2025-03-01T22:20:08.276Z"}
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2025-03-01T22:20:52.751Z"}
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2025-03-02T05:04:36.244Z"}
@@ -95,3 +96,7 @@ error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.n
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2025-09-21T07:07:45.162Z"}
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2025-09-23T18:10:37.791Z"}
 error: UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net {"timestamp":"2025-09-23T18:28:56.877Z"}
+=======
+error: UNHANDLED EXCEPTION: ReferenceError - logger is not defined {"timestamp":"2024-12-20T12:29:35.060Z"}
+error: UNHANDLED REJECTION: MongoNetworkError - connect ETIMEDOUT 15.184.46.166:27017 {"timestamp":"2024-12-23T11:28:27.323Z"}
+>>>>>>> 1ce08b9098ebcfddac090348d40758e7d6d0685b

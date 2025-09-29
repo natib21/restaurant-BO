@@ -35,7 +35,6 @@ app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 
 app.use(express.json(/* { limit: '100mb' } */));
 
-// Data Sanitization agains NoSQL injection
 app.use(mongoSanitize());
 
 // Data Sanitization agains XSS
