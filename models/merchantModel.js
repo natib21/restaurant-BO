@@ -5,6 +5,7 @@ const merchantSchema = new mongoose.Schema({
     type: String,
     required: [true, "Business name is required"],
     trim: true,
+    unique:true
   },
   legalName: {
     type: String,
@@ -15,24 +16,26 @@ const merchantSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-  },
   phone: {
     type: String,
     required: true,
     unique: true,
   },
-  address: {
+  location: {
     street: String,
     city: String,
-    state: String,
-    postalCode: String,
-    country: { type: String, default: "Ethiopia" }, // adapt to your target
-  },
+    subCity: String,
+    country: { type: String, default: "Ethiopia" },
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: true,
+      },
+    },
   cuisineType: {
     type: [String], // e.g. ["Italian", "Fast Food"]
     default: [],
@@ -43,11 +46,7 @@ const merchantSchema = new mongoose.Schema({
   coverImage: {
     type: String, // for customer-facing app branding
   },
-  openingHours: {
-    type: Map,
-    of: String, 
-    // e.g. { monday: "9:00-22:00", tuesday: "9:00-22:00", ... }
-  },
+  
   subscriptionPlan: {
     type: String,
     enum: ["free", "basic", "pro", "enterprise"],

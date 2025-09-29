@@ -3,14 +3,9 @@ const validator = require('validator');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const historySchema = new mongoose.Schema({
-  orderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order', // Reference to the Order model
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now, // Record when the order was accepted
-  },
+  orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+  action: { type: String, enum: ['accepted', 'prepared', 'served'], required: true },
+  timestamp: { type: Date, default: Date.now },
 });
 const userSchema = new mongoose.Schema({
   firstName: {
@@ -38,11 +33,19 @@ const userSchema = new mongoose.Schema({
       message: 'password are not the same',
     },
   },
-  role: {
-    type: String,
-    enum: ['admin', 'waiter', 'kitchen', 'cashier', 'manager'],
-    required: true,
-    default: 'waiter',
+  role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' }, 
+  roleName: { type: String, enum: ['super-admin', 'admin']}, // SaaS/global roles
+  business: {
+    type: String, // Temporary business name entered during signup
+    required: [true, 'Business name is required'],
+  },
+  restaurant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Merchant',
+    required: function() {
+      // Required after signup (can enforce in backend logic)
+      return false; // optional at signup, enforce in API after signup
+    },
   },
   email: {
     type: String,
@@ -76,44 +79,30 @@ const userSchema = new mongoose.Schema({
   },
   isActive: {
     type: Boolean,
-    default: true,
+    default: false,
     // select: false,
   },
   photo: String,
   passwordChangedAt: Date,
   passwordResetToken: String,
   passwordResetTokenExpires: Date,
-  history: {
-    type: [historySchema],
-    validate: {
-      validator: function (value) {
-        // Allow history to be defined only for waiter or kitchen roles
-        return this.role === 'waiter' || this.role === 'kitchen'
-          ? true
-          : !value.length;
-      },
-      message: 'History is allowed only for waiters and kitchen staff',
-    },
-  },
-  merchant: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Merchant",
-  required: function () {
-    // Only required if the role is not super-admin (your SaaS back office)
-    return this.role !== "super-admin";
-  },
-}
+  history: [historySchema],
+  
 
 });
 
 
-userSchema.pre('save', function (next) {
-  // Remove history if the role is not waiter or kitchen
-  if (this.role !== 'waiter' && this.role !== 'kitchen') {
-    this.history = undefined; // Remove the history field from the document
+userSchema.pre('save', async function(next) {
+  if (this.role) {
+    const Role = mongoose.model('Role');
+    const role = await Role.findById(this.role).populate('tasks');
+    if (!role || !role.tasks.length) this.history = undefined;
+  } else {
+    this.history = undefined;
   }
   next();
 });
+
 userSchema.index(
   { email: 1 },
   {

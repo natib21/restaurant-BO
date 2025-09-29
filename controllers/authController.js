@@ -35,8 +35,14 @@ const createSendToken = (user, statusCode, res) => {
 
 exports.signup = catchAsync(async (req, res, next) => {
   console.log(req.body);
-  if (req.body.role === 'admin' && !req.body.email) {
-    return next(new AppError('Email is required for admin users.'), 404);
+ const { firstName, lastName, phone, email, business, password, passwordConfirm } = req.body;
+
+  if (!firstName || !lastName || !phone || !email || !business || !password || !passwordConfirm) {
+    return next(new AppError('Please provide all required fields', 400));
+  }
+
+  if (password !== passwordConfirm) {
+    return next(new AppError('Passwords do not match', 400));
   }
   const newUser = await User.create(req.body);
   createSendToken(newUser, 201, res);

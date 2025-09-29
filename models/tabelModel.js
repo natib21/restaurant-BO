@@ -3,10 +3,16 @@ const Schema = mongoose.Schema;
 
 const tableSchema = new Schema(
   {
+    restaurant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Merchant", // or "Restaurant"
+    required: true,
+  },
     tableNumber: {
       type: String,
       required: true,
       trim: true,
+      unique:true
     },
     capacity: {
       type: Number,
@@ -33,6 +39,7 @@ const tableSchema = new Schema(
       ref: "Order",
       default: null,
     },
+    qr: { type: String }
   },
   { timestamps: true }
 );
