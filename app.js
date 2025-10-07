@@ -55,7 +55,6 @@ if (process.env.NODE_ENV === 'development') {
 
 app.use((req, res, next) => {
   req.requestTime = new Date().toISOString();
-
   next();
 });
 
@@ -67,7 +66,5 @@ app.use('/api/table', tableRouter);
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this Server `, 404));
 });
-
 app.use(GlobalErrorHandler);
-
 module.exports = app;

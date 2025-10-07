@@ -11,7 +11,8 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-dotenv.config({ path: './config.env' });
+dotenv.config({ path: './config.env' }); 
+
 const app = require('./app');
 
 const server = createSocketServer(app);
@@ -24,6 +25,7 @@ const DB = process.env.DATABASE.replace(
 mongoose.connect(DB).then(() => {
   logger.info('MongoDB connected successfully!');
 });
+
 
 const PORT = process.env.PORT || 3000;
 const SERVER = server.listen(PORT, () => {
