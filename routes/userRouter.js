@@ -5,8 +5,8 @@ const router = express.Router();
 
 router.post(
   '/signup',
-  authController.protect,
-  authController.restrictTo('admin', 'waiter'),
+  // authController.protect,
+  // authController.restrictTo('admin', 'waiter'),
   authController.signup
 );
 router.post('/login', authController.login);

@@ -5,6 +5,9 @@ const authController = require('../controllers/authController');
 const router = express.Router();
 
 router
+  .route('/:id')
+  .get( menuController.getPublicMenu)
+router
   .route('/search')
   .get(menuController.searchMenu, menuController.getAllMenu);
 
@@ -19,8 +22,10 @@ router
 router
   .route('/specials')
   .get(menuController.getSpecials, menuController.getAllMenu);
+
+
 router
-  .route('/')
+  .route('/menu')
   .get(menuController.getAllMenu)
   .post(
     authController.protect,
@@ -31,7 +36,7 @@ router
   );
 
 router
-  .route('/:id')
+  .route('/menu/:id')
   .get(menuController.getMenu)
   .patch(
     authController.protect,

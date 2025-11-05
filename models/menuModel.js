@@ -12,6 +12,11 @@ const sizeSchema = mongoose.Schema({
   price: { type: Number },
 });
 const menuSchema = mongoose.Schema({
+   restaurant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Merchant", // or "Restaurant"
+    required: true,
+  },
   name: {
     type: String,
     required: [true, 'Menu Item Must Have Name'],

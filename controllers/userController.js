@@ -23,7 +23,7 @@ exports.getAllUser = catchAsync(async (req, res, next) => {
 });
 
 exports.updateMe = catchAsync(async (req, res, next) => {
-  //  no password update
+ 
   if (req.body.password || req.body.passwordConfirm) {
     return next(
       new AppError(
@@ -120,3 +120,7 @@ exports.deleteUser = catchAsync(async (req, res) => {
     menu: null,
   });
 });
+
+
+
+

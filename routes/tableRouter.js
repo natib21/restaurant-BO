@@ -5,12 +5,12 @@ const router = express.Router();
 router
   .route('/')
   .get(tableController.getAllTables)
-  .post(tableController.createNewTables);
+  .post(tableController.createNewTable);
 
 router
   .route('/:id')
-  .get(tableController.getTables)
-  .patch(tableController.updateTables)
-  .delete(tableController.deleteTables);
+  .get(tableController.getTable)
+  .patch(tableController.updateTable)
+  .delete(tableController.deleteTable);
 
 module.exports = router;

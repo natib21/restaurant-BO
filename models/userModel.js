@@ -1,17 +1,23 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
+// const crypto = require('crypto');
+
 const historySchema = new mongoose.Schema({
   orderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order', // Reference to the Order model
-  },
+      type: mongoose.Schema.Types.ObjectId, ref: 'Order' 
+    },
+  action: {
+      type: String, enum: ['accepted', 'prepared', 'served'],
+      required: true 
+    },
   timestamp: {
-    type: Date,
-    default: Date.now, // Record when the order was accepted
-  },
+     type: Date, 
+     default: Date.now
+     },
 });
+
+
 const userSchema = new mongoose.Schema({
   firstName: {
     type: String,
@@ -39,10 +45,14 @@ const userSchema = new mongoose.Schema({
     },
   },
   role: {
-    type: String,
-    enum: ['admin', 'waiter', 'kitchen', 'cashier', 'manager'],
-    required: true,
-    default: 'waiter',
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Role',
+    default:null
+  }, 
+  merchant:{
+    type:mongoose.Schema.Types.ObjectId,
+    ref:'Merchant',
+    default:null
   },
   email: {
     type: String,
@@ -83,26 +93,29 @@ const userSchema = new mongoose.Schema({
   passwordChangedAt: Date,
   passwordResetToken: String,
   passwordResetTokenExpires: Date,
-  history: {
-    type: [historySchema],
-    validate: {
-      validator: function (value) {
-        // Allow history to be defined only for waiter or kitchen roles
-        return this.role === 'waiter' || this.role === 'kitchen'
-          ? true
-          : !value.length;
-      },
-      message: 'History is allowed only for waiters and kitchen staff',
-    },
-  },
+  history: [historySchema],
+
 });
-userSchema.pre('save', function (next) {
-  // Remove history if the role is not waiter or kitchen
-  if (this.role !== 'waiter' && this.role !== 'kitchen') {
-    this.history = undefined; // Remove the history field from the document
-  }
-  next();
+
+
+
+userSchema.pre('save', async function(next) {
+    if (this.role) {
+        const Role = mongoose.model('Role');
+        // This query is redundant if pre('validate') already fetched the role.
+        // But for safety, we keep it as it requires 'tasks' which pre('validate') did not fetch.
+        const role = await Role.findById(this.role).populate('tasks');
+        if (!role || !role.tasks.length) this.history = undefined;
+    } else {
+        this.history = undefined;
+    }
+    next();
 });
+
+
+// ------------------------------------
+// --- USER SCHEMA INDEXES & METHODS ---
+// ------------------------------------
 userSchema.index(
   { email: 1 },
   {
@@ -110,6 +123,8 @@ userSchema.index(
     partialFilterExpression: { email: { $exists: true, $ne: null } },
   }
 );
+
+// 2. Password Hashing
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
@@ -118,6 +133,7 @@ userSchema.pre('save', async function (next) {
   this.passwordConfirm = undefined;
   next();
 });
+
 
 userSchema.methods.correctPassword = async function (
   candidatePassword,
@@ -150,10 +166,16 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 
   return resetToken;
 }; */
-userSchema.pre(/^find/, function (next) {
-  this.find({ isActive: { $ne: false } });
+
+// ------------------------------------
+// --- USER SCHEMA QUERY MIDDLEWARE ---
+// ------------------------------------
+/* userSchema.pre(/^find/, function (next) {
+  this.find({ restaurant: { $ne: null } });
   next();
-});
+}); */
+
+// --- MODEL EXPORT ---
 const User = mongoose.model('user', userSchema);
 
 module.exports = User;

@@ -3,15 +3,30 @@ const User = require('../models/userModel');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('../utils/appError');
 const { promisify } = require('util');
+const mongoose = require('mongoose')
+const Merchant = require('../models/merchantModel')
+const Task = require('../models/taskModel')
+const Role =require('../models/roleModel');
 
-const signToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE_IN,
-  });
+
+const signToken = (user) => {
+  console.log("user : -",user)
+  if (!user || !user._id || !user.merchant) {
+    throw new AppError('Invalid user for token generation', 500);
+  }
+  const merchant = user.merchant._id ;
+  return jwt.sign(
+    {
+      id: user._id,
+      merchant
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE_IN }
+  );
 };
 
 const createSendToken = (user, statusCode, res) => {
-  const token = signToken(user._id);
+  const token = signToken(user);
 
   const cookieOptions = {
     expires: new Date(
@@ -19,11 +34,14 @@ const createSendToken = (user, statusCode, res) => {
     ),
     // secure: true,
     httpOnly: true,
+    sameSite:'strict'
   };
   if (process.env.NODE_ENV === 'production') cookieOptions.secure = true;
   res.cookie('jwt', token, cookieOptions);
   // Remove the password from the output
   user.password = undefined;
+  user.passwordConfirm = undefined;
+  user.merchant = undefined;
   res.status(statusCode).json({
     status: 'success',
     token,
@@ -32,38 +50,93 @@ const createSendToken = (user, statusCode, res) => {
     },
   });
 };
-
 exports.signup = catchAsync(async (req, res, next) => {
-  console.log(req.body);
-  if (req.body.role === 'admin' && !req.body.email) {
-    return next(new AppError('Email is required for admin users.'), 404);
-  }
-  const newUser = await User.create(req.body);
-  createSendToken(newUser, 201, res);
-  /*  const token = signToken(newUser._id);
 
-  res.status(201).json({
-    status: 'success',
-    token,
-    data: {
-      user: newUser,
-    },
-  }); */
+ const { firstName, lastName, phone, email, business, password, passwordConfirm } = req.body;
+
+  if (!firstName || !lastName || !phone || !email || !business || !password || !passwordConfirm) {
+    return next(new AppError('Please provide all required fields', 400));
+  }
+  if (password !== passwordConfirm) {
+    return next(new AppError('Passwords do not match', 400));
+  }
+
+   const [existingUser, existingMerchant] = await Promise.all([
+    User.findOne({ phone }),
+    Merchant.findOne({ businessName: business })
+  ]);
+
+  if (existingUser) {
+    return next(new AppError('Phone number already registered', 400));
+  }
+  if (existingMerchant) {
+    return next(new AppError('A business with that name already exists.', 400));
+  }
+ 
+   const newMerchant = await Merchant.create({
+    businessName: business,
+    status: 'pending',
+    phone,
+    mode:'Test',
+  }); 
+
+ const existingSuperAdminRole = await Role.findOne({ name: 'Super Merchant Admin' });
+
+    if (!existingSuperAdminRole) {
+        return next(new AppError('Master "Super Merchant Admin" role template not found. Setup error.', 500));
+    }
+  const newUser = await User.create({
+        firstName, 
+        lastName, 
+        phone, 
+        email, 
+        password, 
+        passwordConfirm,
+        merchant: newMerchant._id, 
+        role: existingSuperAdminRole._id
+    });
+
+    const finalUser = await User.findById(newUser._id)
+        .populate({
+            path: 'role',
+            select: 'name context description tasks',
+            populate:{
+              path:'tasks',
+              select:'name description target method'
+            }
+        });
+
+  createSendToken(finalUser, 201, res);
 });
 
+
 exports.login = catchAsync(async (req, res, next) => {
-  const { firstName, password } = req.body;
-  console.log(firstName, password);
-  if (!firstName || !password) {
+
+  const { email, password } = req.body;
+  console.log(email, password);
+  if (!email || !password) {
     return next(new AppError('Please provide Name or Password', 404));
   }
-
-  const user = await User.findOne({ firstName }).select('+password');
+   const user = await User.findOne({ email }).select('+password');
+   console.log(user)
 
   if (!user || !(await user.correctPassword(password, user.password)))
     return next(new AppError('Incorrect name or password', 401));
-  createSendToken(user, 200, res);
+
+  const populatedUser = await User.findById(user._id)
+        .populate({
+            path: 'role',
+            select: 'name context description tasks',
+            populate: {
+                path: 'tasks',
+                select: 'name target method description'
+            }
+        })
+        
+  createSendToken(populatedUser, 200, res);
+
 });
+
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
@@ -76,22 +149,47 @@ exports.protect = catchAsync(async (req, res, next) => {
   }
 
   if (!token) {
-    return next(new AppError('You are not logged in! please log in ', 401));
+    return next(new AppError('You are not logged in! Please log in.', 401));
   }
 
-  // verfiy token
   const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
 
-  const currentUser = await User.findById(decoded.id);
+  const currentUser = await User.findById(decoded.id)
+    .populate({
+      path: 'role',
+      select: 'name context description tasks',
+      populate: {
+        path: 'tasks',
+        select: 'name target method description',
+      },
+    })
+    .populate({
+      path: 'merchant',
+      select: 'businessName status mode',
+    });
 
   if (!currentUser) {
-    return next(new AppError('the token does not exist', 401));
+    return next(new AppError('User belonging to this token no longer exists.', 401));
   }
+
+
+  if (
+    currentUser.merchant &&
+    currentUser.merchant._id.toString() !== decoded.merchant
+  ) {
+    return next(new AppError('Token merchant mismatch. Please re-login.', 401));
+  }
+
 
   if (currentUser.changedPasswordAfter(decoded.iat)) {
     return next(
-      new AppError('User recently changed password! pls log in again', 401)
+      new AppError('User recently changed password! Please log in again.', 401)
     );
+  }
+
+
+  if (currentUser.isActive === false) {
+    return next(new AppError('Your account is inactive. Contact support.', 403));
   }
 
   req.user = currentUser;
@@ -99,19 +197,93 @@ exports.protect = catchAsync(async (req, res, next) => {
   next();
 });
 
-exports.restrictTo = (...roles) => {
+
+// exports.restrictTo = (...roles) => {
+//   return (req, res, next) => {
+//     if (!roles.includes(req.user.role)) {
+//       return next(
+//         new AppError(
+//           'You do Not have a permission to perform this action ',
+//           403
+//         )
+//       );
+//     }
+//     next();
+//   };
+// };
+
+
+
+
+exports.restrictTo = () => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    const fullUrl = req.originalUrl.replace(/\/$/, ''); // normalize trailing slash
+    const httpMethod = req.method;
+    const { role } = req.user || {};
+
+    // ✅ Public routes (no auth required)
+    const publicRoutes = [
+      { method: 'POST', path: /^\/api\/user\/signup$/ },
+      { method: 'POST', path: /^\/api\/user\/login$/ },
+    ];
+
+    const isPublic = publicRoutes.some(route =>
+      (!route.method || route.method === httpMethod) &&
+      route.path.test(fullUrl)
+    );
+
+    if (isPublic) return next();
+
+    // 🧍‍♂️ No role assigned — treat as basic
+    if (!role || role.name === 'basics-') {
+      const basicAllowed = [
+        { method: 'GET', path: /^\/api\/v1\/profile$/ },
+        { method: 'GET', path: /^\/api\/v1\/orders$/ },
+        { method: 'POST', path: /^\/api\/v1\/request-merchant-role$/ },
+        { method: 'GET', path: /^\/api\/v1\/public\/*/ },
+      ];
+
+      const hasBasicAccess = basicAllowed.some(route =>
+        (!route.method || route.method === httpMethod) &&
+        route.path.test(fullUrl)
+      );
+
+      if (!hasBasicAccess) {
+        return next(
+          new AppError(
+            'Basic users have limited access. Contact backoffice to upgrade your role.',
+            403
+          )
+        );
+      }
+      return next();
+    }
+
+    
+    const hasAccess = role.tasks?.some(task => {
+      const taskUrl = task.target?.replace(/\/$/, ''); // normalize
+      const targetMatch =
+        taskUrl &&
+        (fullUrl === taskUrl || fullUrl.startsWith(taskUrl + '/'));
+
+      const methodMatch = !task.method || task.method === httpMethod;
+
+      return targetMatch && methodMatch;
+    });
+
+    if (!hasAccess) {
       return next(
         new AppError(
-          'You do Not have a permission to perform this action ',
+          `Access denied: ${role.name} does not have permission for ${httpMethod} ${fullUrl}`,
           403
         )
       );
     }
+
     next();
   };
 };
+
 
 exports.adminResetPassword = catchAsync(async (req, res, next) => {
   const { phone, password, passwordConfirm } = req.body;

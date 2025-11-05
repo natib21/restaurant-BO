@@ -14,6 +14,9 @@ const menuRouter = require('./routes/menuRouter');
 const orderRouter = require('./routes/orderRouter');
 const userRouter = require('./routes/userRouter');
 const tableRouter = require('./routes/tableRouter');
+const roleRouter = require('./routes/roleRouter');
+const merchantRouter = require('./routes/merchantRouter')
+const taskRouter = require('./routes/taskRouter')
 
 const app = express();
 
@@ -58,10 +61,16 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api/menu', menuRouter);
-app.use('/api/order', orderRouter);
-app.use('/api/user', userRouter);
-app.use('/api/table', tableRouter);
+app.use('/api/v1/merchant', menuRouter);
+
+app.use('/api/v1/', orderRouter);
+app.use('/api/v1/role',roleRouter)
+app.use('/api/v1/user', userRouter);
+app.use('/api/v1/table', tableRouter);
+app.use('/api/v1/merchant',merchantRouter)
+app.use('/api/v1/task',taskRouter)
+
+
 
 app.all('*', (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl} on this Server `, 404));
