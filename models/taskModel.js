@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-
 const taskSchema = new Schema({
   name: {
     type: String,
@@ -13,6 +12,7 @@ const taskSchema = new Schema({
     type: String,
     required: [true, 'Task must have an endpoint'],
     trim: true,
+    unique: true,
   },
   method: {
     type: String,

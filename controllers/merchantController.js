@@ -14,16 +14,15 @@ const multerFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-   storage: multerStorage,
-   fileFilter: multerFilter,
-  
-  });
+  storage: multerStorage,
+  fileFilter: multerFilter,
+});
 
 // upload both logo and coverImage
 exports.uploadMerchantPhotos = upload.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'coverImage', maxCount: 1 },
-  { name: 'documents', maxCount: 10 }
+  { name: 'documents', maxCount: 10 },
 ]);
 
 // Resize images using sharp
@@ -56,9 +55,9 @@ exports.processMerchantMedia = catchAsync(async (req, res, next) => {
       type: req.body.documentTypes?.[index] || 'unknown',
       url: `/img/merchants/documents/${file.originalname}`,
       name: file.originalname,
-      uploadedAt: new Date()
+      uploadedAt: new Date(),
     }));
-    
+
     // Save documents to filesystem
     req.files.documents.forEach(file => {
       require('fs').writeFileSync(
@@ -74,20 +73,21 @@ exports.processMerchantMedia = catchAsync(async (req, res, next) => {
 // ------------------- VALIDATION MIDDLEWARE -------------------
 const validateMerchantData = (req, res, next) => {
   const requiredFields = ['businessName', 'ownerName', 'phone', 'taxId', 'location'];
-  
+
   for (let field of requiredFields) {
     if (!req.body[field]) {
       return next(new AppError(`Please provide ${field}`, 400));
     }
   }
-  
+
   // Validate coordinates
-  if (req.body.location?.coordinates && 
-      !Array.isArray(req.body.location.coordinates) || 
-      req.body.location.coordinates.length !== 2) {
+  if (
+    (req.body.location?.coordinates && !Array.isArray(req.body.location.coordinates)) ||
+    req.body.location.coordinates.length !== 2
+  ) {
     return next(new AppError('Location coordinates must be [longitude, latitude]', 400));
   }
-  
+
   next();
 };
 
@@ -101,28 +101,26 @@ exports.getAllMerchants = catchAsync(async (req, res) => {
     .limitFields()
     .paginate();
 
- const merchants = await features.query
-    .populate('approvedBy', 'firstName lastName email')
-    .lean()
+  const merchants = await features.query.populate('approvedBy', 'firstName lastName email').lean();
 
   const merchantsWithImages = merchants.map(merchant => ({
     ...merchant,
-    logo: merchant.logo 
+    logo: merchant.logo
       ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.logo}`
       : null,
     coverImage: merchant.coverImage
       ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.coverImage}`
       : null,
     documentCount: merchant.documents?.length || 0,
-    userCount: merchant.users?.length || 0
+    userCount: merchant.users?.length || 0,
   }));
 
   res.status(200).json({
     status: 'success',
     results: merchants.length,
     data: {
-      merchants: merchantsWithImages
-    }
+      merchants: merchantsWithImages,
+    },
   });
 });
 
@@ -133,7 +131,7 @@ exports.getMerchant = catchAsync(async (req, res, next) => {
     .populate({
       path: 'users',
       select: 'firstName lastName phone role email',
-      populate: { path: 'role', select: 'name context' }
+      populate: { path: 'role', select: 'name context' },
     });
 
   if (!merchant) {
@@ -143,17 +141,17 @@ exports.getMerchant = catchAsync(async (req, res, next) => {
   // Add image URLs
   const merchantWithImages = {
     ...merchant.toObject(),
-    logo: merchant.logo 
+    logo: merchant.logo
       ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.logo}`
       : null,
     coverImage: merchant.coverImage
       ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.coverImage}`
-      : null
+      : null,
   };
 
   res.status(200).json({
     status: 'success',
-    data: { merchant: merchantWithImages }
+    data: { merchant: merchantWithImages },
   });
 });
 
@@ -162,7 +160,7 @@ exports.createNewMerchant = catchAsync(async (req, res, next) => {
   req.body.status = 'pending';
   req.body.isActive = true;
   req.body.approvedBy = req.user._id; // Backoffice admin
-  
+
   // Validate required fields
   validateMerchantData(req, res, next);
 
@@ -170,21 +168,24 @@ exports.createNewMerchant = catchAsync(async (req, res, next) => {
     $or: [
       { phone: req.body.phone },
       { taxId: req.body.taxId },
-      { businessName: req.body.businessName }
-    ]
+      { businessName: req.body.businessName },
+    ],
   });
-   if (existingMerchant) {
-    return next(new AppError('Merchant already exists with this phone, tax ID, or business name', 400));
+  if (existingMerchant) {
+    return next(
+      new AppError('Merchant already exists with this phone, tax ID, or business name', 400)
+    );
   }
   const newMerchant = await Merchant.create(req.body);
-const populatedMerchant = await Merchant.findById(newMerchant._id)
-    .populate('approvedBy', 'firstName lastName email');
+  const populatedMerchant = await Merchant.findById(newMerchant._id).populate(
+    'approvedBy',
+    'firstName lastName email'
+  );
   res.status(201).json({
     status: 'success',
-    data:{
+    data: {
       merchant: populatedMerchant,
-    }
-    
+    },
   });
 });
 
@@ -203,14 +204,10 @@ exports.updateMerchant = catchAsync(async (req, res, next) => {
     req.body.approvedBy = req.user._id;
   }
 
-  const merchant = await Merchant.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { 
-      new: true, 
-      runValidators: true 
-    }
-  ).populate('approvedBy', 'firstName lastName email');
+  const merchant = await Merchant.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true,
+  }).populate('approvedBy', 'firstName lastName email');
 
   if (!merchant) {
     return next(new AppError('Merchant not found', 404));
@@ -218,7 +215,7 @@ exports.updateMerchant = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    data: { merchant }
+    data: { merchant },
   });
 });
 
@@ -226,9 +223,9 @@ exports.updateMerchant = catchAsync(async (req, res, next) => {
 exports.deleteMerchant = catchAsync(async (req, res, next) => {
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       status: 'inactive',
-      isActive: false 
+      isActive: false,
     },
     { new: true }
   );
@@ -240,31 +237,30 @@ exports.deleteMerchant = catchAsync(async (req, res, next) => {
   // Deactivate associated users
   await User.updateMany(
     { restaurant: req.params.id },
-    { 
+    {
       isActive: false,
-      role: null // Remove merchant role
+      role: null, // Remove merchant role
     }
   );
 
   res.status(200).json({
     status: 'success',
-    message: 'Merchant deactivated successfully'
+    message: 'Merchant deactivated successfully',
   });
 });
-
 
 // 6. APPROVE MERCHANT
 exports.approveMerchant = catchAsync(async (req, res, next) => {
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       status: 'approved',
       approvedBy: req.user._id,
-      isActive: true
+      isActive: true,
     },
-    { 
-      new: true, 
-      runValidators: true 
+    {
+      new: true,
+      runValidators: true,
     }
   ).populate('approvedBy', 'firstName lastName email');
 
@@ -279,21 +275,21 @@ exports.approveMerchant = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     message: 'Merchant approved successfully',
-    data: { merchant }
+    data: { merchant },
   });
 });
 
 // 7. SUSPEND MERCHANT
 exports.suspendMerchant = catchAsync(async (req, res, next) => {
   const { reason } = req.body;
-  
+
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       status: 'suspended',
       isActive: false,
       suspendedReason: reason || 'No reason provided',
-      suspendedAt: new Date()
+      suspendedAt: new Date(),
     },
     { new: true }
   ).populate('approvedBy', 'firstName lastName email');
@@ -305,7 +301,7 @@ exports.suspendMerchant = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     message: 'Merchant suspended successfully',
-    data: { merchant }
+    data: { merchant },
   });
 });
 
@@ -313,11 +309,11 @@ exports.suspendMerchant = catchAsync(async (req, res, next) => {
 exports.activateMerchant = catchAsync(async (req, res, next) => {
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       status: 'approved',
       isActive: true,
       suspendedReason: null,
-      suspendedAt: null
+      suspendedAt: null,
     },
     { new: true }
   ).populate('approvedBy', 'firstName lastName email');
@@ -329,7 +325,7 @@ exports.activateMerchant = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     message: 'Merchant activated successfully',
-    data: { merchant }
+    data: { merchant },
   });
 });
 
@@ -337,7 +333,7 @@ exports.activateMerchant = catchAsync(async (req, res, next) => {
 exports.getMerchantStats = catchAsync(async (req, res, next) => {
   const stats = await Merchant.aggregate([
     {
-      $match: { _id: mongoose.Types.ObjectId(req.params.id) }
+      $match: { _id: mongoose.Types.ObjectId(req.params.id) },
     },
     {
       $lookup: {
@@ -345,8 +341,8 @@ exports.getMerchantStats = catchAsync(async (req, res, next) => {
         localField: '_id',
         foreignField: 'restaurant',
         as: 'users',
-        pipeline: [{ $match: { role: { $ne: null } } }]
-      }
+        pipeline: [{ $match: { role: { $ne: null } } }],
+      },
     },
     {
       $project: {
@@ -355,9 +351,9 @@ exports.getMerchantStats = catchAsync(async (req, res, next) => {
         subscriptionPlan: 1,
         userCount: { $size: '$users' },
         cuisineType: 1,
-        createdAt: 1
-      }
-    }
+        createdAt: 1,
+      },
+    },
   ]);
 
   if (!stats.length) {
@@ -366,14 +362,14 @@ exports.getMerchantStats = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    data: { stats: stats[0] }
+    data: { stats: stats[0] },
   });
 });
 
 // 10. UPDATE SUBSCRIPTION PLAN
 exports.updateSubscription = catchAsync(async (req, res, next) => {
   const { plan } = req.body;
-  
+
   const validPlans = ['free', 'basic', 'pro', 'enterprise'];
   if (!validPlans.includes(plan)) {
     return next(new AppError('Invalid subscription plan', 400));
@@ -381,9 +377,9 @@ exports.updateSubscription = catchAsync(async (req, res, next) => {
 
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       subscriptionPlan: plan,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     },
     { new: true }
   );
@@ -394,10 +390,9 @@ exports.updateSubscription = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    data: { merchant }
+    data: { merchant },
   });
 });
-
 
 // New CRUD for merchant users
 exports.createMerchantUser = catchAsync(async (req, res, next) => {
@@ -412,12 +407,18 @@ exports.createMerchantUser = catchAsync(async (req, res, next) => {
 
   // Validate required fields
   if (!firstName || !phone || !password || !passwordConfirm || !role) {
-    return next(new AppError('Please provide firstName, phone, password, passwordConfirm, and role', 400));
+    return next(
+      new AppError('Please provide firstName, phone, password, passwordConfirm, and role', 400)
+    );
   }
 
   // Validate role
   const roleDoc = await Role.findById(role);
-  if (!roleDoc || roleDoc.context !== 'merchant' || String(roleDoc.restaurant) !== String(merchantId)) {
+  if (
+    !roleDoc ||
+    roleDoc.context !== 'merchant' ||
+    String(roleDoc.restaurant) !== String(merchantId)
+  ) {
     return next(new AppError('Invalid role or role does not belong to this merchant', 400));
   }
 
@@ -472,7 +473,11 @@ exports.updateMerchantUser = catchAsync(async (req, res, next) => {
   // Validate role if provided
   if (role) {
     const roleDoc = await Role.findById(role);
-    if (!roleDoc || roleDoc.context !== 'merchant' || String(roleDoc.restaurant) !== String(merchantId)) {
+    if (
+      !roleDoc ||
+      roleDoc.context !== 'merchant' ||
+      String(roleDoc.restaurant) !== String(merchantId)
+    ) {
       return next(new AppError('Invalid role or role does not belong to this merchant', 400));
     }
   }

@@ -1,11 +1,11 @@
 const AppError = require('../utils/appError');
 
-const handleCastErrorDb = (err) => {
+const handleCastErrorDb = err => {
   const message = `invalid ${err.path}: ${err.value}.`;
   return new AppError(message, 400);
 };
 
-const handleDuplicationErrorDb = (err) => {
+const handleDuplicationErrorDb = err => {
   const errmMsg = err.errorResponse.errmsg;
   const regex = /dup key: { name: "(.*?)" }/;
 
@@ -16,15 +16,14 @@ const handleDuplicationErrorDb = (err) => {
   return new AppError(message, 400);
 };
 
-const handleValidationError = (err) => {
-  const errors = Object.values(err.errors).map((el) => el.message);
+const handleValidationError = err => {
+  const errors = Object.values(err.errors).map(el => el.message);
 
   const message = `Invalid input Data ${errors.join(', ')}`;
   return new AppError(message, 400);
 };
 
-const handleJWTError = () =>
-  new AppError('Invalid token, please log in again', 401);
+const handleJWTError = () => new AppError('Invalid token, please log in again', 401);
 
 const handleJWTExpireError = () => new AppError('Your Token has expired', 401);
 

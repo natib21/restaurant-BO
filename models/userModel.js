@@ -5,18 +5,19 @@ const bcrypt = require('bcryptjs');
 
 const historySchema = new mongoose.Schema({
   orderId: {
-      type: mongoose.Schema.Types.ObjectId, ref: 'Order' 
-    },
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+  },
   action: {
-      type: String, enum: ['accepted', 'prepared', 'served'],
-      required: true 
-    },
+    type: String,
+    enum: ['accepted', 'prepared', 'served'],
+    required: true,
+  },
   timestamp: {
-     type: Date, 
-     default: Date.now
-     },
+    type: Date,
+    default: Date.now,
+  },
 });
-
 
 const userSchema = new mongoose.Schema({
   firstName: {
@@ -34,25 +35,30 @@ const userSchema = new mongoose.Schema({
     minlength: 6,
     select: false,
   },
-  passwordConfirm: {
-    type: String,
-    required: [true, 'Please provide a password'],
-    validate: {
-      validator: function (el) {
-        return el === this.password;
-      },
-      message: 'password are not the same',
-    },
+passwordConfirm: {
+  type: String,
+  required: function () {
+    // Only require passwordConfirm when:
+    // 1. It's a new document AND
+    // 2. The password is NOT already hashed (i.e., we're hashing it now)
+    return this.isNew && !this.password?.startsWith('$2');
   },
+  validate: {
+    validator: function (el) {
+      return el === this.password;
+    },
+    message: 'Passwords do not match',
+  },
+},
   role: {
-    type: mongoose.Schema.Types.ObjectId, 
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Role',
-    default:null
-  }, 
-  merchant:{
-    type:mongoose.Schema.Types.ObjectId,
-    ref:'Merchant',
-    default:null
+    default: null,
+  },
+  merchant: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Merchant',
+    default: null,
   },
   email: {
     type: String,
@@ -94,24 +100,20 @@ const userSchema = new mongoose.Schema({
   passwordResetToken: String,
   passwordResetTokenExpires: Date,
   history: [historySchema],
-
 });
 
-
-
-userSchema.pre('save', async function(next) {
-    if (this.role) {
-        const Role = mongoose.model('Role');
-        // This query is redundant if pre('validate') already fetched the role.
-        // But for safety, we keep it as it requires 'tasks' which pre('validate') did not fetch.
-        const role = await Role.findById(this.role).populate('tasks');
-        if (!role || !role.tasks.length) this.history = undefined;
-    } else {
-        this.history = undefined;
-    }
-    next();
+userSchema.pre('save', async function (next) {
+  if (this.role) {
+    const Role = mongoose.model('Role');
+    // This query is redundant if pre('validate') already fetched the role.
+    // But for safety, we keep it as it requires 'tasks' which pre('validate') did not fetch.
+    const role = await Role.findById(this.role).populate('tasks');
+    if (!role || !role.tasks.length) this.history = undefined;
+  } else {
+    this.history = undefined;
+  }
+  next();
 });
-
 
 // ------------------------------------
 // --- USER SCHEMA INDEXES & METHODS ---
@@ -128,26 +130,25 @@ userSchema.index(
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
 
-  this.password = await bcrypt.hash(this.password, 12);
+  // If password is already a bcrypt hash (from seeder), skip re-hashing
+  if (this.password?.startsWith('$2a$') || this.password?.startsWith('$2b$')) {
+    this.passwordConfirm = undefined;
+    return next();
+  }
 
+  // Otherwise, hash it
+  this.password = await bcrypt.hash(this.password, 12);
   this.passwordConfirm = undefined;
   next();
 });
 
-
-userSchema.methods.correctPassword = async function (
-  candidatePassword,
-  userPassword
-) {
+userSchema.methods.correctPassword = async function (candidatePassword, userPassword) {
   return await bcrypt.compare(candidatePassword, userPassword);
 };
 
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
   if (this.passwordChangedAt) {
-    const changedTimeStamp = parseInt(
-      this.passwordChangedAt.getTime() / 1000,
-      10
-    );
+    const changedTimeStamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
 
     return JWTTimestamp < changedTimeStamp;
   }

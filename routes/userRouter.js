@@ -18,18 +18,11 @@ router.patch(
   authController.adminResetPassword
 );
 
-router.patch(
-  '/changePassword',
-  authController.protect,
-  authController.changePassword
-);
+router.patch('/changePassword', authController.protect, authController.changePassword);
 
 router.patch('/updateMe', authController.protect, userController.updateMe);
 router.delete('/deleteMe', authController.protect, userController.deleteMe);
-router
-  .route('/')
-  .get(userController.getAllUser)
-  .post(userController.createNewUser);
+router.route('/').get(userController.getAllUser).post(userController.createNewUser);
 
 router
   .route('/:id')

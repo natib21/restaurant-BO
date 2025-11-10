@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon server.js",
-    "start:prod": "cross-env NODE_ENV=production nodemon server.js"
+    "start:prod": "cross-env NODE_ENV=production nodemon server.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "author": "Nathnael Zelalem",
   "license": "ISC",
@@ -33,5 +35,8 @@
     "winston": "^3.15.0",
     "xss": "^1.0.15",
     "xss-filters": "^1.2.7"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
   }
 }

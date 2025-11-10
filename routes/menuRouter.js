@@ -4,32 +4,22 @@ const menuController = require('../controllers/menuController');
 const authController = require('../controllers/authController');
 const router = express.Router();
 
-router
-  .route('/:id')
-  .get( menuController.getPublicMenu)
-router
-  .route('/search')
-  .get(menuController.searchMenu, menuController.getAllMenu);
+router.route('/:id').get(menuController.getPublicMenu);
 
-router
-  .route('/beverage')
-  .get(menuController.getAllBeverage, menuController.getAllMenu);
+router.route('/search').get(menuController.searchMenu, menuController.getAllMenu);
 
-router
-  .route('/Appetizers')
-  .get(menuController.getAppetizers, menuController.getAllMenu);
+router.route('/beverage').get(menuController.getAllBeverage, menuController.getAllMenu);
 
-router
-  .route('/specials')
-  .get(menuController.getSpecials, menuController.getAllMenu);
+router.route('/Appetizers').get(menuController.getAppetizers, menuController.getAllMenu);
 
+router.route('/specials').get(menuController.getSpecials, menuController.getAllMenu);
 
 router
   .route('/menu')
   .get(menuController.getAllMenu)
   .post(
     authController.protect,
-    authController.restrictTo('admin'),
+    authController.restrictTo(),
     menuController.uploadMenuPhoto,
     menuController.resizeMenuPhoto,
     menuController.createNewMenu
@@ -45,10 +35,6 @@ router
     menuController.resizeMenuPhoto,
     menuController.updateMenu
   )
-  .delete(
-    authController.protect,
-    authController.restrictTo('admin'),
-    menuController.deleteMenu
-  );
+  .delete(authController.protect, authController.restrictTo('admin'), menuController.deleteMenu);
 
 module.exports = router;
