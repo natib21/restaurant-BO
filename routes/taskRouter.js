@@ -8,7 +8,9 @@ const router = express.Router();
 // router.use(authController.protect, authController.restrictTo('admin'));
 
 // Routes for task management
-router.get('/', taskController.getAllTasks); // List all tasks
+router.get('/', taskController.getAllTasks); 
+
+// List all tasks
 router.post('/sync', taskController.syncTasks); // Sync tasks from Task API
 router.post('/', taskController.createTask); // Create a single task
 router.patch('/:id', taskController.updateTask); // Update a task

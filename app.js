@@ -61,14 +61,14 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api/v1/merchant', menuRouter);
+app.use('/api/v1/menus', menuRouter);
+app.use('/api/v1/orders', orderRouter);
+app.use('/api/v1/roles', roleRouter);
+app.use('/api/v1/users', userRouter);
+app.use('/api/v1/tables', tableRouter);
+app.use('/api/v1/merchants', merchantRouter);
+app.use('/api/v1/tasks', taskRouter);
 
-app.use('/api/v1/', orderRouter);
-app.use('/api/v1/role',roleRouter)
-app.use('/api/v1/user', userRouter);
-app.use('/api/v1/table', tableRouter);
-app.use('/api/v1/merchant',merchantRouter)
-app.use('/api/v1/task',taskRouter)
 
 
 

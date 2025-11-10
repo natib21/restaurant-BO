@@ -211,13 +211,9 @@ exports.protect = catchAsync(async (req, res, next) => {
 //     next();
 //   };
 // };
-
-
-
-
 exports.restrictTo = () => {
   return (req, res, next) => {
-    const fullUrl = req.originalUrl.replace(/\/$/, ''); // normalize trailing slash
+    let fullUrl = req.originalUrl.replace(/\/$/, ''); // normalize trailing slash
     const httpMethod = req.method;
     const { role } = req.user || {};
 
@@ -231,7 +227,6 @@ exports.restrictTo = () => {
       (!route.method || route.method === httpMethod) &&
       route.path.test(fullUrl)
     );
-
     if (isPublic) return next();
 
     // 🧍‍♂️ No role assigned — treat as basic
@@ -247,7 +242,6 @@ exports.restrictTo = () => {
         (!route.method || route.method === httpMethod) &&
         route.path.test(fullUrl)
       );
-
       if (!hasBasicAccess) {
         return next(
           new AppError(
@@ -259,22 +253,30 @@ exports.restrictTo = () => {
       return next();
     }
 
-    
+    // -----------------------------
+    // Normalize dynamic IDs for all resources
+    // -----------------------------
+    // Replace any segment that looks like an ID (numeric or alphanumeric) with :id
+    const segments = fullUrl.split('/');
+    const idPattern = /^[a-zA-Z0-9]{8,}$/; // assume IDs are >=8 chars alphanumeric or numbers
+    for (let i = 0; i < segments.length; i++) {
+      if (segments[i] && (isNaN(segments[i]) === false || idPattern.test(segments[i]))) {
+        segments[i] = ':id';
+      }
+    }
+    fullUrl = segments.join('/');
+
     const hasAccess = role.tasks?.some(task => {
       const taskUrl = task.target?.replace(/\/$/, ''); // normalize
-      const targetMatch =
-        taskUrl &&
-        (fullUrl === taskUrl || fullUrl.startsWith(taskUrl + '/'));
-
+      const targetMatch = taskUrl && fullUrl === taskUrl;
       const methodMatch = !task.method || task.method === httpMethod;
-
       return targetMatch && methodMatch;
     });
 
     if (!hasAccess) {
       return next(
         new AppError(
-          `Access denied: ${role.name} does not have permission for ${httpMethod} ${fullUrl}`,
+          `Access denied: ${role.name} does not have permission for ${httpMethod} ${req.originalUrl}`,
           403
         )
       );

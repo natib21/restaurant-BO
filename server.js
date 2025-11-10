@@ -22,7 +22,9 @@ const DB = process.env.DATABASE.replace(
   process.env.DATABASE_PASSWORD
 );
 
-mongoose.connect(DB).then(() => {
+const Local_DB = process.env.LOCAL_DATABASE; 
+
+mongoose.connect(Local_DB).then(() => {
   logger.info('MongoDB connected successfully!');
 });
 
