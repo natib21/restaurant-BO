@@ -26,10 +26,10 @@ const paymentSchema = new mongoose.Schema({
     required: true,
   },
   method: {
-  type: String,
-  enum: ['card', 'mobile', 'cash'], // allow cash too
-  required: true,
-},
+    type: String,
+    enum: ['card', 'mobile', 'cash'], // allow cash too
+    required: true,
+  },
   transactionId: {
     type: String,
     required: true, // Unique ID from payment gateway
@@ -49,7 +49,7 @@ const paymentSchema = new mongoose.Schema({
 });
 
 // Auto-update `updatedAt`
-paymentSchema.pre('save', function(next) {
+paymentSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
 });

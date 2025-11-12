@@ -1,4 +1,3 @@
-
 const Table = require('../models/tabelModel');
 const ApiFeatures = require('../utils/apiFeatures');
 const AppError = require('../utils/appError');

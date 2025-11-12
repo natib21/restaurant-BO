@@ -3,7 +3,6 @@ const Schema = mongoose.Schema;
 
 // Embedded schema for order items
 const orderItemSchema = new Schema({
-   
   name: {
     type: String, // Menu item name (not a reference)
     required: true,
@@ -25,11 +24,11 @@ const orderItemSchema = new Schema({
 
 // Main order schema
 const orderSchema = new Schema({
-  restaurant: { 
+  restaurant: {
     type: Schema.Types.ObjectId,
-     ref: "Merchant", 
-     required: true 
-    },
+    ref: 'Merchant',
+    required: true,
+  },
   name: {
     type: String,
   },
@@ -56,7 +55,7 @@ const orderSchema = new Schema({
   },
   assignedRole: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' }, // who handles
   assignedUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // staff assigned
-  paymentStatus: { type: String, enum: ['unpaid','paid'], default: 'unpaid' },
+  paymentStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
   createdAt: {
     type: Date,
     default: Date.now(),

@@ -26,8 +26,6 @@ router
   .patch(merchantController.updateMerchantUser) // Update a user
   .delete(merchantController.deleteMerchantUser);
 
-
-
 // CRUD OPERATIONS
 router
   .route('/')
@@ -58,6 +56,5 @@ router.patch('/:id/subscription', merchantController.updateSubscription);
 
 // UTILITY OPERATIONS
 router.get('/:id/stats', merchantController.getMerchantStats);
-
 
 module.exports = router;

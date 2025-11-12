@@ -6,21 +6,18 @@ const dotenv = require('dotenv');
 
 const { createSocketServer } = require('./socket');
 
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
   logger.error(`UNHANDLED EXCEPTION: ${err.name} - ${err.message}`);
   process.exit(1);
 });
 
-dotenv.config({ path: './config.env' }); 
+dotenv.config({ path: './config.env' });
 
 const app = require('./app');
 
 const server = createSocketServer(app);
 
-const DB = process.env.DATABASE.replace(
-  '<PASSWORD>',
-  process.env.DATABASE_PASSWORD
-);
+const DB = process.env.DATABASE.replace('<PASSWORD>', process.env.DATABASE_PASSWORD);
 
 const Local_DB = process.env.LOCAL_DATABASE; 
 
@@ -28,13 +25,12 @@ mongoose.connect(Local_DB).then(() => {
   logger.info('MongoDB connected successfully!');
 });
 
-
 const PORT = process.env.PORT || 3000;
 const SERVER = server.listen(PORT, () => {
   logger.info(`Server is running on port ${PORT}`);
 });
 
-process.on('unhandledRejection', (err) => {
+process.on('unhandledRejection', err => {
   logger.error(`UNHANDLED REJECTION: ${err.name} - ${err.message}`);
   console.log('UNHANDLES REJECTION 🔥 SHUTTING DOWN... ');
   SERVER.close(() => {

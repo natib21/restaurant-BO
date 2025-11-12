@@ -4,15 +4,15 @@ const Schema = mongoose.Schema;
 const tableSchema = new Schema(
   {
     restaurant: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Merchant", 
-    required: true,
-  },
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Merchant',
+      required: true,
+    },
     tableNumber: {
       type: String,
       required: true,
       trim: true,
-      unique:true
+      unique: true,
     },
     capacity: {
       type: Number,
@@ -21,29 +21,29 @@ const tableSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["available", "occupied", "reserved", "needs-cleaning"],
-      default: "available",
+      enum: ['available', 'occupied', 'reserved', 'needs-cleaning'],
+      default: 'available',
     },
     location: {
       type: String,
-      enum: ["indoor", "outdoor", "rooftop", "vip"],
-      default: "indoor",
+      enum: ['indoor', 'outdoor', 'rooftop', 'vip'],
+      default: 'indoor',
     },
     merchant: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Merchant",
+      ref: 'Merchant',
       required: true,
     },
     currentOrder: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Order",
+      ref: 'Order',
       default: null,
     },
-    qr: { type: String }
+    qr: { type: String },
   },
   { timestamps: true }
 );
 
-const Table = mongoose.model("Table", tableSchema);
+const Table = mongoose.model('Table', tableSchema);
 
 module.exports = Table;

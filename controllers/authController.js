@@ -3,23 +3,22 @@ const User = require('../models/userModel');
 const catchAsync = require('./../utils/catchAsync');
 const AppError = require('../utils/appError');
 const { promisify } = require('util');
-const mongoose = require('mongoose')
-const Merchant = require('../models/merchantModel')
-const Task = require('../models/taskModel')
-const Role =require('../models/roleModel');
+const mongoose = require('mongoose');
+const Merchant = require('../models/merchantModel');
+const Task = require('../models/taskModel');
+const Role = require('../models/roleModel');
 
-
-const signToken = (user) => {
-  console.log("user : -",user)
-  if (!user || !user._id || !user.merchant) {
+const signToken = user => {
+  console.log('user : -', user);
+  if (!user || !user._id  ) {
     throw new AppError('Invalid user for token generation', 500);
   }
-  const merchant = user.merchant._id ;
+  const payload = { id: user._id };
+  if (user.merchant && user.merchant._id) {
+    payload.merchant = user.merchant._id.toString();
+  }
   return jwt.sign(
-    {
-      id: user._id,
-      merchant
-    },
+    payload,
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE_IN }
   );
@@ -29,12 +28,10 @@ const createSendToken = (user, statusCode, res) => {
   const token = signToken(user);
 
   const cookieOptions = {
-    expires: new Date(
-      Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
-    ),
+    expires: new Date(Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000),
     // secure: true,
     httpOnly: true,
-    sameSite:'strict'
+    sameSite: 'strict',
   };
   if (process.env.NODE_ENV === 'production') cookieOptions.secure = true;
   res.cookie('jwt', token, cookieOptions);
@@ -51,8 +48,7 @@ const createSendToken = (user, statusCode, res) => {
   });
 };
 exports.signup = catchAsync(async (req, res, next) => {
-
- const { firstName, lastName, phone, email, business, password, passwordConfirm } = req.body;
+  const { firstName, lastName, phone, email, business, password, passwordConfirm } = req.body;
 
   if (!firstName || !lastName || !phone || !email || !business || !password || !passwordConfirm) {
     return next(new AppError('Please provide all required fields', 400));
@@ -61,9 +57,9 @@ exports.signup = catchAsync(async (req, res, next) => {
     return next(new AppError('Passwords do not match', 400));
   }
 
-   const [existingUser, existingMerchant] = await Promise.all([
+  const [existingUser, existingMerchant] = await Promise.all([
     User.findOne({ phone }),
-    Merchant.findOne({ businessName: business })
+    Merchant.findOne({ businessName: business }),
   ]);
 
   if (existingUser) {
@@ -72,79 +68,77 @@ exports.signup = catchAsync(async (req, res, next) => {
   if (existingMerchant) {
     return next(new AppError('A business with that name already exists.', 400));
   }
- 
-   const newMerchant = await Merchant.create({
+
+  const newMerchant = await Merchant.create({
     businessName: business,
     status: 'pending',
     phone,
-    mode:'Test',
-  }); 
+    mode: 'Test',
+  });
 
- const existingSuperAdminRole = await Role.findOne({ name: 'Super Merchant Admin' });
+  const existingSuperAdminRole = await Role.findOne({ name: 'SUPER-MERCHANT-ADMIN' });
 
-    if (!existingSuperAdminRole) {
-        return next(new AppError('Master "Super Merchant Admin" role template not found. Setup error.', 500));
-    }
+  if (!existingSuperAdminRole) {
+    return next(
+      new AppError('Master "Super Merchant Admin" role template not found. Setup error.', 500)
+    );
+  }
   const newUser = await User.create({
-        firstName, 
-        lastName, 
-        phone, 
-        email, 
-        password, 
-        passwordConfirm,
-        merchant: newMerchant._id, 
-        role: existingSuperAdminRole._id
-    });
+    firstName,
+    lastName,
+    phone,
+    email,
+    password,
+    passwordConfirm,
+    merchant: newMerchant._id,
+    role: existingSuperAdminRole._id,
+  });
 
-    const finalUser = await User.findById(newUser._id)
-        .populate({
-            path: 'role',
-            select: 'name context description tasks',
-            populate:{
-              path:'tasks',
-              select:'name description target method'
-            }
-        });
-
+  const finalUser = await User.findById(newUser._id).populate({
+    path: 'role',
+    select: 'name context description tasks',
+    populate: {
+      path: 'tasks',
+      select: 'name description target method',
+    },
+  });
+  if (newUser.role?.name !== 'SUPER-ADMIN') {
+  populatedUser = await populatedUser.populate({
+    path: 'merchant',
+    select: 'businessName status mode'
+  });
+}
   createSendToken(finalUser, 201, res);
 });
 
-
 exports.login = catchAsync(async (req, res, next) => {
-
   const { email, password } = req.body;
   console.log(email, password);
   if (!email || !password) {
     return next(new AppError('Please provide Name or Password', 404));
   }
-   const user = await User.findOne({ email }).select('+password');
-   console.log(user)
+  const user = await User.findOne({ email }).select('+password');
+  console.log(user);
 
   if (!user || !(await user.correctPassword(password, user.password)))
     return next(new AppError('Incorrect name or password', 401));
 
-  const populatedUser = await User.findById(user._id)
-        .populate({
-            path: 'role',
-            select: 'name context description tasks',
-            populate: {
-                path: 'tasks',
-                select: 'name target method description'
-            }
-        })
-        
+  const populatedUser = await User.findById(user._id).populate({
+    path: 'role',
+    select: 'name context description tasks',
+    populate: {
+      path: 'tasks',
+      select: 'name target method description',
+    },
+  });
+
   createSendToken(populatedUser, 200, res);
-
 });
-
 
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }
 
@@ -172,21 +166,18 @@ exports.protect = catchAsync(async (req, res, next) => {
     return next(new AppError('User belonging to this token no longer exists.', 401));
   }
 
-
   if (
-    currentUser.merchant &&
-    currentUser.merchant._id.toString() !== decoded.merchant
-  ) {
-    return next(new AppError('Token merchant mismatch. Please re-login.', 401));
-  }
-
+  currentUser.merchant &&
+  decoded.merchant &&
+  currentUser.merchant._id.toString() !== decoded.merchant
+) {
+  return next(new AppError('Token merchant mismatch. Please re-login.', 401));
+}
 
   if (currentUser.changedPasswordAfter(decoded.iat)) {
-    return next(
-      new AppError('User recently changed password! Please log in again.', 401)
-    );
+    return next(new AppError('User recently changed password! Please log in again.', 401));
   }
-
+  console.log(currentUser);
 
   if (currentUser.isActive === false) {
     return next(new AppError('Your account is inactive. Contact support.', 403));
@@ -196,7 +187,6 @@ exports.protect = catchAsync(async (req, res, next) => {
 
   next();
 });
-
 
 // exports.restrictTo = (...roles) => {
 //   return (req, res, next) => {
@@ -211,92 +201,114 @@ exports.protect = catchAsync(async (req, res, next) => {
 //     next();
 //   };
 // };
+
+function pathToRegex(path) {
+  const cleanPath = path.replace(/\/$/, '');
+  const regexStr = cleanPath
+    .replace(/:[^\/]+/g, '([^/]+)') // :id → capture group
+    .replace(/\//g, '\\/');
+  return new RegExp(`^${regexStr}$`);
+}
+
+/**
+ * restrictTo() - Dynamic RBAC Middleware
+ * Supports:
+ *   - Public routes
+ *   - Basic role (limited access)
+ *   - Dynamic task permissions with :id
+ *   - Method matching (*, GET, POST, etc.)
+ */
 exports.restrictTo = () => {
   return (req, res, next) => {
-    let fullUrl = req.originalUrl.replace(/\/$/, ''); // normalize trailing slash
+    const fullUrl = req.originalUrl.replace(/\/$/, '');
     const httpMethod = req.method;
-    const { role } = req.user || {};
+    const user = req.user;
 
-    // ✅ Public routes (no auth required)
+    // 1. Authentication required
+    if (!user) {
+      return next(new AppError('Authentication required', 401));
+    }
+
+    const { role } = user;
+     
+    // 2. Public routes (no auth needed)
     const publicRoutes = [
       { method: 'POST', path: /^\/api\/user\/signup$/ },
       { method: 'POST', path: /^\/api\/user\/login$/ },
     ];
 
-    const isPublic = publicRoutes.some(route =>
-      (!route.method || route.method === httpMethod) &&
-      route.path.test(fullUrl)
+    const isPublic = publicRoutes.some(
+      r => (!r.method || r.method === httpMethod) && r.path.test(fullUrl)
     );
     if (isPublic) return next();
 
-    // 🧍‍♂️ No role assigned — treat as basic
-    if (!role || role.name === 'basics-') {
+    if (role && (role.name === 'SUPER-ADMIN' || role.isSystemRole === true)) {
+      console.log('SUPER-ADMIN bypass: full access');
+      return next();
+    }
+
+    // 3. Basic role: limited access
+    if (!role || role.name === 'basics-role') {
       const basicAllowed = [
         { method: 'GET', path: /^\/api\/v1\/profile$/ },
         { method: 'GET', path: /^\/api\/v1\/orders$/ },
         { method: 'POST', path: /^\/api\/v1\/request-merchant-role$/ },
-        { method: 'GET', path: /^\/api\/v1\/public\/*/ },
+        { method: 'GET', path: /^\/api\/v1\/public\// },
       ];
 
-      const hasBasicAccess = basicAllowed.some(route =>
-        (!route.method || route.method === httpMethod) &&
-        route.path.test(fullUrl)
+      const hasAccess = basicAllowed.some(
+        r => (!r.method || r.method === httpMethod) && r.path.test(fullUrl)
       );
-      if (!hasBasicAccess) {
+
+      if (!hasAccess) {
         return next(
-          new AppError(
-            'Basic users have limited access. Contact backoffice to upgrade your role.',
-            403
-          )
+          new AppError('Basic users have limited access. Contact backoffice to upgrade.', 403)
         );
       }
       return next();
     }
-
-    // -----------------------------
-    // Normalize dynamic IDs for all resources
-    // -----------------------------
-    // Replace any segment that looks like an ID (numeric or alphanumeric) with :id
-    const segments = fullUrl.split('/');
-    const idPattern = /^[a-zA-Z0-9]{8,}$/; // assume IDs are >=8 chars alphanumeric or numbers
-    for (let i = 0; i < segments.length; i++) {
-      if (segments[i] && (isNaN(segments[i]) === false || idPattern.test(segments[i]))) {
-        segments[i] = ':id';
-      }
+ console.log("Full URL :- " +fullUrl)
+ console.log("Method :- " +httpMethod)
+    // 4. Dynamic task-based access (with :id support)
+    if (!Array.isArray(role.tasks) || role.tasks.length === 0) {
+      return next(new AppError('No task assigned to this role', 403));
     }
-    fullUrl = segments.join('/');
 
-    const hasAccess = role.tasks?.some(task => {
-      const taskUrl = task.target?.replace(/\/$/, ''); // normalize
-      const targetMatch = taskUrl && fullUrl === taskUrl;
-      const methodMatch = !task.method || task.method === httpMethod;
-      return targetMatch && methodMatch;
+    const hasAccess = role.tasks.some(task => {
+      const taskUrl = (task.target || '').replace(/\/$/, '').trim();
+      if (!taskUrl) return false;
+
+      // Method match: allow *, or exact
+      const methodMatch = !task.method || task.method === '*' || task.method === httpMethod;
+
+      if (!methodMatch) return false;
+
+      // Convert task.target → regex and test
+      let pathRegex;
+      try {
+        pathRegex = pathToRegex(taskUrl);
+      } catch (e) {
+        return false; // skip malformed
+      }
+      console.log("Full URL :- " +fullUrl)
+      console.log("Taks URL :- " +taskUrl)
+      console.log("Path to Regex URL :- " +pathRegex)
+      return pathRegex.test(fullUrl);
     });
 
     if (!hasAccess) {
-      return next(
-        new AppError(
-          `Access denied: ${role.name} does not have permission for ${httpMethod} ${req.originalUrl}`,
-          403
-        )
-      );
+      return next(new AppError(`Access denied: ${role.name} → ${httpMethod} ${fullUrl}`, 403));
     }
 
     next();
   };
 };
 
-
 exports.adminResetPassword = catchAsync(async (req, res, next) => {
   const { phone, password, passwordConfirm } = req.body;
 
   if (!phone || !password || !passwordConfirm) {
-    return next(
-      new AppError(
-        'Please provide phone, password, and password confirmation',
-        400
-      )
-    );
+    return next(new AppError('Please provide phone, password, and password confirmation', 400));
   }
 
   if (password !== passwordConfirm) {

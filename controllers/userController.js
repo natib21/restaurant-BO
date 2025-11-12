@@ -4,7 +4,7 @@ const AppError = require('../utils/appError');
 
 const filterObj = (obj, ...allowedFields) => {
   const newObj = {};
-  Object.keys(obj).forEach((el) => {
+  Object.keys(obj).forEach(el => {
     if (allowedFields.includes(el)) newObj[el] = obj[el];
   });
   return newObj;
@@ -23,14 +23,8 @@ exports.getAllUser = catchAsync(async (req, res, next) => {
 });
 
 exports.updateMe = catchAsync(async (req, res, next) => {
- 
   if (req.body.password || req.body.passwordConfirm) {
-    return next(
-      new AppError(
-        'This is Not for Password update pls use /changePassword route',
-        400
-      )
-    );
+    return next(new AppError('This is Not for Password update pls use /changePassword route', 400));
   }
 
   // update Document
@@ -74,23 +68,11 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   console.log(req.body, req.params.id);
 
   if (req.body.password || req.body.passwordConfirm) {
-    return next(
-      new AppError(
-        'This is Not for Password update pls use /changePassword route',
-        400
-      )
-    );
+    return next(new AppError('This is Not for Password update pls use /changePassword route', 400));
   }
 
   // update Document
-  const filterdBody = filterObj(
-    req.body,
-    'firstName',
-    'lastName',
-    'email',
-    'phone',
-    'role'
-  );
+  const filterdBody = filterObj(req.body, 'firstName', 'lastName', 'email', 'phone', 'role');
 
   console.log(filterdBody);
 
@@ -120,7 +102,3 @@ exports.deleteUser = catchAsync(async (req, res) => {
     menu: null,
   });
 });
-
-
-
-
