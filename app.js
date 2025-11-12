@@ -66,7 +66,7 @@ app.use('/api/v1/order', orderRouter);
 app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/user', userRouter);
 app.use('/api/v1/table', tableRouter);
-app.use('/api/v1/merchant', merchantRouter);
+app.use('/api/v1/merchants', merchantRouter);
 app.use('/api/v1/tasks', taskRouter);
 
 app.all('*', (req, res, next) => {

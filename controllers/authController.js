@@ -128,7 +128,7 @@ exports.login = catchAsync(async (req, res, next) => {
     select: 'name context description tasks',
     populate: {
       path: 'tasks',
-      select: 'name target method description',
+      select: 'name endpoint method description',
     },
   });
 
