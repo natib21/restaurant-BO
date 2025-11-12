@@ -1,60 +1,179 @@
+/**
+ * @file merchantRoutes.js
+ * @description Merchant & user management routes
+ *              - User routes use req.user.merchant (no :id in URL)
+ *              - All access controlled via restrictTo() + tasks
+ *              - No magic role strings
+ */
+
 const express = require('express');
 const merchantController = require('../controllers/merchantController');
 const authController = require('../controllers/authController');
 
 const router = express.Router();
 
-// PROTECT ALL ROUTES
-// router.use(authController.protect);
-// router.use(authController.restrictTo()); // Backoffice role required
+// ===================================================================
+// 1. GLOBAL MIDDLEWARE
+// ===================================================================
 
-// MEDIA UPLOAD
+// All routes require login
+router.use(authController.protect);
+
+// ===================================================================
+// 2. KYC UPLOAD (Merchant self-onboarding)
+// ===================================================================
+
 router.post(
   '/KYC',
-  authController.protect,
+  authController.restrictTo(), // task: 'upload-kyc'
   merchantController.uploadMerchantPhotos,
-  merchantController.processMerchantMedia
+  merchantController.processMerchantMedia,
+  merchantController.createNewMerchant
 );
 
+// ===================================================================
+// 3. MERCHANT-ONLY ROLE MANAGEMENT
+// ===================================================================
+// POST /api/v1/merchants/roles
+// GET  /api/v1/merchants/roles
 router
-  .route('/:id/users')
-  .get(merchantController.getMerchantUsers) // Read all users
-  .post(merchantController.createMerchantUser); // Create a new user
-
-router
-  .route('/:id/users/:userId')
-  .patch(merchantController.updateMerchantUser) // Update a user
-  .delete(merchantController.deleteMerchantUser);
-
-// CRUD OPERATIONS
-router
-  .route('/')
+  .route('/roles')
   .post(
-    authController.protect,
-    merchantController.uploadMerchantPhotos,
-    merchantController.processMerchantMedia,
-    merchantController.createNewMerchant
+    authController.restrictTo(), // task: 'create-role'
+    merchantController.createMerchantRole
   )
-  .get(merchantController.getAllMerchants);
+  .get(
+    authController.restrictTo(), // task: 'list-roles'
+    merchantController.getAllMerchantRoles
+  );
 
+// GET    /api/v1/merchants/roles/:roleId
+// PATCH  /api/v1/merchants/roles/:roleId
+// DELETE /api/v1/merchants/roles/:roleId
 router
-  .route('/:id')
-  .get(merchantController.getMerchant)
-  .patch(
-    authController.protect,
-    merchantController.uploadMerchantPhotos,
-    merchantController.processMerchantMedia,
-    merchantController.updateMerchant
+  .route('/roles/:roleId')
+  .get(
+    authController.restrictTo(), // task: 'view-role'
+    merchantController.getMerchantRole
   )
-  .delete(merchantController.deleteMerchant);
+  .patch(
+    authController.restrictTo(), // task: 'update-role'
+    merchantController.updateMerchantRole
+  )
+  .delete(
+    authController.restrictTo(), // task: 'delete-role'
+    merchantController.deleteMerchantRole
+  );
 
-// WORKFLOW OPERATIONS
-router.patch('/:id/approve', merchantController.approveMerchant);
-router.patch('/:id/suspend', merchantController.suspendMerchant);
-router.patch('/:id/activate', merchantController.activateMerchant);
-router.patch('/:id/subscription', merchantController.updateSubscription);
+// ===================================================================
+// 3. USER MANAGEMENT (no :merchantId in URL)
+// ===================================================================
 
-// UTILITY OPERATIONS
-router.get('/:id/stats', merchantController.getMerchantStats);
+// GET    /api/v1/merchants/users
+// POST   /api/v1/merchants/users
+router
+  .route('/users')
+  .get(
+    authController.restrictTo(), // task: 'view-users'
+    merchantController.getMerchantUsers
+  )
+  .post(
+    authController.restrictTo(), // task: 'create-user'
+    merchantController.createMerchantUser
+  );
+
+// PATCH  /api/v1/merchants/users/:userId
+// DELETE /api/v1/merchants/users/:userId
+router
+  .route('/users/:id')
+  .patch(
+    authController.restrictTo(), // task: 'update-user'
+    merchantController.updateMerchantUser
+  )
+  .delete(
+    authController.restrictTo(), // task: 'delete-user'
+    merchantController.deleteMerchantUser
+  );
+
+// ===================================================================
+// 4. MERCHANT CRUD (Back-office only)
+// ===================================================================
+
+// POST /api/v1/merchants
+router.post(
+  '/',
+  authController.restrictTo(), // task: 'create-merchant'
+  merchantController.uploadMerchantPhotos,
+  merchantController.processMerchantMedia,
+  merchantController.createNewMerchant
+);
+
+// GET /api/v1/merchants
+router.get(
+  '/',
+  authController.restrictTo(), // task: 'list-merchants'
+  merchantController.getAllMerchants
+);
+
+// GET /api/v1/merchants/:id
+router.get(
+  '/:id',
+  authController.restrictTo(), // task: 'view-merchant'
+  merchantController.getMerchant
+);
+
+// PATCH /api/v1/merchants/:id
+router.patch(
+  '/:id',
+  authController.restrictTo(), // task: 'update-merchant'
+  merchantController.uploadMerchantPhotos,
+  merchantController.processMerchantMedia,
+  merchantController.updateMerchant
+);
+
+// DELETE /api/v1/merchants/:id
+router.delete(
+  '/:id',
+  authController.restrictTo(), // task: 'delete-merchant'
+  merchantController.deleteMerchant
+);
+
+// ===================================================================
+// 5. WORKFLOW ROUTES
+// ===================================================================
+
+router.patch(
+  '/:id/approve',
+  authController.restrictTo(), // task: 'approve-merchant'
+  merchantController.approveMerchant
+);
+
+router.patch(
+  '/:id/suspend',
+  authController.restrictTo(), // task: 'suspend-merchant'
+  merchantController.suspendMerchant
+);
+
+router.patch(
+  '/:id/activate',
+  authController.restrictTo(), // task: 'activate-merchant'
+  merchantController.activateMerchant
+);
+
+router.patch(
+  '/:id/subscription',
+  authController.restrictTo(), // task: 'update-subscription'
+  merchantController.updateSubscription
+);
+
+// ===================================================================
+// 6. STATS
+// ===================================================================
+
+router.get(
+  '/:id/stats',
+  authController.restrictTo(), // task: 'view-stats'
+  merchantController.getMerchantStats
+);
 
 module.exports = router;

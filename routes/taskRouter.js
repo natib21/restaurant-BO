@@ -6,6 +6,12 @@ const router = express.Router();
 
 // Restrict all routes to merchant admins
 // router.use(authController.protect, authController.restrictTo('admin'));
+router.use((req, res, next) => {
+  if (req.user.role.name !== 'SUPER-ADMIN') {
+    return next(new AppError('Access denied. Super Admin only.', 403));
+  }
+  next();
+});
 
 router
   .route('/deleteAll')

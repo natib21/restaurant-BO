@@ -1,99 +1,152 @@
+/**
+ * @file merchantController.js
+ * @description Handles all CRUD operations for merchants, including media uploads,
+ *              user management within merchants, approval workflows, and statistics.
+ *              Supports both back-office (system admin) and merchant self-management.
+ */
+
 const multer = require('multer');
 const sharp = require('sharp');
 const Merchant = require('../models/merchantModel');
 const ApiFeatures = require('../utils/apiFeatures');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
+const User = require('../models/userModel');
+const Role = require('../models/roleModel');
+const mongoose = require('mongoose');
+const fs = require('fs');
 
-// ------------------- MULTER SETUP -------------------
+/* ===================================================================
+   1. MULTER SETUP: Handle file uploads (logo, cover, documents)
+   =================================================================== */
+
+// Store files in memory to allow processing with Sharp before saving
 const multerStorage = multer.memoryStorage();
 
+/**
+ * Filter to allow only image files for logo & coverImage
+ * Documents are handled separately (no filtering needed)
+ */
 const multerFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image')) cb(null, true);
-  else cb(new AppError('Not an image! Please upload only images.', 400), false);
+  if (file.fieldname === 'documents') {
+    // Allow any file type for documents
+    cb(null, true);
+  } else if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new AppError('Not an image! Please upload only images for logo/cover.', 400), false);
+  }
 };
 
+// Configure multer to accept multiple fields
 const upload = multer({
   storage: multerStorage,
   fileFilter: multerFilter,
 });
 
-// upload both logo and coverImage
+/**
+ * Middleware: Upload up to 1 logo, 1 cover image, and 10 documents
+ */
 exports.uploadMerchantPhotos = upload.fields([
   { name: 'logo', maxCount: 1 },
   { name: 'coverImage', maxCount: 1 },
   { name: 'documents', maxCount: 10 },
 ]);
 
-// Resize images using sharp
+/* ===================================================================
+   2. IMAGE & DOCUMENT PROCESSING (Sharp + Filesystem)
+   =================================================================== */
+
+/**
+ * Middleware: Resize images and save to disk, store document metadata
+ * Runs after multer, before create/update
+ */
 exports.processMerchantMedia = catchAsync(async (req, res, next) => {
-  // Process logo
-  if (req.files?.logo) {
-    req.files.logo[0].filename = `merchant-logo-${Date.now()}-${req.files.logo[0].originalname.split('.').slice(0, -1).join('.')}.jpeg`;
-    await sharp(req.files.logo[0].buffer)
-      .resize(300, 300)
+  // --- Process Logo ---
+  if (req.files?.logo?.[0]) {
+    const logoFile = req.files.logo[0];
+    const logoFilename = `merchant-logo-${Date.now()}-${logoFile.originalname.split('.').slice(0, -1).join('.')}.jpeg`;
+
+    await sharp(logoFile.buffer)
+      .resize(300, 300, { fit: 'cover' })
       .toFormat('jpeg')
       .jpeg({ quality: 90 })
-      .toFile(`public/img/merchants/${req.files.logo[0].filename}`);
-    req.body.logo = req.files.logo[0].filename;
+      .toFile(`public/img/merchants/${logoFilename}`);
+
+    req.body.logo = logoFilename;
   }
 
-  // Process cover image
-  if (req.files?.coverImage) {
-    req.files.coverImage[0].filename = `merchant-cover-${Date.now()}-${req.files.coverImage[0].originalname.split('.').slice(0, -1).join('.')}.jpeg`;
-    await sharp(req.files.coverImage[0].buffer)
-      .resize(1200, 400)
+  // --- Process Cover Image ---
+  if (req.files?.coverImage?.[0]) {
+    const coverFile = req.files.coverImage[0];
+    const coverFilename = `merchant-cover-${Date.now()}-${coverFile.originalname.split('.').slice(0, -1).join('.')}.jpeg`;
+
+    await sharp(coverFile.buffer)
+      .resize(1200, 400, { fit: 'cover' })
       .toFormat('jpeg')
       .jpeg({ quality: 90 })
-      .toFile(`public/img/merchants/${req.files.coverImage[0].filename}`);
-    req.body.coverImage = req.files.coverImage[0].filename;
+      .toFile(`public/img/merchants/${coverFilename}`);
+
+    req.body.coverImage = coverFilename;
   }
 
-  // Process documents (store as-is, no resizing)
+  // --- Process Documents (no resize, just save + metadata) ---
   if (req.files?.documents) {
-    req.body.documents = req.files.documents.map((file, index) => ({
-      type: req.body.documentTypes?.[index] || 'unknown',
-      url: `/img/merchants/documents/${file.originalname}`,
-      name: file.originalname,
-      uploadedAt: new Date(),
-    }));
+    const docs = req.files.documents;
+    req.body.documents = [];
 
-    // Save documents to filesystem
-    req.files.documents.forEach(file => {
-      require('fs').writeFileSync(
-        `public/img/merchants/documents/${file.originalname}`,
-        file.buffer
-      );
+    docs.forEach((file, index) => {
+      const docFilename = `${Date.now()}-${file.originalname}`;
+      const docPath = `public/img/merchants/documents/${docFilename}`;
+
+      // Save file to disk
+      fs.writeFileSync(docPath, file.buffer);
+
+      // Push metadata
+      req.body.documents.push({
+        name: file.originalname,
+        type: req.body.documentTypes?.[index] || 'unknown',
+        url: `/img/merchants/documents/${docFilename}`,
+        uploadedAt: new Date(),
+      });
     });
   }
 
   next();
 });
 
-// ------------------- VALIDATION MIDDLEWARE -------------------
-const validateMerchantData = (req, res, next) => {
-  const requiredFields = ['businessName', 'ownerName', 'phone', 'taxId', 'location'];
+/* ===================================================================
+   3. VALIDATION MIDDLEWARE
+   =================================================================== */
 
-  for (let field of requiredFields) {
+/**
+ * Validate required fields and location coordinates before creating/updating
+ */
+const validateMerchantData = (req, res, next) => {
+  const required = ['businessName', 'ownerName', 'phone', 'taxId', 'location'];
+  for (const field of required) {
     if (!req.body[field]) {
       return next(new AppError(`Please provide ${field}`, 400));
     }
   }
 
-  // Validate coordinates
-  if (
-    (req.body.location?.coordinates && !Array.isArray(req.body.location.coordinates)) ||
-    req.body.location.coordinates.length !== 2
-  ) {
-    return next(new AppError('Location coordinates must be [longitude, latitude]', 400));
+  const coords = req.body.location?.coordinates;
+  if (!Array.isArray(coords) || coords.length !== 2 || typeof coords[0] !== 'number' || typeof coords[1] !== 'number') {
+    return next(new AppError('Location coordinates must be [longitude, latitude] as numbers', 400));
   }
 
   next();
 };
 
-// ------------------- CRUD -------------------
+/* ===================================================================
+   4. CRUD OPERATIONS
+   =================================================================== */
 
-// Get all merchants (with optional filtering, sorting, pagination)
+/**
+ * GET /api/v1/merchants
+ * Fetch all merchants with filtering, sorting, pagination
+ * Includes image URLs and counts
+ */
 exports.getAllMerchants = catchAsync(async (req, res) => {
   const features = new ApiFeatures(Merchant.find(), req.query)
     .filter()
@@ -101,105 +154,99 @@ exports.getAllMerchants = catchAsync(async (req, res) => {
     .limitFields()
     .paginate();
 
-  const merchants = await features.query.populate('approvedBy', 'firstName lastName email').lean();
+  const merchants = await features.query
+    .populate('approvedBy', 'firstName lastName email')
+    .lean(); // Use lean for performance
 
-  const merchantsWithImages = merchants.map(merchant => ({
-    ...merchant,
-    logo: merchant.logo
-      ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.logo}`
-      : null,
-    coverImage: merchant.coverImage
-      ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.coverImage}`
-      : null,
-    documentCount: merchant.documents?.length || 0,
-    userCount: merchant.users?.length || 0,
+  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
+
+  const merchantsWithImages = merchants.map(m => ({
+    ...m,
+    logo: m.logo ? `${baseUrl}/${m.logo}` : null,
+    coverImage: m.coverImage ? `${baseUrl}/${m.coverImage}` : null,
+    documentCount: m.documents?.length || 0,
+    userCount: m.users?.length || 0,
   }));
 
   res.status(200).json({
     status: 'success',
-    results: merchants.length,
-    data: {
-      merchants: merchantsWithImages,
-    },
+    results: merchantsWithImages.length,
+    data: { merchants: merchantsWithImages },
   });
 });
 
-// Get a single merchant
+/**
+ * GET /api/v1/merchants/:id
+ * Get single merchant with populated users and roles
+ */
 exports.getMerchant = catchAsync(async (req, res, next) => {
   const merchant = await Merchant.findById(req.params.id)
     .populate('approvedBy', 'firstName lastName email')
     .populate({
       path: 'users',
-      select: 'firstName lastName phone role email',
-      populate: { path: 'role', select: 'name context' },
+      select: 'firstName lastName phone email role isActive',
+      populate: { path: 'role', select: 'name context description' },
     });
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
-  // Add image URLs
-  const merchantWithImages = {
-    ...merchant.toObject(),
-    logo: merchant.logo
-      ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.logo}`
-      : null,
-    coverImage: merchant.coverImage
-      ? `${req.protocol}://${req.get('host')}/img/merchants/${merchant.coverImage}`
-      : null,
-  };
+  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
+  const merchantObj = merchant.toObject();
 
   res.status(200).json({
     status: 'success',
-    data: { merchant: merchantWithImages },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${baseUrl}/${merchantObj.logo}` : null,
+        coverImage: merchantObj.coverImage ? `${baseUrl}/${merchantObj.coverImage}` : null,
+      },
+    },
   });
 });
 
-// Create new merchant
+/**
+ * POST /api/v1/merchants
+ * Create new merchant (back-office only)
+ * Sets status to 'pending', approvedBy = current user
+ */
 exports.createNewMerchant = catchAsync(async (req, res, next) => {
-  req.body.status = 'pending';
-  req.body.isActive = true;
-  req.body.approvedBy = req.user._id; // Backoffice admin
+  // Run validation
+  validateMerchantData(req, res, () => {});
 
-  // Validate required fields
-  validateMerchantData(req, res, next);
-
-  const existingMerchant = await Merchant.findOne({
+  // Prevent duplicates
+  const exists = await Merchant.findOne({
     $or: [
       { phone: req.body.phone },
       { taxId: req.body.taxId },
       { businessName: req.body.businessName },
     ],
   });
-  if (existingMerchant) {
-    return next(
-      new AppError('Merchant already exists with this phone, tax ID, or business name', 400)
-    );
-  }
-  const newMerchant = await Merchant.create(req.body);
-  const populatedMerchant = await Merchant.findById(newMerchant._id).populate(
-    'approvedBy',
-    'firstName lastName email'
-  );
+  if (exists) return next(new AppError('Merchant already exists with this phone, tax ID, or name', 400));
+
+  req.body.status = 'pending';
+  req.body.isActive = true;
+  req.body.approvedBy = req.user._id;
+
+  const merchant = await Merchant.create(req.body);
+  const populated = await Merchant.findById(merchant._id).populate('approvedBy', 'firstName lastName email');
+
   res.status(201).json({
     status: 'success',
-    data: {
-      merchant: populatedMerchant,
-    },
+    data: { merchant: populated },
   });
 });
 
-// Update merchant
+/**
+ * PATCH /api/v1/merchants/:id
+ * Update merchant (block sensitive fields)
+ */
 exports.updateMerchant = catchAsync(async (req, res, next) => {
-  // Prevent updating certain fields
-  const blockedFields = ['phone', 'taxId', 'businessName'];
-  blockedFields.forEach(field => {
-    if (req.body[field]) {
-      return next(new AppError(`Cannot update ${field}`, 400));
-    }
-  });
+  const blocked = ['phone', 'taxId', 'businessName'];
+  for (const field of blocked) {
+    if (req.body[field]) return next(new AppError(`Cannot update ${field}`, 400));
+  }
 
-  // Handle status change
   if (req.body.status === 'approved') {
     req.body.approvedBy = req.user._id;
   }
@@ -209,80 +256,68 @@ exports.updateMerchant = catchAsync(async (req, res, next) => {
     runValidators: true,
   }).populate('approvedBy', 'firstName lastName email');
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
-  res.status(200).json({
-    status: 'success',
-    data: { merchant },
-  });
+  res.status(200).json({ status: 'success', data: { merchant } });
 });
 
-// Delete merchant
+/**
+ * DELETE /api/v1/merchants/:id
+ * Soft-delete: set status=inactive, isActive=false, deactivate users
+ */
 exports.deleteMerchant = catchAsync(async (req, res, next) => {
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    {
-      status: 'inactive',
-      isActive: false,
-    },
+    { status: 'inactive', isActive: false },
     { new: true }
   );
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
-  // Deactivate associated users
+  // Deactivate all associated users
   await User.updateMany(
     { restaurant: req.params.id },
-    {
-      isActive: false,
-      role: null, // Remove merchant role
-    }
+    { isActive: false, role: null, restaurant: null }
   );
 
   res.status(200).json({
     status: 'success',
-    message: 'Merchant deactivated successfully',
+    message: 'Merchant deactivated and users disabled',
   });
 });
 
-// 6. APPROVE MERCHANT
+/* ===================================================================
+   5. WORKFLOW: Approve, Suspend, Activate
+   =================================================================== */
+
+/**
+ * PATCH /api/v1/merchants/:id/approve
+ * Approve pending merchant
+ */
 exports.approveMerchant = catchAsync(async (req, res, next) => {
-  const merchant = await Merchant.findByIdAndUpdate(
+  const merchant = await Merchant.findById(req.params.id);
+  if (!merchant) return next(new AppError('Merchant not found', 404));
+  if (merchant.status !== 'pending') return next(new AppError('Only pending merchants can be approved', 400));
+
+  const updated = await Merchant.findByIdAndUpdate(
     req.params.id,
-    {
-      status: 'approved',
-      approvedBy: req.user._id,
-      isActive: true,
-    },
-    {
-      new: true,
-      runValidators: true,
-    }
+    { status: 'approved', approvedBy: req.user._id, isActive: true },
+    { new: true, runValidators: true }
   ).populate('approvedBy', 'firstName lastName email');
-
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
-
-  if (merchant.status !== 'pending') {
-    return next(new AppError('Only pending merchants can be approved', 400));
-  }
 
   res.status(200).json({
     status: 'success',
-    message: 'Merchant approved successfully',
-    data: { merchant },
+    message: 'Merchant approved',
+    data: { merchant: updated },
   });
 });
 
-// 7. SUSPEND MERCHANT
+/**
+ * PATCH /api/v1/merchants/:id/suspend
+ * Suspend merchant with reason
+ */
 exports.suspendMerchant = catchAsync(async (req, res, next) => {
   const { reason } = req.body;
-
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
     {
@@ -294,47 +329,46 @@ exports.suspendMerchant = catchAsync(async (req, res, next) => {
     { new: true }
   ).populate('approvedBy', 'firstName lastName email');
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
   res.status(200).json({
     status: 'success',
-    message: 'Merchant suspended successfully',
+    message: 'Merchant suspended',
     data: { merchant },
   });
 });
 
-// 8. ACTIVATE/REACTIVATE MERCHANT
+/**
+ * PATCH /api/v1/merchants/:id/activate
+ * Reactivate suspended merchant
+ */
 exports.activateMerchant = catchAsync(async (req, res, next) => {
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    {
-      status: 'approved',
-      isActive: true,
-      suspendedReason: null,
-      suspendedAt: null,
-    },
+    { status: 'approved', isActive: true, suspendedReason: null, suspendedAt: null },
     { new: true }
   ).populate('approvedBy', 'firstName lastName email');
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
   res.status(200).json({
     status: 'success',
-    message: 'Merchant activated successfully',
+    message: 'Merchant reactivated',
     data: { merchant },
   });
 });
 
-// 9. GET MERCHANT STATISTICS
+/* ===================================================================
+   6. STATISTICS & SUBSCRIPTION
+   =================================================================== */
+
+/**
+ * GET /api/v1/merchants/:id/stats
+ * Get merchant stats: user count, plan, etc.
+ */
 exports.getMerchantStats = catchAsync(async (req, res, next) => {
   const stats = await Merchant.aggregate([
-    {
-      $match: { _id: mongoose.Types.ObjectId(req.params.id) },
-    },
+    { $match: { _id: mongoose.Types.ObjectId(req.params.id) } },
     {
       $lookup: {
         from: 'users',
@@ -356,204 +390,167 @@ exports.getMerchantStats = catchAsync(async (req, res, next) => {
     },
   ]);
 
-  if (!stats.length) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!stats.length) return next(new AppError('Merchant not found', 404));
 
-  res.status(200).json({
-    status: 'success',
-    data: { stats: stats[0] },
-  });
+  res.status(200).json({ status: 'success', data: { stats: stats[0] } });
 });
 
-// 10. UPDATE SUBSCRIPTION PLAN
+/**
+ * PATCH /api/v1/merchants/:id/subscription
+ * Update subscription plan
+ */
 exports.updateSubscription = catchAsync(async (req, res, next) => {
   const { plan } = req.body;
-
-  const validPlans = ['free', 'basic', 'pro', 'enterprise'];
-  if (!validPlans.includes(plan)) {
-    return next(new AppError('Invalid subscription plan', 400));
-  }
+  const valid = ['free', 'basic', 'pro', 'enterprise'];
+  if (!valid.includes(plan)) return next(new AppError('Invalid plan', 400));
 
   const merchant = await Merchant.findByIdAndUpdate(
     req.params.id,
-    {
-      subscriptionPlan: plan,
-      updatedAt: new Date(),
-    },
+    { subscriptionPlan: plan, updatedAt: new Date() },
     { new: true }
   );
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
-  res.status(200).json({
-    status: 'success',
-    data: { merchant },
-  });
+  res.status(200).json({ status: 'success', data: { merchant } });
 });
 
-// New CRUD for merchant users
-exports.createMerchantUser = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.id;
-  const { firstName, lastName, phone, email, password, passwordConfirm, role } = req.body;
+/* ===================================================================
+   7. MERCHANT USER MANAGEMENT (Staff CRUD)
+   =================================================================== */
 
-  // Validate merchant existence
+/**
+ * POST /api/v1/merchants/:id/users
+ * Create a user under this merchant (back-office or merchant admin)
+ */
+exports.createMerchantUser = catchAsync(async (req, res, next) => {
+  console.log(req.user)
+  const merchantId = req.user.merchant._id;
+  
+  const { firstName, lastName, phone, email, password, role } = req.body;
+
+  // Validate merchant
   const merchant = await Merchant.findById(merchantId);
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
   // Validate required fields
-  if (!firstName || !phone || !password || !passwordConfirm || !role) {
-    return next(
-      new AppError('Please provide firstName, phone, password, passwordConfirm, and role', 400)
-    );
+  if (!firstName || !phone || !password  || !role) {
+    return next(new AppError('All fields are required: firstName, phone, password, role', 400));
   }
 
-  // Validate role
+  // Validate role belongs to this merchant
   const roleDoc = await Role.findById(role);
-  if (
-    !roleDoc ||
-    roleDoc.context !== 'merchant' ||
-    String(roleDoc.restaurant) !== String(merchantId)
-  ) {
-    return next(new AppError('Invalid role or role does not belong to this merchant', 400));
+  if (!roleDoc || roleDoc.context !== 'merchant' || String(roleDoc.merchant) !== merchantId) {
+    return next(new AppError('Invalid role or role not assigned to this merchant', 400));
   }
 
-  // Validate unique fields
-  const existingUser = await User.findOne({ $or: [{ phone }, { email }] });
-  if (existingUser) {
-    return next(new AppError('User with this phone or email already exists', 400));
-  }
+  // Prevent duplicate phone/email
+  const exists = await User.findOne({ $or: [{ phone }, { email }] });
+  if (exists) return next(new AppError('Phone or email already in use', 400));
 
   // Create user
-  const newUser = await User.create({
+  const user = await User.create({
     firstName,
     lastName,
     phone,
     email,
     password,
-    passwordConfirm,
+    passwordConfirm :password,
     business: merchant.businessName,
-    restaurant: merchantId,
+    merchant: merchantId,
     role: roleDoc._id,
     isActive: true,
   });
 
-  // Populate role for response
-  const populatedUser = await User.findById(newUser._id)
+  const populated = await User.findById(user._id)
     .populate('role', 'name context')
-    .select('firstName lastName phone email role');
+    .select('firstName lastName phone email role isActive');
 
-  res.status(201).json({
-    status: 'success',
-    data: { user: populatedUser },
-  });
+  res.status(201).json({ status: 'success', data: { user: populated } });
 });
 
+/**
+ * PATCH /api/v1/merchants/:id/users/:userId
+ * Update user details (cannot change password or merchant)
+ */
 exports.updateMerchantUser = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.id;
-  const userId = req.params.userId;
+  const { id: merchantId, userId } = req.params;
   const { firstName, lastName, email, phone, role, isActive } = req.body;
 
-  // Validate merchant existence
   const merchant = await Merchant.findById(merchantId);
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
-  // Validate user existence and association
   const user = await User.findById(userId);
-  if (!user || String(user.restaurant) !== String(merchantId)) {
-    return next(new AppError('User not found or not associated with this merchant', 404));
+  if (!user || String(user.restaurant) !== merchantId) {
+    return next(new AppError('User not found or not linked to this merchant', 404));
   }
 
-  // Validate role if provided
+  // Validate role if updating
   if (role) {
     const roleDoc = await Role.findById(role);
-    if (
-      !roleDoc ||
-      roleDoc.context !== 'merchant' ||
-      String(roleDoc.restaurant) !== String(merchantId)
-    ) {
-      return next(new AppError('Invalid role or role does not belong to this merchant', 400));
+    if (!roleDoc || roleDoc.context !== 'merchant' || String(roleDoc.restaurant) !== merchantId) {
+      return next(new AppError('Invalid role for this merchant', 400));
     }
   }
 
-  // Prevent updating sensitive fields
-  const blockedFields = ['password', 'passwordConfirm', 'restaurant', 'business'];
-  blockedFields.forEach(field => {
-    if (req.body[field]) {
-      return next(new AppError(`Cannot update ${field}`, 400));
-    }
-  });
+  // Block sensitive updates
+  const blocked = ['password', 'passwordConfirm', 'restaurant', 'business'];
+  if (blocked.some(f => req.body[f])) {
+    return next(new AppError('Cannot update password or merchant assignment here', 400));
+  }
 
-  // Update user
-  const updateData = { firstName, lastName, email, phone, role, isActive };
-  Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+  const update = { firstName, lastName, email, phone, role, isActive };
+  Object.keys(update).forEach(k => update[k] === undefined && delete update[k]);
 
-  const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+  const updated = await User.findByIdAndUpdate(userId, update, {
     new: true,
     runValidators: true,
   })
     .populate('role', 'name context')
     .select('firstName lastName phone email role isActive');
 
-  if (!updatedUser) {
-    return next(new AppError('User not found', 404));
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: { user: updatedUser },
-  });
+  res.status(200).json({ status: 'success', data: { user: updated } });
 });
 
+/**
+ * DELETE /api/v1/merchants/:id/users/:userId
+ * Soft-delete: deactivate user and remove role/merchant link
+ */
 exports.deleteMerchantUser = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.id;
-  const userId = req.params.userId;
+  const { id: merchantId, userId } = req.params;
 
-  // Validate merchant existence
   const merchant = await Merchant.findById(merchantId);
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
-  // Validate user existence and association
   const user = await User.findById(userId);
-  if (!user || String(user.restaurant) !== String(merchantId)) {
-    return next(new AppError('User not found or not associated with this merchant', 404));
+  if (!user || String(user.restaurant) !== merchantId) {
+    return next(new AppError('User not found or not associated', 404));
   }
 
-  // Deactivate user instead of deleting
-  const updatedUser = await User.findByIdAndUpdate(
-    userId,
-    { isActive: false, role: null, restaurant: null },
-    { new: true }
-  );
-
-  res.status(200).json({
-    status: 'success',
-    message: 'User deactivated successfully',
+  await User.findByIdAndUpdate(userId, {
+    isActive: false,
+    role: null,
+    restaurant: null,
+    business: null,
   });
+
+  res.status(200).json({ status: 'success', message: 'User deactivated and unlinked' });
 });
 
-// Existing getMerchantUsers (unchanged)
+/**
+ * GET /api/v1/merchants/:id/users
+ * List all users under this merchant
+ */
 exports.getMerchantUsers = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.id;
-  const merchant = await Merchant.findById(merchantId)
+  const merchant = await Merchant.findById(req.params.id)
     .populate({
       path: 'users',
-      select: 'firstName lastName phone role email',
-      populate: { path: 'role', select: 'name context' },
+      select: 'firstName lastName phone email role isActive',
+      populate: { path: 'role', select: 'name context description' },
     })
     .select('businessName users');
 
-  if (!merchant) {
-    return next(new AppError('Merchant not found', 404));
-  }
+  if (!merchant) return next(new AppError('Merchant not found', 404));
 
   res.status(200).json({
     status: 'success',
@@ -561,5 +558,123 @@ exports.getMerchantUsers = catchAsync(async (req, res, next) => {
       merchant: merchant.businessName,
       users: merchant.users || [],
     },
+  });
+});
+
+
+exports.createMerchantRole = catchAsync(async (req, res, next) => {
+  const { name, description, tasks } = req.body;
+  const merchantId = req.user.merchant._id;
+
+  // Validate tasks
+  if (tasks && tasks.length > 0) {
+    const validTasks = await Task.find({ _id: { $in: tasks } });
+    if (validTasks.length !== tasks.length) {
+      return next(new AppError('One or more tasks are invalid', 400));
+    }
+  }
+
+  // Prevent duplicate name
+  const exists = await Role.findOne({
+    name: name.toUpperCase(),
+    merchant: merchantId,
+  });
+  if (exists) return next(new AppError('Role name already exists', 400));
+
+  const role = await Role.create({
+    name: name.toUpperCase(),
+    description,
+    tasks,
+    merchant: merchantId,
+    isSystemRole: false,
+    isSubscriptionBased: false,
+  });
+
+  res.status(201).json({
+    status: 'success',
+    data: { role },
+  });
+});
+
+// ===================================================================
+// GET ALL ROLES (merchant only)
+// ===================================================================
+exports.getAllMerchantRoles = catchAsync(async (req, res, next) => {
+   const merchantId = req.user.merchant._id;
+  const roles = await Role.find({ merchant: merchantId })
+    .populate('tasks', 'name target method')
+    .select('name description tasks createdAt');
+
+  res.status(200).json({
+    status: 'success',
+    results: roles.length,
+    data: { roles },
+  });
+});
+
+// ===================================================================
+// GET SINGLE ROLE
+// ===================================================================
+exports.getMerchantRole = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id;
+  const role = await Role.findOne({
+    _id: req.params.roleId,
+    merchant: merchantId
+  }).populate('tasks');
+
+  if (!role) return next(new AppError('Role not found', 404));
+
+  res.status(200).json({
+    status: 'success',
+    data: { role },
+  });
+});
+
+// ===================================================================
+// UPDATE ROLE
+// ===================================================================
+exports.updateMerchantRole = catchAsync(async (req, res, next) => {
+   const merchantId = req.user.merchant._id;
+  const role = await Role.findOne({
+    _id: req.params.roleId,
+    merchant: merchantId,
+  });
+
+  if (!role) return next(new AppError('Role not found', 404));
+
+  // Prevent changing merchant or system flags
+  delete req.body.merchant;
+  delete req.body.isSystemRole;
+  delete req.body.isSubscriptionBased;
+
+  const updated = await Role.findByIdAndUpdate(req.params.roleId, req.body, {
+    new: true,
+    runValidators: true,
+  }).populate('tasks');
+
+  res.status(200).json({
+    status: 'success',
+    data: { role: updated },
+  });
+});
+
+// ===================================================================
+// DELETE ROLE
+// ===================================================================
+exports.deleteMerchantRole = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id;
+  const role = await Role.findOne({
+    _id: req.params.roleId,
+    merchant: merchantId,
+  });
+
+  if (!role) return next(new AppError('Role not found', 404));
+  if (role.isSystemRole) return next(new AppError('Cannot delete system role', 400));
+
+  await Role.findByIdAndDelete(req.params.roleId);
+
+  res.status(204).json({
+    status: 'success',
+    data: null,
   });
 });
