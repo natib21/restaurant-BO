@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const logger = require('./utils/logger');
+const { logger, morganStream } = require('./utils/logger');
 
 const dotenv = require('dotenv');
 
@@ -10,7 +10,7 @@ process.on('uncaughtException', err => {
   logger.error(`UNHANDLED EXCEPTION: ${err.name} - ${err.message}`);
   process.exit(1);
 });
-
+const chalk = require('chalk')
 dotenv.config({ path: './config.env' });
 
 const app = require('./app');
@@ -20,12 +20,12 @@ const server = createSocketServer(app);
 const DB = process.env.DATABASE.replace('<PASSWORD>', process.env.DATABASE_PASSWORD);
 
 mongoose.connect(DB).then(() => {
-  logger.info('MongoDB connected successfully!');
+  logger.info(chalk.white.bgGreen('MongoDB connected successfully!'));
 });
 
 const PORT = process.env.PORT || 3000;
 const SERVER = server.listen(PORT, () => {
-  logger.info(`Server is running on port ${PORT}`);
+  logger.info(chalk.bgCyan(`Server is running on port ${PORT}`));
 });
 
 process.on('unhandledRejection', err => {

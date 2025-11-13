@@ -50,11 +50,7 @@ passwordConfirm: {
     message: 'Passwords do not match',
   },
 },
-  role: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Role',
-    default: null,
-  },
+  
   merchant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant',
@@ -89,6 +85,10 @@ passwordConfirm: {
   createdAt: {
     type: Date,
     default: Date.now,
+  },role: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role',
+    default: null,
   },
   isActive: {
     type: Boolean,
@@ -177,6 +177,6 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 }); */
 
 // --- MODEL EXPORT ---
-const User = mongoose.model('user', userSchema);
+const User = mongoose.model('User', userSchema);
 
 module.exports = User;

@@ -154,7 +154,7 @@ exports.protect = catchAsync(async (req, res, next) => {
       select: 'name context description tasks',
       populate: {
         path: 'tasks',
-        select: 'name target method description',
+        select: 'name endpoint method description',
       },
     })
     .populate({
@@ -177,7 +177,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   if (currentUser.changedPasswordAfter(decoded.iat)) {
     return next(new AppError('User recently changed password! Please log in again.', 401));
   }
-  console.log(currentUser);
+  // console.log(currentUser);
 
   if (currentUser.isActive === false) {
     return next(new AppError('Your account is inactive. Contact support.', 403));
@@ -276,7 +276,8 @@ exports.restrictTo = () => {
     }
 
     const hasAccess = role.tasks.some(task => {
-      const taskUrl = (task.target || '').replace(/\/$/, '').trim();
+      const taskUrl = (task.endpoint || '').replace(/\/$/, '').trim();
+      console.log(" task :-" +taskUrl)
       if (!taskUrl) return false;
 
       // Method match: allow *, or exact

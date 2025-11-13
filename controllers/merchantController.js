@@ -7,12 +7,14 @@
 
 const multer = require('multer');
 const sharp = require('sharp');
-const Merchant = require('../models/merchantModel');
 const ApiFeatures = require('../utils/apiFeatures');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 const User = require('../models/userModel');
 const Role = require('../models/roleModel');
+const Merchant = require('../models/merchantModel');
+const Task = require('../models/taskModel')
+
 const mongoose = require('mongoose');
 const fs = require('fs');
 
@@ -424,49 +426,76 @@ exports.updateSubscription = catchAsync(async (req, res, next) => {
  * Create a user under this merchant (back-office or merchant admin)
  */
 exports.createMerchantUser = catchAsync(async (req, res, next) => {
-  console.log(req.user)
-  const merchantId = req.user.merchant._id;
-  
+  // 1. Merchant that is creating the user
+  const merchant = req.user.merchant;               // <-- populated in protect()
+  const merchantId = merchant._id;                  // <-- use this
+
+  // 2. Extract body
   const { firstName, lastName, phone, email, password, role } = req.body;
 
-  // Validate merchant
-  const merchant = await Merchant.findById(merchantId);
-  if (!merchant) return next(new AppError('Merchant not found', 404));
-
-  // Validate required fields
-  if (!firstName || !phone || !password  || !role) {
-    return next(new AppError('All fields are required: firstName, phone, password, role', 400));
+  // 3. Required fields
+  const required = { firstName, phone, password, role };
+  const missing = Object.keys(required).find(k => !required[k]);
+  if (missing) {
+    return next(
+      new AppError(
+        `Missing required field: ${missing} (firstName, phone, password, role)`,
+        400
+      )
+    );
   }
 
-  // Validate role belongs to this merchant
-  const roleDoc = await Role.findById(role);
-  if (!roleDoc || roleDoc.context !== 'merchant' || String(roleDoc.merchant) !== merchantId) {
-    return next(new AppError('Invalid role or role not assigned to this merchant', 400));
+  // 4. ----- ROLE VALIDATION -----
+  const roleDoc = await Role.findOne({
+    _id: role,
+    merchant: merchantId,           // must belong to this merchant
+    isActive: true,                 // only active roles can be assigned
+    isSystemRole: false,            // merchants cannot assign system roles
+  });
+
+  if (!roleDoc) {
+    return next(
+      new AppError(
+        'Invalid role: role does not exist, is inactive, or does not belong to your merchant',
+        400
+      )
+    );
   }
 
-  // Prevent duplicate phone/email
-  const exists = await User.findOne({ $or: [{ phone }, { email }] });
-  if (exists) return next(new AppError('Phone or email already in use', 400));
+  // 5. Prevent duplicate phone / email (across all users)
+  const duplicate = await User.findOne({
+    $or: [{ phone }, { email: email?.trim() }].filter(Boolean),
+  });
+  if (duplicate) {
+    return next(new AppError('Phone or email already in use', 400));
+  }
 
-  // Create user
-  const user = await User.create({
-    firstName,
-    lastName,
-    phone,
-    email,
+  // 6. Create the user
+  const newUser = await User.create({
+    firstName: firstName.trim(),
+    lastName: lastName?.trim(),
+    phone: phone.trim(),
+    email: email?.trim().toLowerCase(),
     password,
-    passwordConfirm :password,
+    passwordConfirm: password,               // you hash in pre-save hook
     business: merchant.businessName,
     merchant: merchantId,
     role: roleDoc._id,
     isActive: true,
   });
 
-  const populated = await User.findById(user._id)
-    .populate('role', 'name context')
-    .select('firstName lastName phone email role isActive');
+  // 7. Return clean response (no password, no internal fields)
+  const populated = await User.findById(newUser._id)
+    .select('firstName lastName phone email role isActive')
+    .populate({
+      path: 'role',
+      select: 'name description',
+    });
 
-  res.status(201).json({ status: 'success', data: { user: populated } });
+  res.status(201).json({
+    status: 'success',
+    data: { user: populated },
+  });
 });
 
 /**
@@ -542,16 +571,22 @@ exports.deleteMerchantUser = catchAsync(async (req, res, next) => {
  * List all users under this merchant
  */
 exports.getMerchantUsers = catchAsync(async (req, res, next) => {
-  const merchant = await Merchant.findById(req.params.id)
+  const merchantId = req.user.merchant._id;
+ const merchant = await Merchant.findById(merchantId)
+    .select('businessName')  // Only need name
     .populate({
-      path: 'users',
+      path: 'users',  // ← Virtual field
       select: 'firstName lastName phone email role isActive',
-      populate: { path: 'role', select: 'name context description' },
+      match: { isActive: true },  // Optional: only active users
+      populate: {
+        path: 'role',
+        select: 'name description',
+      },
     })
-    .select('businessName users');
+    .lean({ virtuals: true });
 
+    console.log("Merchant -----"+merchant)
   if (!merchant) return next(new AppError('Merchant not found', 404));
-
   res.status(200).json({
     status: 'success',
     data: {
@@ -563,36 +598,60 @@ exports.getMerchantUsers = catchAsync(async (req, res, next) => {
 
 
 exports.createMerchantRole = catchAsync(async (req, res, next) => {
-  const { name, description, tasks } = req.body;
+  let { name, description, tasks } = req.body;
   const merchantId = req.user.merchant._id;
-
-  // Validate tasks
-  if (tasks && tasks.length > 0) {
-    const validTasks = await Task.find({ _id: { $in: tasks } });
-    if (validTasks.length !== tasks.length) {
-      return next(new AppError('One or more tasks are invalid', 400));
-    }
+  console.log(name,merchantId,tasks)
+  if (!name?.trim()) {
+    return next(new AppError('Role name is required', 400));
+  }
+  if (!description?.trim()) {
+    return next(new AppError('Role description is required', 400));
+  }
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return next(new AppError('At least one task must be assigned to the role', 400));
   }
 
-  // Prevent duplicate name
-  const exists = await Role.findOne({
-    name: name.toUpperCase(),
-    merchant: merchantId,
-  });
-  if (exists) return next(new AppError('Role name already exists', 400));
+  // Normalize
+  name = name.trim().toUpperCase();
+  description = description.trim();
 
+  // 2. Prevent duplicate role name
+  const exists = await Role.findOne({ name, merchant: merchantId });
+  if (exists) {
+    return next(new AppError('Role name already exists', 400));
+  }
+
+  // 3. Validate all task IDs
+  const invalidId = tasks.find(id => !mongoose.Types.ObjectId.isValid(id));
+  if (invalidId) {
+    return next(new AppError(`Invalid task ID: ${invalidId}`, 400));
+  }
+
+  // 4. Verify all tasks exist
+  const validTasks = await Task.find({ _id: { $in: tasks } });
+  if (validTasks.length !== tasks.length) {
+    return next(new AppError('One or more tasks do not exist', 400));
+  }
+
+  // 5. Create role
   const role = await Role.create({
-    name: name.toUpperCase(),
+    name,
     description,
-    tasks,
+    tasks, // ← tasks is guaranteed valid & non-empty
     merchant: merchantId,
     isSystemRole: false,
     isSubscriptionBased: false,
   });
 
+  // 6. Populate response
+  const populatedRole = await Role.findById(role._id).populate({
+    path: 'tasks',
+    select: 'name endpoint method description',
+  });
+
   res.status(201).json({
     status: 'success',
-    data: { role },
+    data: { role: populatedRole },
   });
 });
 
