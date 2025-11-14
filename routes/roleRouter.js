@@ -22,10 +22,7 @@ router.use((req, res, next) => {
 });
 
 // 3. CRUD Routes
-router
-  .route('/')
-  .get(roleController.getAllRoles)
-  .post(roleController.createNewRole);
+router.route('/').get(roleController.getAllRoles).post(roleController.createNewRole);
 
 router
   .route('/:id')

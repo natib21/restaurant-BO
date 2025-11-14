@@ -42,10 +42,10 @@ const roleSchema = new Schema(
       default: Date.now,
     },
     isActive: {
-    type: Boolean,
-    default: true,
-    // select: false,
-  },
+      type: Boolean,
+      default: true,
+      // select: false,
+    },
   },
   {
     timestamps: true,

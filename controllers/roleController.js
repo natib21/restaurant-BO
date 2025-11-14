@@ -8,7 +8,7 @@
 const Role = require('../models/roleModel');
 const Task = require('../models/taskModel');
 const Merchant = require('../models/merchantModel'); // for validation
-const User = require('../models/userModel');       // for delete check
+const User = require('../models/userModel'); // for delete check
 const AppError = require('../utils/appError');
 const ApiFeatures = require('../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
@@ -128,7 +128,6 @@ exports.createNewRole = catchAsync(async (req, res, next) => {
 // UPDATE ROLE
 // ===================================================================
 exports.updateRole = catchAsync(async (req, res, next) => {
-  
   const role = await Role.findById(req.params.id);
   if (!role) return next(new AppError('Role not found', 404));
 

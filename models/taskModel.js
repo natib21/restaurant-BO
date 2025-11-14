@@ -12,7 +12,6 @@ const taskSchema = new Schema({
     type: String,
     required: [true, 'Task must have an endpoint'],
     trim: true,
-    
   },
   method: {
     type: String,

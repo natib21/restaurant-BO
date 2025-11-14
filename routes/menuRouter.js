@@ -30,11 +30,11 @@ router
   .get(menuController.getMenu)
   .patch(
     authController.protect,
-    authController.restrictTo('admin', 'kitchen'),
+    authController.restrictTo(),
     menuController.uploadMenuPhoto,
     menuController.resizeMenuPhoto,
     menuController.updateMenu
   )
-  .delete(authController.protect, authController.restrictTo('admin'), menuController.deleteMenu);
+  .delete(authController.protect, authController.restrictTo(), menuController.deleteMenu);
 
 module.exports = router;

@@ -10,7 +10,7 @@ process.on('uncaughtException', err => {
   logger.error(`UNHANDLED EXCEPTION: ${err.name} - ${err.message}`);
   process.exit(1);
 });
-const chalk = require('chalk')
+const chalk = require('chalk');
 dotenv.config({ path: './config.env' });
 
 const app = require('./app');

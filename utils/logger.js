@@ -6,14 +6,24 @@ require('dotenv').config({ path: './config.env' });
 // ──────────────────────────────────────────────────────────────
 // 1. Colorize log levels for console
 // ──────────────────────────────────────────────────────────────
-const colorizeLevel = winston.format((info) => {
+const colorizeLevel = winston.format(info => {
   const level = info.level.toUpperCase();
   switch (info.level) {
-    case 'error': info.level = chalk.red(level); break;
-    case 'warn':  info.level = chalk.yellow(level); break;
-    case 'info':  info.level = chalk.cyan(level); break;
-    case 'http':  info.level = chalk.magenta(level); break;
-    case 'debug': info.level = chalk.gray(level); break;
+    case 'error':
+      info.level = chalk.red(level);
+      break;
+    case 'warn':
+      info.level = chalk.yellow(level);
+      break;
+    case 'info':
+      info.level = chalk.cyan(level);
+      break;
+    case 'http':
+      info.level = chalk.magenta(level);
+      break;
+    case 'debug':
+      info.level = chalk.gray(level);
+      break;
   }
   return info;
 });
@@ -24,25 +34,20 @@ const colorizeLevel = winston.format((info) => {
 const consoleFormat = winston.format.combine(
   colorizeLevel(),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.printf(
-    ({ timestamp, level, message, requestId, userId, merchantId }) => {
-      const extras = [];
-      if (requestId) extras.push(`reqId:${requestId}`);
-      if (userId) extras.push(`user:${userId}`);
-      if (merchantId) extras.push(`merchant:${merchantId}`);
-      const extraStr = extras.length ? chalk.gray(`[${extras.join(' ')}]`) : '';
-      return `${chalk.gray(timestamp)} ${level} ${extraStr} ${message}`;
-    }
-  )
+  winston.format.printf(({ timestamp, level, message, requestId, userId, merchantId }) => {
+    const extras = [];
+    if (requestId) extras.push(`reqId:${requestId}`);
+    if (userId) extras.push(`user:${userId}`);
+    if (merchantId) extras.push(`merchant:${merchantId}`);
+    const extraStr = extras.length ? chalk.gray(`[${extras.join(' ')}]`) : '';
+    return `${chalk.gray(timestamp)} ${level} ${extraStr} ${message}`;
+  })
 );
 
 // ──────────────────────────────────────────────────────────────
 // 3. File format (clean JSON)
 // ──────────────────────────────────────────────────────────────
-const fileFormat = winston.format.combine(
-  winston.format.timestamp(),
-  winston.format.json()
-);
+const fileFormat = winston.format.combine(winston.format.timestamp(), winston.format.json());
 
 // ──────────────────────────────────────────────────────────────
 // 4. Create logger
@@ -61,7 +66,7 @@ const logger = winston.createLogger({
 // 5. Morgan stream → winston logger
 // ──────────────────────────────────────────────────────────────
 const morganStream = {
-  write: (message) => {
+  write: message => {
     // Remove trailing newline
     const msg = message.trim();
 
