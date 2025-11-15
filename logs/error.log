@@ -1,0 +1,2 @@
+{"level":"error","message":"UNHANDLED EXCEPTION: ReferenceError - res is not defined","timestamp":"2025-11-14T06:39:20.254Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-14T19:37:42.131Z"}

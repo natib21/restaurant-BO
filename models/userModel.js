@@ -35,26 +35,22 @@ const userSchema = new mongoose.Schema({
     minlength: 6,
     select: false,
   },
-passwordConfirm: {
-  type: String,
-  required: function () {
-    // Only require passwordConfirm when:
-    // 1. It's a new document AND
-    // 2. The password is NOT already hashed (i.e., we're hashing it now)
-    return this.isNew && !this.password?.startsWith('$2');
-  },
-  validate: {
-    validator: function (el) {
-      return el === this.password;
+  passwordConfirm: {
+    type: String,
+    required: function () {
+      // Only require passwordConfirm when:
+      // 1. It's a new document AND
+      // 2. The password is NOT already hashed (i.e., we're hashing it now)
+      return this.isNew && !this.password?.startsWith('$2');
     },
-    message: 'Passwords do not match',
+    validate: {
+      validator: function (el) {
+        return el === this.password;
+      },
+      message: 'Passwords do not match',
+    },
   },
-},
-  role: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Role',
-    default: null,
-  },
+
   merchant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant',
@@ -89,6 +85,11 @@ passwordConfirm: {
   createdAt: {
     type: Date,
     default: Date.now,
+  },
+  role: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role',
+    default: null,
   },
   isActive: {
     type: Boolean,
@@ -177,6 +178,6 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 }); */
 
 // --- MODEL EXPORT ---
-const User = mongoose.model('user', userSchema);
+const User = mongoose.model('User', userSchema);
 
 module.exports = User;

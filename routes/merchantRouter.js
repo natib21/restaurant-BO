@@ -51,10 +51,10 @@ router
 // PATCH  /api/v1/merchants/roles/:roleId
 // DELETE /api/v1/merchants/roles/:roleId
 router
-  .route('/roles/:roleId')
+  .route('/roles/:id')
   .get(
     authController.restrictTo(), // task: 'view-role'
-    merchantController.getMerchantRole
+    merchantController.getMerchantRoleById
   )
   .patch(
     authController.restrictTo(), // task: 'update-role'
@@ -64,6 +64,11 @@ router
     authController.restrictTo(), // task: 'delete-role'
     merchantController.deleteMerchantRole
   );
+router.patch(
+  '/roles/:id/activate',
+  authController.restrictTo(),
+  merchantController.activateMerchantRole
+);
 
 // ===================================================================
 // 3. USER MANAGEMENT (no :merchantId in URL)
@@ -86,6 +91,7 @@ router
 // DELETE /api/v1/merchants/users/:userId
 router
   .route('/users/:id')
+  .get(authController.restrictTo(), merchantController.getMerchantUserById)
   .patch(
     authController.restrictTo(), // task: 'update-user'
     merchantController.updateMerchantUser
@@ -94,6 +100,11 @@ router
     authController.restrictTo(), // task: 'delete-user'
     merchantController.deleteMerchantUser
   );
+router.patch(
+  '/users/:id/activate',
+  authController.restrictTo(),
+  merchantController.activateMerchantUser
+);
 
 // ===================================================================
 // 4. MERCHANT CRUD (Back-office only)

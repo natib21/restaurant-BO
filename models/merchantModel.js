@@ -155,8 +155,8 @@ merchantSchema.index({ 'location.city': 1, 'location.subCity': 1 });
 merchantSchema.virtual('users', {
   ref: 'User',
   localField: '_id',
-  foreignField: 'restaurant',
-  match: { role: { $ne: null } },
+  foreignField: 'merchant',
+  // match: { role: { $ne: null } },
 });
 
 merchantSchema.virtual('orderCount', {
@@ -181,6 +181,9 @@ merchantSchema.methods.getDisplayName = function () {
   this.find({ status: { $ne: 'inactive' } });
   next();
 }); */
+
+merchantSchema.set('toObject', { virtuals: true });
+merchantSchema.set('toJSON', { virtuals: true });
 
 const Merchant = mongoose.model('Merchant', merchantSchema);
 module.exports = Merchant;

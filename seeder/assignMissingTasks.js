@@ -10,15 +10,16 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
-const logger = require('../utils/logger')
+const logger = require('../utils/logger');
 
-
-const MONGO_URI =  `mongodb+srv://nathnaelzelalem:UZ8NzyORmOcIPUK9@restaurant.k0gc3.mongodb.net/?retryWrites=true&w=majority&appName=Restaurant` || 'mongodb://localhost:27017/your-db-name';
+const MONGO_URI =
+  `mongodb+srv://nathnaelzelalem:UZ8NzyORmOcIPUK9@restaurant.k0gc3.mongodb.net/?retryWrites=true&w=majority&appName=Restaurant` ||
+  'mongodb://localhost:27017/your-db-name';
 
 async function assignMerchantTasks() {
   try {
     // 1. Connect to DB
-     await mongoose.connect(MONGO_URI).then(() => {
+    await mongoose.connect(MONGO_URI).then(() => {
       logger.info('MongoDB connected successfully!');
     });
 
@@ -43,9 +44,7 @@ async function assignMerchantTasks() {
 
     // 4. Filter out tasks already in the role
     const existingTaskIds = merchantAdminRole.tasks.map(id => id.toString());
-    const missingTaskIds = taskIds.filter(
-      id => !existingTaskIds.includes(id.toString())
-    );
+    const missingTaskIds = taskIds.filter(id => !existingTaskIds.includes(id.toString()));
 
     console.log(`Already assigned: ${existingTaskIds.length}`);
     console.log(`Missing: ${missingTaskIds.length}`);
@@ -61,7 +60,6 @@ async function assignMerchantTasks() {
 
     console.log(`Successfully added ${missingTaskIds.length} tasks to SUPER-MERCHANT-ADMIN`);
     console.log('One-time fix completed!');
-
   } catch (err) {
     console.error('Error:', err.message);
   } finally {
@@ -69,6 +67,5 @@ async function assignMerchantTasks() {
     console.log('Disconnected from MongoDB');
   }
 }
-
 
 assignMerchantTasks();

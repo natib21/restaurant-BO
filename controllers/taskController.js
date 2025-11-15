@@ -13,7 +13,9 @@ const AppError = require('../utils/appError');
 // -------------------------------------------------------------------
 // ALL API TASKS (for sync)
 // -------------------------------------------------------------------
-const allApiTasks = [ /* ... your full list ... */ ];
+const allApiTasks = [
+  /* ... your full list ... */
+];
 
 // -------------------------------------------------------------------
 // GET ALL TASKS
