@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
+const Merchant = require('./merchantModel');
 
 const sizeSchema = mongoose.Schema({
   size: {
@@ -12,7 +13,7 @@ const sizeSchema = mongoose.Schema({
   price: { type: Number },
 });
 const menuSchema = mongoose.Schema({
-  restaurant: {
+  merchant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant', // or "Restaurant"
     required: true,

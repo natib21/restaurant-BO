@@ -1,40 +1,47 @@
 const express = require('express');
-
 const menuController = require('../controllers/menuController');
 const authController = require('../controllers/authController');
+
 const router = express.Router();
 
-router.route('/:id').get(menuController.getPublicMenu);
+// Get a public menu by ID (e.g., via QR code)
+router.get('/:id/public', menuController.getPublicMenu);
 
-router.route('/search').get(menuController.searchMenu, menuController.getAllMenu);
+// Search/filter menus (beverage, appetizers, specials, etc.)
+router.get('/search', menuController.searchMenu, menuController.getAllMenu);
+router.get('/beverage', menuController.getAllBeverage, menuController.getAllMenu);
+router.get('/appetizers', menuController.getAppetizers, menuController.getAllMenu);
+router.get('/specials', menuController.getSpecials, menuController.getAllMenu);
 
-router.route('/beverage').get(menuController.getAllBeverage, menuController.getAllMenu);
+// -------------------
+// PROTECTED ROUTES (MERCHANT & ADMIN)
+// -------------------
+router.use(authController.protect);
 
-router.route('/Appetizers').get(menuController.getAppetizers, menuController.getAllMenu);
+// Merchant: get all menus for their merchant
+// router.get('/',  menuController.getAllMenusForMerchant);
 
-router.route('/specials').get(menuController.getSpecials, menuController.getAllMenu);
+// Create a new menu (merchant or admin)
+router.post(
+  '/',
 
+  menuController.uploadMenuPhoto,
+  menuController.resizeMenuPhoto,
+  menuController.createNewMenu
+);
+
+// Get/update/delete a single menu
 router
-  .route('/menu')
-  .get(menuController.getAllMenu)
-  .post(
-    authController.protect,
-    authController.restrictTo(),
-    menuController.uploadMenuPhoto,
-    menuController.resizeMenuPhoto,
-    menuController.createNewMenu
-  );
-
-router
-  .route('/menu/:id')
+  .route('/:id')
   .get(menuController.getMenu)
-  .patch(
-    authController.protect,
-    authController.restrictTo(),
-    menuController.uploadMenuPhoto,
-    menuController.resizeMenuPhoto,
-    menuController.updateMenu
-  )
-  .delete(authController.protect, authController.restrictTo(), menuController.deleteMenu);
+  .patch(menuController.uploadMenuPhoto, menuController.resizeMenuPhoto, menuController.updateMenu)
+  .delete(menuController.deleteMenu);
+
+// -------------------
+// SUPER ADMIN ROUTES
+// -------------------
+
+// Get all menus across all merchants
+router.get('/admin/all', menuController.getAllMenu);
 
 module.exports = router;

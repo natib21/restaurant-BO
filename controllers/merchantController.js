@@ -383,7 +383,7 @@ exports.getMerchantStats = catchAsync(async (req, res, next) => {
       $lookup: {
         from: 'users',
         localField: '_id',
-        foreignField: 'restaurant',
+        foreignField: 'merchant',
         as: 'users',
         pipeline: [{ $match: { role: { $ne: null } } }],
       },
@@ -861,7 +861,6 @@ exports.deleteMerchantRole = catchAsync(async (req, res, next) => {
     data: null,
   });
 });
-
 
 /**
  * PATCH /api/v1/merchants/roles/:id/reactivate

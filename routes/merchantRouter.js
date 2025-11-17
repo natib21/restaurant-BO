@@ -7,6 +7,7 @@
  */
 
 const express = require('express');
+
 const merchantController = require('../controllers/merchantController');
 const authController = require('../controllers/authController');
 

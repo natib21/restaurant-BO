@@ -108,10 +108,7 @@ exports.searchMenu = catchAsync(async (req, res, next) => {
 
   const searchRegex = new RegExp(query.trim(), 'i');
   req.query = {
-    $or: [
-      { name: searchRegex },
-      { description: searchRegex },
-    ],
+    $or: [{ name: searchRegex }, { description: searchRegex }],
   };
   next();
 });
@@ -135,25 +132,22 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
 
   // 2. Optional: Block if merchant is not approved/active
   // Uncomment when approval workflow is enforced
-  /*
-  if (merchant.status !== 'approved' || !merchant.isActive) {
+
+  /* if (merchant.status !== 'approved' || !merchant.isActive) {
     return next(new AppError('This restaurant is currently unavailable.', 403));
-  }
-  */
+  } */
 
   // 3. Fetch all active menu items for this merchant
   const menuItems = await Menu.find({
     restaurant: merchantId,
-    isDeleted: { $ne: true },     // Hide soft-deleted items
-    isActive: true,               // Only show active items
+    isDeleted: { $ne: true }, // Hide soft-deleted items
+    isActive: true, // Only show active items
   }).select('-__v -restaurant -isDeleted');
 
   // 4. Add full image URLs
   const menuWithImages = menuItems.map(item => ({
     ...item.toObject(),
-    image: item.image
-      ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}`
-      : null,
+    image: item.image ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}` : null,
   }));
 
   res.status(200).json({
@@ -195,9 +189,7 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
 
   const menuWithImages = menuItems.map(item => ({
     ...item.toObject(),
-    image: item.image
-      ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}`
-      : null,
+    image: item.image ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}` : null,
   }));
 
   res.status(200).json({
