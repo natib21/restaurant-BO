@@ -44,10 +44,10 @@ const customerSchema = new mongoose.Schema(
       profilePic: String,
     },
     telegram: {
-      id: { type: String, sparse: true },        // Telegram user ID (numeric string)
-      username: String,                          // @username or null
-      firstName: String,                         // Telegram first name
-      profilePic: String,                        // Telegram file_id or URL
+      id: { type: String, sparse: true }, // Telegram user ID (numeric string)
+      username: String, // @username or null
+      firstName: String, // Telegram first name
+      profilePic: String, // Telegram file_id or URL
     },
 
     // Where did this customer come from?

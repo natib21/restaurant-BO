@@ -138,8 +138,8 @@ const merchantSchema = new mongoose.Schema({
   // Social connections
   facebookPageId: String,
   facebookPageToken: String,
-  telegramBotToken: String,        // same for all (or per merchant)
-  telegramChannel: String,         // e.g., @selamscoffee
+  telegramBotToken: String, // same for all (or per merchant)
+  telegramChannel: String, // e.g., @selamscoffee
   createdAt: {
     type: Date,
     default: Date.now,

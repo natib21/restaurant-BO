@@ -316,6 +316,22 @@ exports.restrictTo = () => {
 
     const { role } = user;
 
+    // Array of routes that are accessible WITHOUT any authentication or RBAC check.
+    const publicRoutes = [
+      // Merchant Registration & Login
+      { path: /^\/api\/v1\/users\/signup$/, method: 'POST' },
+      { path: /^\/api\/v1\/users\/login$/, method: 'POST' },
+
+      // Social/Guest Login (assuming this route is /api/v1/users/social-login)
+      { path: /^\/api\/v1\/users\/social-login$/, method: 'POST' },
+
+      // Password Reset
+      { path: /^\/api\/v1\/users\/forgotPassword$/, method: 'POST' },
+      { path: /^\/api\/v1\/users\/resetPassword\/[^/]+$/, method: 'PATCH' }, // Matches resetPassword/:token
+
+      // Public Menu Endpoints (if they exist, e.g., to fetch a menu)
+      // { path: /^\/api\/v1\/public\/menu\/[^/]+$/, method: 'GET' }, // Example
+    ];
     const isPublic = publicRoutes.some(
       r => (!r.method || r.method === httpMethod) && r.path.test(fullUrl)
     );

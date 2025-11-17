@@ -16,6 +16,7 @@ const { logger, morganStream } = require('./utils/logger'); // <-- NEW
 // ──────────────────────────────────────────────────────────────
 // Routers
 // ──────────────────────────────────────────────────────────────
+const menuGroupRouter = require('./routes/menuGroupRoute');
 const menuRouter = require('./routes/menuRouter');
 const orderRouter = require('./routes/orderRouter');
 const userRouter = require('./routes/userRouter');
@@ -104,6 +105,7 @@ app.use('/api/v1/user', userRouter);
 app.use('/api/v1/tasks', taskRouter);
 app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/merchants', merchantRouter);
+app.use('/api/v1/menuGroup', menuGroupRouter);
 app.use('/api/v1/menu', menuRouter);
 app.use('/api/v1/table', tableRouter);
 app.use('/api/v1/order', orderRouter);

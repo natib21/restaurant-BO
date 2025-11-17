@@ -41,9 +41,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     } catch (err) {
       return next(new AppError('Invalid Facebook token', 401));
     }
-  }
-
-  else if (source === 'tiktok' && token) {
+  } else if (source === 'tiktok' && token) {
     try {
       const ttRes = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
         headers: { Authorization: `Bearer ${token}` },
@@ -60,9 +58,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     } catch (err) {
       return next(new AppError('Invalid TikTok token', 401));
     }
-  }
-
-  else if (source === 'telegram' && req.body.telegramUser) {
+  } else if (source === 'telegram' && req.body.telegramUser) {
     const tg = req.body.telegramUser; // { id, username, first_name, photo_url }
     customerData.source = 'telegram';
     customerData.telegram = {
@@ -76,9 +72,12 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
 
   // ─── Upsert Customer (never duplicate social accounts) ───
   let query;
-  if (customerData.source === 'facebook') query = { merchant: merchantId, 'facebook.id': customerData.facebook.id };
-  else if (customerData.source === 'tiktok') query = { merchant: merchantId, 'tiktok.id': customerData.tiktok.id };
-  else if (customerData.source === 'telegram') query = { merchant: merchantId, 'telegram.id': customerData.telegram.id };
+  if (customerData.source === 'facebook')
+    query = { merchant: merchantId, 'facebook.id': customerData.facebook.id };
+  else if (customerData.source === 'tiktok')
+    query = { merchant: merchantId, 'tiktok.id': customerData.tiktok.id };
+  else if (customerData.source === 'telegram')
+    query = { merchant: merchantId, 'telegram.id': customerData.telegram.id };
   else query = { merchant: merchantId, fullName: customerData.fullName, source: 'guest' }; // guest
 
   const customer = await Customer.findOneAndUpdate(query, customerData, {
