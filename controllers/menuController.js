@@ -135,11 +135,11 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
 
   // 2. Optional: Block if merchant is not approved/active
   // Uncomment when approval workflow is enforced
-  /*
-  if (merchant.status !== 'approved' || !merchant.isActive) {
+  
+  /* if (merchant.status !== 'approved' || !merchant.isActive) {
     return next(new AppError('This restaurant is currently unavailable.', 403));
-  }
-  */
+  } */
+ 
 
   // 3. Fetch all active menu items for this merchant
   const menuItems = await Menu.find({

@@ -7,7 +7,8 @@ const mongoose = require('mongoose');
 const Merchant = require('../models/merchantModel');
 const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
-
+const sendEmail = require('./../utils/email')
+const crypto = require('crypto')
 /**
  * Generates a JWT token for a user
  * Payload includes: user ID and optionally merchant ID
@@ -142,7 +143,8 @@ exports.login = catchAsync(async (req, res, next) => {
 
   // Get user with password (it's excluded by default)
   const user = await User.findOne({ email }).select('+password');
-
+  const users = await User.find();
+  console.log(user)
   // Check user exists + password correct
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError('Incorrect email or password', 401));
@@ -305,29 +307,75 @@ exports.restrictTo = () => {
 };
 
 /**
- * ADMIN RESET PASSWORD - Reset any user's password by phone (admin only)
+ *  RESET PASSWORD - Reset any user's password by phone (admin only)
  */
-exports.adminResetPassword = catchAsync(async (req, res, next) => {
-  const { phone, password, passwordConfirm } = req.body;
+exports.forgotPassword = catchAsync(async (req, res, next) => {
+  const {email } = req.body;
 
-  if (!phone || !password || !passwordConfirm) {
-    return next(new AppError('Please provide phone, password, and password confirmation', 400));
-  }
-  if (password !== passwordConfirm) {
-    return next(new AppError('Passwords do not match', 400));
+  if (!email ) {
+    return next(new AppError('Please provide email address', 400));
   }
 
-  const user = await User.findOne({ phone });
+  const user = await User.findOne({ email });
   if (!user) {
-    return next(new AppError('No user found with that phone number', 404));
+    return next(new AppError('No user found with that email address', 404));
   }
+ const resetToken = user.createPasswordResetToken()
+  await user.save({validateBeforeSave:false});
 
-  user.password = password;
-  user.passwordConfirm = undefined; // Not needed after save (pre-save hook handles hashing)
-  await user.save();
+ const resetURL = `${req.protocol}://${req.get("host")}/api/v1/user/resetPassword/${resetToken}`;
+ const message = `Forgot your password ? Submit a PATCH request with your new password and passwordConfirm
+    to: ${resetURL} if you didn't forget your password, please ignore this email`
+    try{
+      await sendEmail({
+      email:user.email,
+      subject:'Your password reset token (valid for 10min)',
+      message
+    })
 
-  createSendToken(user, 200, res); // Logs them in after reset
+    res.status(200).json({
+      status:'success',
+      message:'Token sent to email'
+    })
+    } catch(err){
+      user.passwordResetToken= undefined
+      user.passwordResetTokenExpires= undefined
+      await user.save({validateBeforeSave:false});
+
+      return next(new AppError("there was an error sending the email. try again later "),500)
+    }
+    
+    // createSendToken(user, 200, res); // Logs them in after reset
 });
+
+exports.resetPassword= catchAsync(async(req,res,next)=>{
+
+ const hashedToken = crypto
+ .createHash('sha256')
+ .update(req.params.token)
+ .digest('hex');
+
+ const user = await User.findOne({
+  passwordResetToken:hashedToken ,
+  passwordResetTokenExpires:{$gt:Date.now()}
+})
+
+if(!user){
+  return next (new AppError('Token is invalid or has expired',400))
+}
+
+user.password = req.body.password
+user.passwordConfirm = req.body.passwordConfirm
+user.passwordResetToken = undefined
+user.passwordResetTokenExpires = undefined
+
+
+await user.save();
+createSendToken(user,200,res)
+})
+
+
+
 
 /**
  * CHANGE PASSWORD - Logged-in user changes their own password

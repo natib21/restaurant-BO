@@ -11,12 +11,14 @@ router.post(
 );
 router.post('/login', authController.login);
 
-router.patch(
-  '/adminResetPassword',
-  authController.protect,
-  authController.restrictTo('admin'),
-  authController.adminResetPassword
+router.post(
+  '/forgotPassword',
+  authController.forgotPassword
 );
+router.patch(
+  '/resetPassword/:token',
+   authController.resetPassword
+)
 
 router.patch('/changePassword', authController.protect, authController.changePassword);
 

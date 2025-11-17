@@ -383,7 +383,7 @@ exports.getMerchantStats = catchAsync(async (req, res, next) => {
       $lookup: {
         from: 'users',
         localField: '_id',
-        foreignField: 'restaurant',
+        foreignField: 'merchant',
         as: 'users',
         pipeline: [{ $match: { role: { $ne: null } } }],
       },

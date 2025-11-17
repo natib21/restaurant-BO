@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
 const bcrypt = require('bcryptjs');
-// const crypto = require('crypto');
+const crypto = require('crypto');
 
 const historySchema = new mongoose.Schema({
   orderId: {
@@ -156,7 +156,7 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 
   return false;
 };
-/* userSchema.methods.createPasswordResetToken = function () {
+userSchema.methods.createPasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString('hex');
   this.passwordResetToken = crypto
     .createHash('sha256')
@@ -167,7 +167,7 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
   this.passwordResetTokenExpires = Date.now() + 10 * 60 * 1000;
 
   return resetToken;
-}; */
+};
 
 // ------------------------------------
 // --- USER SCHEMA QUERY MIDDLEWARE ---
@@ -178,6 +178,6 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
 }); */
 
 // --- MODEL EXPORT ---
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model('user', userSchema);
 
 module.exports = User;

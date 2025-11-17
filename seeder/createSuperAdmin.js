@@ -5,7 +5,7 @@ const Role = require('../models/roleModel');
 const dotenv = require('dotenv');
 require('../models/taskModel');
 const bcrypt = require('bcryptjs');
-const logger = require('../utils/logger');
+const {logger} = require('../utils/logger');
 dotenv.config({path:'././config.env'})
 const SUPER_ADMIN_CONFIG = {
   email: process.env.SUPER_ADMIN_EMAIL || 'admin@system.com',

@@ -5,6 +5,7 @@ const authController = require('../controllers/authController');
 const router = express.Router();
 
 // Get a public menu by ID (e.g., via QR code)
+router.get('/:id/public', menuController.getPublicMenu);
 
 // Search/filter menus (beverage, appetizers, specials, etc.)
 router.get('/search', menuController.searchMenu, menuController.getAllMenu);
@@ -13,7 +14,6 @@ router.get('/appetizers', menuController.getAppetizers, menuController.getAllMen
 router.get('/specials', menuController.getSpecials, menuController.getAllMenu);
 
 
-router.get('/:id/public', menuController.getPublicMenu);
 
 // -------------------
 // PROTECTED ROUTES (MERCHANT & ADMIN)
