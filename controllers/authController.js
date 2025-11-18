@@ -9,10 +9,13 @@ const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
 const sendEmail = require('./../utils/email')
 const crypto = require('crypto')
+
 /**
  * Generates a JWT token for a user
  * Payload includes: user ID and optionally merchant ID
  */
+
+
 const signToken = user => {
   console.log('user : -', user);
   if (!user || !user._id) {
