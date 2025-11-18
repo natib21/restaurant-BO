@@ -862,7 +862,6 @@ exports.deleteMerchantRole = catchAsync(async (req, res, next) => {
   });
 });
 
-
 /**
  * PATCH /api/v1/merchants/roles/:id/reactivate
  * Reactivate a previously deactivated role

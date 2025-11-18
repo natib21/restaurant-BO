@@ -5,8 +5,8 @@ const Role = require('../models/roleModel');
 const dotenv = require('dotenv');
 require('../models/taskModel');
 const bcrypt = require('bcryptjs');
-const {logger} = require('../utils/logger');
-dotenv.config({path:'././config.env'})
+const { logger } = require('../utils/logger');
+dotenv.config({ path: '././config.env' });
 const SUPER_ADMIN_CONFIG = {
   email: process.env.SUPER_ADMIN_EMAIL || 'admin@system.com',
   password: process.env.SUPER_ADMIN_PASSWORD || 'admin123',
@@ -18,7 +18,7 @@ const SUPER_ADMIN_CONFIG = {
 const createSuperAdmin = async () => {
   try {
     const DB = `mongodb+srv://nathnaelzelalem:UZ8NzyORmOcIPUK9@restaurant.k0gc3.mongodb.net/?retryWrites=true&w=majority&appName=Restaurant`;
-    const Local_DB = process.env.LOCAL_DATABASE; 
+    const Local_DB = process.env.LOCAL_DATABASE;
     console.log(Local_DB);
 
     await mongoose.connect(Local_DB).then(() => {

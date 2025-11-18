@@ -7,9 +7,8 @@ const mongoose = require('mongoose');
 const Merchant = require('../models/merchantModel');
 const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
-const sendEmail = require('./../utils/email')
-const crypto = require('crypto')
-
+const sendEmail = require('./../utils/email');
+const crypto = require('crypto');
 /**
  * Generates a JWT token for a user
  * Payload includes: user ID and optionally merchant ID
@@ -147,7 +146,7 @@ exports.login = catchAsync(async (req, res, next) => {
   // Get user with password (it's excluded by default)
   const user = await User.findOne({ email }).select('+password');
   const users = await User.find();
-  console.log(user)
+  console.log(user);
   // Check user exists + password correct
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError('Incorrect email or password', 401));
@@ -164,6 +163,74 @@ exports.login = catchAsync(async (req, res, next) => {
   });
 
   createSendToken(populatedUser, 200, res);
+});
+
+/* ──────────────────────── SOCIAL / GUEST LOGIN ──────────────────────── */
+exports.socialOrGuestLogin = catchAsync(async (req, res, next) => {
+  const { fullName, platform, token, phone, tableNumber } = req.body;
+  const merchantId = req.merchantId; // <-- your multi-tenant middleware must set this
+
+  if (!fullName) return next(new AppError('Name is required', 400));
+
+  let customerData = {
+    merchant: merchantId,
+    fullName: fullName.trim(),
+    phone,
+    tableNumber,
+    source: 'guest',
+  };
+
+  // ────── FACEBOOK ──────
+  if (platform === 'facebook' && token) {
+    const fbRes = await axios.get(
+      `https://graph.facebook.com/v20.0/me?fields=id,name,username,email&access_token=${token}`
+    );
+    const fb = fbRes.data;
+    if (!fb.id) return next(new AppError('Invalid Facebook token', 401));
+
+    customerData = {
+      ...customerData,
+      source: 'facebook',
+      facebook: { id: fb.id, username: fb.username || fb.name },
+    };
+  }
+
+  // ────── TIKTOK ──────
+  if (platform === 'tiktok' && token) {
+    const ttRes = await axios.get('https://open-api.tiktok.com/v2/user/info/', {
+      params: { fields: 'open_id,username,display_name', access_token: token },
+    });
+    const tt = ttRes.data.data.user;
+    if (!tt.open_id) return next(new AppError('Invalid TikTok token', 401));
+
+    customerData = {
+      ...customerData,
+      source: 'tiktok',
+      tiktok: { id: tt.open_id, username: tt.username || tt.display_name },
+    };
+  }
+
+  // ────── UPSERT CUSTOMER (single model) ──────
+  const filter = { merchant: merchantId };
+  if (customerData.source === 'facebook') filter['facebook.id'] = customerData.facebook.id;
+  else if (customerData.source === 'tiktok') filter['tiktok.id'] = customerData.tiktok.id;
+  else filter.fullName = customerData.fullName; // guest – simple name match (you can add phone later)
+
+  const customer = await Customer.findOneAndUpdate(filter, customerData, {
+    upsert: true,
+    new: true,
+    setDefaultsOnInsert: true,
+  });
+
+  // ────── RETURN SAME JWT AS ADMIN USERS ──────
+  // we embed the Customer _id as the JWT subject so protect() can load it
+  const fakeUser = {
+    _id: customer._id,
+    merchant: { _id: merchantId },
+    // dummy role so protect() does not break – you can add a real role later
+    role: { name: 'CUSTOMER', tasks: [] },
+  };
+  createSendToken(fakeUser, 200, res);
 });
 
 /**
@@ -251,6 +318,22 @@ exports.restrictTo = () => {
 
     const { role } = user;
 
+    // Array of routes that are accessible WITHOUT any authentication or RBAC check.
+    const publicRoutes = [
+      // Merchant Registration & Login
+      { path: /^\/api\/v1\/users\/signup$/, method: 'POST' },
+      { path: /^\/api\/v1\/users\/login$/, method: 'POST' },
+
+      // Social/Guest Login (assuming this route is /api/v1/users/social-login)
+      { path: /^\/api\/v1\/users\/social-login$/, method: 'POST' },
+
+      // Password Reset
+      { path: /^\/api\/v1\/users\/forgotPassword$/, method: 'POST' },
+      { path: /^\/api\/v1\/users\/resetPassword\/[^/]+$/, method: 'PATCH' }, // Matches resetPassword/:token
+
+      // Public Menu Endpoints (if they exist, e.g., to fetch a menu)
+      // { path: /^\/api\/v1\/public\/menu\/[^/]+$/, method: 'GET' }, // Example
+    ];
     const isPublic = publicRoutes.some(
       r => (!r.method || r.method === httpMethod) && r.path.test(fullUrl)
     );
@@ -313,9 +396,9 @@ exports.restrictTo = () => {
  *  RESET PASSWORD - Reset any user's password by phone (admin only)
  */
 exports.forgotPassword = catchAsync(async (req, res, next) => {
-  const {email } = req.body;
+  const { email } = req.body;
 
-  if (!email ) {
+  if (!email) {
     return next(new AppError('Please provide email address', 400));
   }
 
@@ -323,62 +406,54 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   if (!user) {
     return next(new AppError('No user found with that email address', 404));
   }
- const resetToken = user.createPasswordResetToken()
-  await user.save({validateBeforeSave:false});
+  const resetToken = user.createPasswordResetToken();
+  await user.save({ validateBeforeSave: false });
 
- const resetURL = `${req.protocol}://${req.get("host")}/api/v1/user/resetPassword/${resetToken}`;
- const message = `Forgot your password ? Submit a PATCH request with your new password and passwordConfirm
-    to: ${resetURL} if you didn't forget your password, please ignore this email`
-    try{
-      await sendEmail({
-      email:user.email,
-      subject:'Your password reset token (valid for 10min)',
-      message
-    })
+  const resetURL = `${req.protocol}://${req.get('host')}/api/v1/user/resetPassword/${resetToken}`;
+  const message = `Forgot your password ? Submit a PATCH request with your new password and passwordConfirm
+    to: ${resetURL} if you didn't forget your password, please ignore this email`;
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: 'Your password reset token (valid for 10min)',
+      message,
+    });
 
     res.status(200).json({
-      status:'success',
-      message:'Token sent to email'
-    })
-    } catch(err){
-      user.passwordResetToken= undefined
-      user.passwordResetTokenExpires= undefined
-      await user.save({validateBeforeSave:false});
+      status: 'success',
+      message: 'Token sent to email',
+    });
+  } catch (err) {
+    user.passwordResetToken = undefined;
+    user.passwordResetTokenExpires = undefined;
+    await user.save({ validateBeforeSave: false });
 
-      return next(new AppError("there was an error sending the email. try again later "),500)
-    }
-    
-    // createSendToken(user, 200, res); // Logs them in after reset
+    return next(new AppError('there was an error sending the email. try again later '), 500);
+  }
+
+  // createSendToken(user, 200, res); // Logs them in after reset
 });
 
-exports.resetPassword= catchAsync(async(req,res,next)=>{
+exports.resetPassword = catchAsync(async (req, res, next) => {
+  const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
 
- const hashedToken = crypto
- .createHash('sha256')
- .update(req.params.token)
- .digest('hex');
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetTokenExpires: { $gt: Date.now() },
+  });
 
- const user = await User.findOne({
-  passwordResetToken:hashedToken ,
-  passwordResetTokenExpires:{$gt:Date.now()}
-})
+  if (!user) {
+    return next(new AppError('Token is invalid or has expired', 400));
+  }
 
-if(!user){
-  return next (new AppError('Token is invalid or has expired',400))
-}
+  user.password = req.body.password;
+  user.passwordConfirm = req.body.passwordConfirm;
+  user.passwordResetToken = undefined;
+  user.passwordResetTokenExpires = undefined;
 
-user.password = req.body.password
-user.passwordConfirm = req.body.passwordConfirm
-user.passwordResetToken = undefined
-user.passwordResetTokenExpires = undefined
-
-
-await user.save();
-createSendToken(user,200,res)
-})
-
-
-
+  await user.save();
+  createSendToken(user, 200, res);
+});
 
 /**
  * CHANGE PASSWORD - Logged-in user changes their own password
