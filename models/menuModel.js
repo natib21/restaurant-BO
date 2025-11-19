@@ -1,31 +1,24 @@
-// models/menuModel.js
+// models/menuItemModel.js
 const mongoose = require('mongoose');
 const slugify = require('slugify');
 
 const variantSchema = new mongoose.Schema({
   size: {
     type: String,
-    required: true,
+    required: [true, 'Variant must have a size'],
     enum: [
-      'XS',
-      'S',
-      'M',
-      'L',
-      'XL',
-      '250ml',
-      '330ml',
-      '500ml',
-      '1L',
-      '2L',
-      'Regular',
-      'Large',
-      'Small',
-      'Medium',
+      'XS', 'S', 'M', 'L', 'XL',
+      '250ml', '330ml', '500ml', '1L', '2L',
+      'Regular', 'Large', 'Small', 'Medium'
     ],
   },
-  volume: String,
-  price: { type: Number, required: true, min: 0 },
-  calories: Number,
+  volume: { type: String }, // e.g., "500g", "1 piece"
+  price: {
+    type: Number,
+    required: [true, 'Variant must have a price'],
+    min: [0, 'Price cannot be negative'],
+  },
+  calories: { type: Number },
   available: { type: Boolean, default: true },
 });
 
@@ -38,13 +31,6 @@ const menuSchema = new mongoose.Schema(
       index: true,
     },
 
-    menuGroup: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'MenuGroup',
-      required: [true, 'Item must belong to a menu group'],
-      index: true,
-    },
-
     name: {
       type: String,
       required: [true, 'Menu item must have a name'],
@@ -54,7 +40,11 @@ const menuSchema = new mongoose.Schema(
 
     slug: String,
 
-    description: { type: String, trim: true, maxlength: 500 },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: 800,
+    },
 
     type: {
       type: String,
@@ -63,7 +53,12 @@ const menuSchema = new mongoose.Schema(
       default: 'food',
     },
 
-    category: { type: String, required: true, trim: true },
+    category: {
+      type: String,
+      trim: true,
+      required: [true, 'Category is required'],
+    },
+
     drinkType: {
       type: String,
       enum: [
@@ -83,85 +78,27 @@ const menuSchema = new mongoose.Schema(
     isAlcoholic: { type: Boolean, default: false },
     alcoholPercentage: { type: Number, min: 0, max: 100, default: 0 },
 
-    isVeg: { type: Boolean, default: null },
+    isVeg: { type: Boolean, default: null }, // null = not specified
     isSpicy: { type: Boolean, default: false },
 
+    // Variants (most items have multiple sizes/prices)
     variants: {
       type: [variantSchema],
-      validate: [v => v.length > 0, 'At least one variant is required'],
+      validate: {
+        validator: function (v) {
+          return v.length > 0;
+        },
+        message: 'At least one variant is required',
+      },
     },
 
-    price: { type: Number, min: 0 }, // fallback if no variants
+    // Fallback price if no variants (rare, for simple items)
+    price: { type: Number, min: 0 },
 
-    image: { type: String, default: 'default.jpg' },
+    image: { type: String, default: 'default-menu-item.jpg' },
     images: [String],
 
-    prepTime: { type: String, default: '15-20 min' },
-
-    // ==================== SPECIAL COMBO SYSTEM ====================
-    isSpecial: {
-      type: Boolean,
-      default: false,
-    },
-
-    comboOffer: {
-      name: { type: String }, // e.g., "Family Deal", "Buy 1 Get 1"
-
-      description: {
-        type: String,
-        required: function () {
-          return this.isSpecial;
-        },
-        maxlength: 400,
-      },
-
-      // Option A: List of included items (text only - most common)
-      includedItems: [String], // e.g., ["2 Large Pizzas", "1 Garlic Bread", "4 Drinks"]
-
-      // Option B: Link to real menu items (advanced)
-      includedMenuItems: [
-        {
-          item: { type: mongoose.Schema.Types.ObjectId, ref: 'Menu' },
-          name: String, // fallback if deleted
-          quantity: { type: Number, default: 1 },
-        },
-      ],
-
-      originalPrice: { type: Number }, // Sum of individual prices
-      comboPrice: {
-        type: Number,
-        required: function () {
-          return this.isSpecial;
-        },
-        min: [1, 'Combo price required for special offers'],
-      },
-
-      savingsAmount: {
-        type: Number,
-        default: function () {
-          if (this.originalPrice && this.comboPrice) {
-            return this.originalPrice - this.comboPrice;
-          }
-          return 0;
-        },
-      },
-
-      savingsText: { type: String }, // e.g., "Save 85 AED!"
-
-      validFrom: { type: Date },
-      validUntil: { type: Date },
-
-      availableOnDays: [
-        {
-          type: String,
-          enum: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
-        },
-      ],
-
-      maxPerOrder: { type: Number, default: 10 },
-      totalSold: { type: Number, default: 0 }, // optional tracking
-    },
-    // ==============================================================
+    prepTime: { type: String, default: '15-25 min' },
 
     ingredients: [String],
     allergens: [String],
@@ -169,19 +106,27 @@ const menuSchema = new mongoose.Schema(
     available: { type: Boolean, default: true },
     inStock: { type: Boolean, default: true },
 
+    // Ratings
     ratingAverage: {
       type: Number,
       default: 4.5,
-      min: 1,
-      max: 5,
-      set: v => Math.round(v * 10) / 10,
+      min: [1, 'Rating must be above 1.0'],
+      max: [5, 'Rating must be below 5.0'],
+      set: (v) => Math.round(v * 10) / 10,
     },
     ratingQuantity: { type: Number, default: 0 },
 
-    tags: [String], // e.g., ["trending", "ramadan", "brunch"]
+    tags: [String], // e.g., ["trending", "chef-special", "ramadan", "vegan"]
 
-    createdAt: { type: Date, default: Date.now, select: false },
-    updatedAt: { type: Date, default: Date.now },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+      select: false,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     toJSON: { virtuals: true },
@@ -189,40 +134,38 @@ const menuSchema = new mongoose.Schema(
   }
 );
 
-// Indexes
-menuSchema.index({ merchant: 1, menuGroup: 1 });
-menuSchema.index({ menuGroup: 1, available: 1 });
-menuSchema.index({ isSpecial: 1, 'comboOffer.validUntil': 1 });
+// ========================= INDEXES =========================
+menuSchema.index({ merchant: 1, name: 1 }, { unique: true }); // Prevent duplicate names per restaurant
+menuSchema.index({ merchant: 1, available: 1 });
+menuSchema.index({ merchant: 1, inStock: 1 });
 menuSchema.index({ slug: 1 });
+menuSchema.index({ tags: 1 });
+menuSchema.index({ category: 1 });
 
-// Auto generate slug + updatedAt
+// ========================= MIDDLEWARE =========================
+// Generate unique slug + update timestamp
 menuSchema.pre('save', function (next) {
-  if (this.isModified('name')) {
-    this.slug = slugify(this.name, { lower: true }) + '-' + Date.now().toString(36);
+  if (this.isModified('name') || !this.slug) {
+    const baseSlug = slugify(this.name, { lower: true, strict: true });
+    this.slug = `${baseSlug}-${Date.now().toString(36)}`;
   }
   this.updatedAt = Date.now();
-
-  // Force rules for special offers
-  if (this.isSpecial) {
-    if (!this.comboOffer?.comboPrice || !this.comboOffer?.description) {
-      return next(new Error('Special offer must have combo price and description'));
-    }
-    if (!this.comboOffer.includedItems || this.comboOffer.includedItems.length === 0) {
-      return next(new Error('Please list what is included in the combo'));
-    }
-  } else {
-    this.comboOffer = undefined;
-  }
-
   next();
 });
 
-// Virtual: average price
+// ========================= VIRTUALS =========================
+// Average price across variants
 menuSchema.virtual('averagePrice').get(function () {
-  if (this.variants?.length > 0) {
-    return Math.round(this.variants.reduce((a, v) => a + v.price, 0) / this.variants.length);
+  if (this.variants && this.variants.length > 0) {
+    const sum = this.variants.reduce((acc, v) => acc + v.price, 0);
+    return Math.round(sum / this.variants.length);
   }
-  return this.price || this.comboOffer?.comboPrice;
+  return this.price || 0;
+});
+
+// Default variant (usually first one)
+menuSchema.virtual('defaultVariant').get(function () {
+  return this.variants?.[0] || null;
 });
 
 module.exports = mongoose.model('Menu', menuSchema);

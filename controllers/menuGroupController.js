@@ -1,25 +1,29 @@
-/**
- * @file menuGroupController.js
- * @description Controller for managing Menu Groups (sections/tabs like Breakfast, Drinks)
- *              Handles: Create, Read, Update, Delete (CRUD)
- *              Supports: Merchant ownership checks via JWT
- */
-
-// const MenuGroup = require('../models/menuGroupModel');
+// controllers/menuGroupController.js
 const MenuGroup = require('../models/menuGroupModel');
-const Menu = require('../models/menuModel');
+const Menu = require('../models/menuModel'); // Master dishes
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
-// Create new menu group (Breakfast, Brunch, Ramadan, etc.)
+// =============================================================
+// CREATE NEW MENU GROUP (e.g., Breakfast, Ramadan, Kids Menu)
+// =============================================================
 exports.createMenuGroup = catchAsync(async (req, res, next) => {
-  const merchnatId = req.user.merchant._id; // Merchant ID from JWT
+  const merchantId = req.user.merchant || req.user._id;
 
-  // TODO: Add subscription limit check here (Free = max 1)
+  const { name, description, bannerImage, visibility, priority, timeSlots, activeDays, blockedDays, isAlcoholMenu } = req.body;
 
   const menuGroup = await MenuGroup.create({
-    ...req.body,
-    merchant: merchnatId,
+    merchant: merchantId,
+    name,
+    description,
+    bannerImage,
+    visibility: visibility || 'always',
+    priority: priority || 0,
+    timeSlots,
+    activeDays,
+    blockedDays,
+    isAlcoholMenu: isAlcoholMenu || false,
+    items: [], // start empty – merchant will add items later
   });
 
   res.status(201).json({
@@ -28,12 +32,19 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
   });
 });
 
-// Get all menu groups for a merchant (admin panel)
+// =============================================================
+// GET ALL MENU GROUPS (Merchant Admin Panel)
+// =============================================================
 exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
-  const menuGroups = await MenuGroup.find({ merchant: req.user.merchant._id }).sort({
-    priority: -1,
-    name: 1,
-  });
+  const merchantId = req.user.merchant || req.user._id;
+
+  const menuGroups = await MenuGroup.find({ merchant: merchantId })
+    .sort({ priority: -1, createdAt: -1 })
+    .select('-__v')
+    .populate({
+      path: 'items.menu',
+      select: 'name image variants available inStock',
+    });
 
   res.status(200).json({
     status: 'success',
@@ -42,16 +53,20 @@ exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
   });
 });
 
-// Update menu group (e.g., change time, hide/show)
-exports.updateMenuGroup = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id;
+// =============================================================
+// GET SINGLE MENU GROUP (for editing in admin)
+// =============================================================
+exports.getMenuGroup = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id || req.user._id;
 
-  const menuGroup = await MenuGroup.findOneAndUpdate(
-    { _id: req.params.id, merchant: merchantId },
-    req.body,
-    { new: true, runValidators: true }
-  );
-  console.log('dfsaf ' + menuGroup);
+  const menuGroup = await MenuGroup.findOne({
+    _id: req.params.id,
+    merchant: merchantId,
+  }).populate({
+    path: 'items.menu',
+    select: 'name image type variants available inStock',
+  });
+
   if (!menuGroup) return next(new AppError('Menu group not found', 404));
 
   res.status(200).json({
@@ -60,16 +75,118 @@ exports.updateMenuGroup = catchAsync(async (req, res, next) => {
   });
 });
 
+// =============================================================
+// UPDATE MENU GROUP (name, scheduling, banner, etc.)
+// =============================================================
+exports.updateMenuGroup = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id || req.user._id;
+
+  const menuGroup = await MenuGroup.findOneAndUpdate(
+    { _id: req.params.id, merchant: merchantId },
+    req.body,
+    { new: true, runValidators: true }
+  );
+
+  if (!menuGroup) return next(new AppError('Menu group not found or unauthorized', 404));
+
+  res.status(200).json({
+    status: 'success',
+    data: { menuGroup },
+  });
+});
+
+// =============================================================
+// DELETE MENU GROUP (safe – only removes playlist, not dishes)
+// =============================================================
 exports.deleteMenuGroup = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id || req.user._id;
+
   const menuGroup = await MenuGroup.findOneAndDelete({
     _id: req.params.id,
-    merchant: req.user.merchant,
+    merchant: merchantId,
   });
 
+  if (!menuGroup) return next(new AppError('Menu group not found or unauthorized', 404));
+
+  res.status(204).json({
+    status: 'success',
+    data: null,
+  });
+});
+
+// =============================================================
+// ADD / REMOVE / REORDER ITEMS IN MENU GROUP
+// =============================================================
+exports.addItemToGroup = catchAsync(async (req, res, next) => {
+  const { menuId } = req.body; // the master Menu item ID
+  const merchantId = req.user.merchant._id || req.user._id;
+
+  const menuItem = await Menu.findOne({ _id: menuId, merchant: merchantId });
+  if (!menuItem) return next(new AppError('Dish not found', 404));
+
+  const updated = await MenuGroup.findOneAndUpdate(
+    { _id: req.params.id, merchant: merchantId },
+    {
+      $push: {
+        items: {
+          menu: menuId,
+          sortOrder: Date.now(), // temporary – can be reordered later
+        },
+      },
+    },
+    { new: true }
+  );
+
+  if (!updated) return next(new AppError('Menu group not found', 404));
+
+  await updated.populate('items.menu');
+
+  res.status(200).json({
+    status: 'success',
+    data: { menuGroup: updated },
+  });
+});
+
+exports.removeItemFromGroup = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id || req.user._id;
+  const { menuId } = req.body;
+
+  const updated = await MenuGroup.findOneAndUpdate(
+    { _id: req.params.id, merchant: merchantId },
+    { $pull: { items: { menu: menuId } } },
+    { new: true }
+  );
+
+  if (!updated) return next(new AppError('Menu group or item not found', 404));
+
+  await updated.populate('items.menu');
+
+  res.status(200).json({
+    status: 'success',
+    data: { menuGroup: updated },
+  });
+});
+
+// Reorder items (drag & drop support)
+exports.reorderItems = catchAsync(async (req, res, next) => {
+  const { items } = req.body; // array of { menuId, sortOrder }
+  const merchantId = req.user.merchant._id || req.user._id;
+
+  const menuGroup = await MenuGroup.findOne({ _id: req.params.id, merchant: merchantId });
   if (!menuGroup) return next(new AppError('Menu group not found', 404));
 
-  // Optional: delete all items in this group
-  await Menu.deleteMany({ menuGroup: req.params.id });
+  // Update sortOrder for each item
+  menuGroup.items.forEach((item) => {
+    const newOrder = items.find((i) => i.menuId === item.menu.toString());
+    if (newOrder) item.sortOrder = newOrder.sortOrder;
+  });
 
-  res.status(204).json({ status: 'success', data: null });
+  await menuGroup.save();
+
+  await menuGroup.populate('items.menu');
+
+  res.status(200).json({
+    status: 'success',
+    data: { menuGroup },
+  });
 });

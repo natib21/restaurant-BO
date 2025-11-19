@@ -2,6 +2,36 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
 
+const menuGroupItemSchema = new mongoose.Schema({
+  menuItem: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Menu',
+    required: true,
+  },
+  sortOrder: {
+    type: Number,
+    default: 0,
+  },
+  // Optional overrides specific to this menu group only
+  overridePrice: {
+    type: Number,
+    min: 0,
+    default: null,
+  },
+  customName: {
+    type: String,
+    trim: true,
+  },
+  customDescription: {
+    type: String,
+    trim: true,
+  },
+  isHidden: {
+    type: Boolean,
+    default: false,
+  },
+});
+
 const menuGroupSchema = new mongoose.Schema(
   {
     name: {
@@ -30,7 +60,6 @@ const menuGroupSchema = new mongoose.Schema(
       default: 'always',
     },
 
-    // Weekly recurring days
     activeDays: [
       {
         type: String,
@@ -40,21 +69,18 @@ const menuGroupSchema = new mongoose.Schema(
 
     blockedDays: [
       {
-        // e.g., no alcohol menu on Tuesday in Dubai
         type: String,
         enum: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
       },
     ],
 
-    // Daily time slots
     timeSlots: [
       {
-        start: { type: String }, // "07:00"
-        end: { type: String }, // "11:00"
+        start: { type: String }, // e.g., "09:00"
+        end: { type: String },   // e.g., "23:00"
       },
     ],
 
-    // Special dates (Ramadan, Eid, Christmas, etc.)
     specialDates: [
       {
         date: { type: Date, required: true },
@@ -62,11 +88,21 @@ const menuGroupSchema = new mongoose.Schema(
       },
     ],
 
-    isAlcoholMenu: { type: Boolean, default: false }, // Auto-control for dry days
+    isAlcoholMenu: { type: Boolean, default: false },
 
-    priority: { type: Number, default: 0 }, // Higher = shown first
+    priority: {
+      type: Number,
+      default: 0, // Higher number = shown first
+    },
 
-    createdAt: { type: Date, default: Date.now, select: false },
+    // The actual list of items in this menu group
+    items: [menuGroupItemSchema],
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+      select: false,
+    },
   },
   {
     toJSON: { virtuals: true },
@@ -74,20 +110,25 @@ const menuGroupSchema = new mongoose.Schema(
   }
 );
 
-// Virtual: All items in this menu group
-menuGroupSchema.virtual('items', {
-  ref: 'Menu',
-  foreignField: 'menuGroup',
-  localField: '_id',
+// ========================= INDEXES =========================
+menuGroupSchema.index({ merchant: 1, visibility: 1 });
+menuGroupSchema.index({ merchant: 1, priority: -1 });
+menuGroupSchema.index({ merchant: 1, isAlcoholMenu: 1 });
+
+// ========================= SLUG =========================
+menuGroupSchema.pre('save', function (next) {
+  if (this.isModified('name') || !this.slug) {
+    this.slug = slugify(`${this.merchant}-${this.name}`, { lower: true, strict: true });
+  }
+  next();
 });
 
-// Indexes
-menuGroupSchema.index({ merchant: 1, visibility: 1 });
-menuGroupSchema.index({ priority: -1 });
-
-// Slug
-menuGroupSchema.pre('save', function (next) {
-  this.slug = slugify(`${this.merchant}-${this.name}`, { lower: true });
+// Optional: Auto-cleanup empty items or hidden ones on query
+menuGroupSchema.pre(/^find/, function (next) {
+  this.populate({
+    path: 'items.menu',
+    match: { available: true, inStock: true }, // only active items
+  });
   next();
 });
 

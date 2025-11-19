@@ -188,7 +188,7 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
 exports.getAllMenu = catchAsync(async (req, res, next) => {
   const filter = { merchant: req.user.merchant._id };
 
-  const menuItems = await Menu.find(filter).populate('menuGroup', 'name').sort('-createdAt');
+  const menuItems = await Menu.find(filter).sort('-createdAt');
 
   const menuWithImages = menuItems.map(item => ({
     ...item.toObject(),
@@ -207,7 +207,7 @@ exports.getMenu = catchAsync(async (req, res, next) => {
   const menuItem = await Menu.findOne({
     _id: req.params.id,
     merchant: merchantId,
-  }).populate('menuGroup', 'name');
+  });
 
   if (!menuItem) return next(new AppError('Menu item not found.', 404));
 
@@ -220,10 +220,10 @@ exports.getMenu = catchAsync(async (req, res, next) => {
 exports.createNewMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
   // Extract body
-  const { name, type, category, menuGroup, variants, isSpecial, comboOffer } = req.body;
+  const { name, type, category, variants, isSpecial, comboOffer } = req.body;
 
   // Required fields
-  const required = { name, type, category, menuGroup, variants };
+  const required = { name, type, category, variants };
   const missing = Object.keys(required).find(k => !required[k]);
   if (missing) {
     return next(
@@ -241,8 +241,8 @@ exports.createNewMenu = catchAsync(async (req, res, next) => {
   }
 
   // Validate menuGroup belongs to this merchant
-  const group = await MenuGroup.findOne({ _id: menuGroup, merchant: merchantId });
-  if (!group) return next(new AppError('Invalid menu section.', 400));
+  /* const group = await MenuGroup.findOne({ _id: menuGroup, merchant: merchantId });
+  if (!group) return next(new AppError('Invalid menu section.', 400)); */
 
   const newMenuItem = await Menu.create({ ...req.body, merchant: merchantId });
 
@@ -289,5 +289,74 @@ exports.deleteMenu = catchAsync(async (req, res, next) => {
   res.status(204).json({
     status: 'success',
     data: null,
+  });
+});
+
+// controllers/menuController.js
+exports.getActiveMenu = catchAsync(async (req, res, next) => {
+  const merchantId = req.params.merchantId || req.user.merchant;
+  const now = new Date();
+  const currentDay = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
+  const currentTime = now.toTimeString().slice(0, 5); // "14:30"
+
+  const menuGroups = await MenuGroup.find({
+    merchant: merchantId,
+    visibility: { $in: ['always', 'scheduled'] },
+    $or: [
+      { activeDays: currentDay },
+      { activeDays: { $size: 0 } }
+    ],
+    $or: [
+      { blockedDays: { $ne: currentDay } },
+      { blockedDays: { $size: 0 } }
+    ]
+  })
+  .sort({ priority: -1 })
+  .populate({
+    path: 'items.menu',
+    match: { available: true, inStock: true },
+    populate: { path: 'variants' }
+  });
+
+  // Filter out groups with no visible items + clean up
+  const cleanedGroups = menuGroups
+    .map(group => {
+      const visibleItems = group.items.filter(i => 
+        i.menuItem && !i.isHidden
+      );
+      if (visibleItems.length === 0) return null;
+
+      return {
+        _id: group._id,
+        name: group.name,
+        description: group.description,
+        bannerImage: group.bannerImage,
+        items: visibleItems.map(i => ({
+          _id: i.menuItem._id,
+          name: i.customName || i.menuItem.name,
+          description: i.customDescription || i.menuItem.description,
+          image: i.menuItem.image,
+          price: i.overridePrice || i.menuItem.variants[0]?.price || i.menuItem.price,
+          variants: i.menuItem.variants,
+          isVeg: i.menuItem.isVeg,
+          isSpicy: i.menuItem.isSpicy,
+          prepTime: i.menuItem.prepTime,
+        }))
+      };
+    })
+    .filter(Boolean);
+
+  // Also get active combos
+  const combos = await Combo.find({ /* same logic as before */ })
+    .sort({ priority: -1 })
+    .populate('items.menuItem');
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      menu: cleanedGroups,
+      combos,
+      generatedAt: new Date()
+    }
   });
 });
