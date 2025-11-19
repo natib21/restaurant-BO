@@ -4,38 +4,57 @@ const authController = require('../controllers/authController');
 
 const router = express.Router();
 
-// PUBLIC ROUTES (no auth needed)
-router.get('/:id/public', menuController.getPublicMenu); // Customer view active menu
+// =============================================================
+// 1. PUBLIC ROUTES – Customer sees active menu (auto day/time switch)
+// =============================================================
 
-// PUBLIC FILTERS & SEARCH (for customers)
-router.get('/beverage', menuController.getAllBeverage, menuController.getPublicMenu); // All drinks
-router.get('/appetizers', menuController.getAppetizers, menuController.getPublicMenu); // Appetizers
-router.get('/specials', menuController.getSpecials, menuController.getPublicMenu); // Special combos
-router.get('/food', menuController.getFoodOnly, menuController.getPublicMenu); // All food
-router.get('/search', menuController.searchMenu, menuController.getPublicMenu); // Search
+// Main public menu (auto detects lunch/dinner/happy hour etc.)
+router.get('/:id/public', menuController.getPublicMenu);
 
-// PROTECTED ROUTES (merchant & admin)
-router.use(authController.protect, authController.restrictTo());
+// FILTERED VERSIONS – All these MUST use SAME :merchantId
 
-// Merchant: Get all their own menus
-router.get('/', menuController.getAllMenu);
+router
+  .get('/:id/public/beverages',   menuController.getAllBeverage, menuController.getPublicMenu)
+  .get('/:id/public/drinks',      menuController.getAllBeverage, menuController.getPublicMenu)
+  .get('/:id/public/food',        menuController.getFoodOnly,    menuController.getPublicMenu)
+  .get('/:id/public/appetizers',  menuController.getAppetizers,   menuController.getPublicMenu)
+  .get('/:id/public/specials',    menuController.getSpecials,     menuController.getPublicMenu)
+  .get('/:id/public/search',      menuController.searchMenu,    menuController.getPublicMenu); // ?query=chicken
 
-// Create new menu item (with image)
-router.post(
-  '/',
-  menuController.uploadMenuPhoto,
-  menuController.resizeMenuPhoto,
-  menuController.createNewMenu
-);
+// Optional: Support old style if you want (less clean)
+// router.get('/beverage/:merchantId', menuController.getAllBeverage, menuController.getPublicMenu);
 
-// Get/update/delete single menu item
+// =============================================================
+// 2. MERCHANT PROTECTED ROUTES
+// =============================================================
+router.use(authController.protect); // All below need login
+
+// Merchant manages their own menu items
+router
+  .route('/')
+  .get(menuController.getAllMenu)
+  .post(
+    menuController.uploadMenuPhoto,
+    menuController.resizeMenuPhoto,
+    menuController.createNewMenu
+  );
+
 router
   .route('/:id')
   .get(menuController.getMenu)
-  .patch(menuController.uploadMenuPhoto, menuController.resizeMenuPhoto, menuController.updateMenu)
+  .patch(
+    menuController.uploadMenuPhoto,
+    menuController.resizeMenuPhoto,
+    menuController.updateMenu
+  )
   .delete(menuController.deleteMenu);
 
-// SUPER-ADMIN ONLY (all menus across merchants)
-router.get('/admin/all', authController.restrictTo(), menuController.getAllMenu);
+// =============================================================
+// 3. SUPER ADMIN ONLY
+// =============================================================
+router.get('/admin/all', 
+  authController.restrictTo('super-admin'), 
+  menuController.getAllMenu // gets ALL menus from ALL merchants
+);
 
 module.exports = router;

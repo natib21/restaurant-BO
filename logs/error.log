@@ -20,3 +20,22 @@
 {"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T01:50:15.190Z"}
 {"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T01:55:28.439Z"}
 {"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T01:56:01.584Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:33:28.596Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:34:06.199Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:34:42.216Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:39:35.699Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T10:41:09.221Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T10:43:15.295Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T10:43:47.969Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:41:23.754Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:41:51.661Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:27.148Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:30.826Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:32.859Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:46.080Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv EREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:55:26.651Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv EREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:55:29.406Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:56:23.142Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T12:12:18.273Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T12:18:40.515Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T12:27:42.139Z"}
