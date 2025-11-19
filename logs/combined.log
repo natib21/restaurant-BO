@@ -372,3 +372,70 @@
 {"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T02:51:54.949Z"}
 {"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T02:51:58.389Z"}
 {"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T02:51:58.409Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T08:32:58.588Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:33:28.596Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T08:33:36.191Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:34:06.199Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T08:34:12.202Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:34:42.216Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T08:39:05.685Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T08:39:35.699Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T10:40:39.211Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T10:41:09.221Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T10:42:45.287Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T10:43:15.295Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T10:43:17.966Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","timestamp":"2025-11-19T10:43:47.969Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T10:45:11.643Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T10:45:17.992Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:40:43.988Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2025-11-19T11:40:50.261Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:40:55.450Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:41:23.754Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:41:27.375Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:41:51.661Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:42:01.702Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:27.148Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:42:30.816Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:30.826Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:42:32.851Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:32.859Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:42:34.737Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:42:46.080Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:42:48.920Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T11:43:05.954Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:50:24.124Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T11:50:27.837Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:52:15.766Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T11:52:19.738Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:54:51.255Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T11:55:01.889Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:55:20.280Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv EREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:55:26.651Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:55:29.249Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv EREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:55:29.406Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T11:55:58.696Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ETIMEOUT _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T11:56:23.142Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:00:09.229Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T12:00:11.569Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:02:21.824Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T12:02:35.018Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:11:49.840Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T12:12:18.273Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:18:18.263Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T12:18:40.515Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:19:00.286Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T12:19:12.631Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:27:23.673Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-19T12:27:42.139Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T12:37:07.267Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T12:37:09.536Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T13:13:47.729Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T13:13:53.031Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T13:16:47.311Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T13:16:48.987Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T13:22:41.920Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T13:22:49.639Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T13:23:10.667Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T13:23:12.238Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2025-11-19T13:50:04.497Z"}

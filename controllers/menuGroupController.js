@@ -8,9 +8,9 @@ const AppError = require('../utils/appError');
 // CREATE NEW MENU GROUP (e.g., Breakfast, Ramadan, Kids Menu)
 // =============================================================
 exports.createMenuGroup = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant || req.user._id;
+  const merchantId = req.user.merchant._id || req.user._id;
 
-  const { name, description, bannerImage, visibility, priority, timeSlots, activeDays, blockedDays, isAlcoholMenu } = req.body;
+  const { name, description, bannerImage, visibility, priority, timeSlots, activeDays, blockedDays, isAlcoholMenu ,items} = req.body;
 
   const menuGroup = await MenuGroup.create({
     merchant: merchantId,
@@ -23,7 +23,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
     activeDays,
     blockedDays,
     isAlcoholMenu: isAlcoholMenu || false,
-    items: [], // start empty – merchant will add items later
+    items, 
   });
 
   res.status(201).json({

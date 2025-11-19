@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const slugify = require('slugify');
 
 const menuGroupItemSchema = new mongoose.Schema({
-  menuItem: {
+  menu: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Menu',
     required: true,

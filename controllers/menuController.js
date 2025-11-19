@@ -96,87 +96,126 @@ exports.getFoodOnly = (req, res, next) => {
    4. PUBLIC: Get active menu for customer (smart scheduling + combos!)
    =================================================================== */
 
+/* =============================================================
+   4. PUBLIC: Get active menu for customer (with ?type= support)
+   Example URLs:
+   /api/v1/menus/public/60d5ec49f1b2c8b3d4e9a123
+   /api/v1/menus/public/60d5ec49f1b2c8b3d4e9a123?type=food
+   /api/v1/menus/public/60d5ec49f1b2c8b3d4e9a123?type=drink
+   /api/v1/menus/public/60d5ec49f1b2c8b3d4e9a123?type=alcohol
+   ============================================================= */
 exports.getPublicMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.params.id;
+  const requestedType = req.query.type?.toLowerCase(); // food | drink | alcohol
 
-  const merchant = await Merchant.findById(merchantId);
+  const merchant = await Merchant.findById(merchantId).select('name isActive');
   if (!merchant || !merchant.isActive) {
-    return next(new AppError('Restaurant not found or currently closed.', 404));
+    return next(new AppError('Restaurant not found or closed.', 404));
   }
 
   const now = new Date();
   const dayName = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
-  const currentTime = now.toTimeString().slice(0, 5);
+  console.log("day Name "+dayName)
+  const currentTime = now.toTimeString().slice(0, 5); // "14:30"
+  console.log("currentTime"+currentTime)
   const today = now.toISOString().split('T')[0];
+console.log("today "+today)
+  // Step 1: Find all currently active MenuGroups
+  const allGroups = await MenuGroup.find({ merchant: merchantId })
+    .select('name description bannerImage priority visibility activeDays blockedDays timeSlots specialDates isAlcoholMenu')
+    .sort({ priority: -1 });
 
-  // Get all menu groups and determine which are active now
-  const groups = await MenuGroup.find({ merchant: merchantId }).select(
-    'name bannerImage priority visibility activeDays blockedDays timeSlots specialDates isAlcoholMenu'
-  );
-
-  const activeGroupIds = [];
   const activeGroups = [];
+  const activeGroupIds = [];
 
-  for (const g of groups) {
-    let show = false;
+  for (const group of allGroups) {
+    let isActive = false;
 
-    if (g.visibility === 'always') show = true;
-    else if (g.visibility === 'scheduled') {
-      const onActiveDay = !g.activeDays?.length || g.activeDays.includes(dayName);
-      const notBlocked = !g.blockedDays?.includes(dayName);
-      const inTime =
-        !g.timeSlots?.length ||
-        g.timeSlots.some(t => t.start <= currentTime && t.end >= currentTime);
-      const specialDateMatch = g.specialDates?.some(d => {
-        const dateStr = d.date.toISOString().split('T')[0];
-        return (
-          dateStr === today ||
-          (d.recurringYearly &&
-            d.date.getMonth() === now.getMonth() &&
-            d.date.getDate() === now.getDate())
-        );
+    if (group.visibility === 'always') {
+      isActive = true;
+    } else if (group.visibility === 'scheduled') {
+      const onActiveDay = !group.activeDays?.length || group.activeDays.includes(dayName);
+      const notBlocked = !group.blockedDays?.includes(dayName);
+
+      const inTimeSlot = !group.timeSlots?.length || group.timeSlots.some(slot =>
+        slot.start <= currentTime && slot.end >= currentTime
+      );
+
+      const isSpecialDate = group.specialDates?.some(d => {
+        const dStr = d.date.toISOString().split('T')[0];
+        return dStr === today || (d.recurringYearly && d.date.getMonth() === now.getMonth() && d.date.getDate() === now.getDate());
       });
 
-      if (g.isAlcoholMenu && dayName === 'tuesday') show = false;
-      else if ((onActiveDay || specialDateMatch) && notBlocked && inTime) show = true;
+      isActive = (onActiveDay || isSpecialDate) && notBlocked && inTimeSlot;
     }
 
-    if (show) {
-      activeGroupIds.push(g._id);
+    if (isActive) {
+      activeGroupIds.push(group._id);
       activeGroups.push({
-        _id: g._id,
-        name: g.name,
-        bannerImage: g.bannerImage
-          ? `${req.protocol}://${req.get('host')}/img/menu/${g.bannerImage}`
+        _id: group._id,
+        name: group.name,
+        description: group.description,
+        bannerImage: group.bannerImage
+          ? `${req.protocol}://${req.get('host')}/img/menu/${group.bannerImage}`
           : null,
+        isAlcoholMenu: group.isAlcoholMenu,
       });
     }
   }
 
-  // Get items + always show special combos
-  const items = await Menu.find({
+  // Step 2: Build query for Menu items
+  let menuQuery = {
     merchant: merchantId,
+    available: true,
+    inStock: true,
     $or: [
-      { menuGroup: { $in: activeGroupIds }, available: true, inStock: true },
-      { isSpecial: true, available: true },
-    ],
-  })
-    .populate('menuGroup', 'name')
+      { menuGroup: { $in: activeGroupIds } },
+      { visibility: 'always' },           // fallback items
+      { isSpecial: true }                 // always show specials
+    ]
+  };
+
+  // Apply type filter if requested
+  if (requestedType === 'food') {
+    menuQuery.type = 'food';
+  } else if (requestedType === 'drink') {
+    menuQuery.type = 'drink';
+  } else if (requestedType === 'alcohol') {
+    // Show only alcohol menu groups + alcohol items
+    const alcoholGroups = activeGroups.filter(g => g.isAlcoholMenu);
+    const alcoholGroupIds = alcoholGroups.map(g => g._id);
+    menuQuery.$or = [
+      { menuGroup: { $in: alcoholGroupIds } },
+      { isAlcohol: true }
+    ];
+    // Override active groups to show only alcohol ones
+    activeGroups = alcoholGroups;
+  }
+
+  // Step 3: Fetch items
+  const items = await Menu.find(menuQuery)
+    .select('name description image price variants type isVeg isSpicy calories prepTime')
     .sort({ isSpecial: -1, name: 1 });
 
-  const itemsWithImages = items.map(item => ({
+  const baseUrl = `${req.protocol}://${req.get('host')}/img/menu/`;
+  const formattedItems = items.map(item => ({
     ...item.toObject(),
-    image: item.image ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}` : null,
+    image: item.image ? baseUrl + item.image : null,
+    finalPrice: item.variants?.[0]?.price || item.price,
   }));
 
+  // Step 4: Send response
   res.status(200).json({
     status: 'success',
     restaurant: merchant.name,
-    results: itemsWithImages.length,
+    generatedAt: new Date(),
+    // activeMenuGroups: activeGroups,
+    filtersApplied: requestedType ? { type: requestedType } : null,
     data: {
       menuGroups: activeGroups,
-      menu: itemsWithImages,
-      specialOffers: itemsWithImages.filter(i => i.isSpecial),
+      items: formattedItems,
+      specialOffers: formattedItems.filter(i => i.isSpecial),
+      totalItems: formattedItems.length,
     },
   });
 });
