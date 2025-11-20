@@ -36,7 +36,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
 // GET ALL MENU GROUPS (Merchant Admin Panel)
 // =============================================================
 exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant || req.user._id;
+  const merchantId = req.user.merchant._id || req.user._id;
 
   const menuGroups = await MenuGroup.find({ merchant: merchantId })
     .sort({ priority: -1, createdAt: -1 })

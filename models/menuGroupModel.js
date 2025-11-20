@@ -103,6 +103,7 @@ const menuGroupSchema = new mongoose.Schema(
       default: Date.now,
       select: false,
     },
+    isSystemDefault:Boolean
   },
   {
     toJSON: { virtuals: true },
