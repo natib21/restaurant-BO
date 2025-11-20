@@ -161,7 +161,7 @@ comboSchema.pre('save', function (next) {
 
 // Pre-populate menuItem details + fallback name
 comboSchema.pre(/^find/, function (next) {
-  this.populate('items.menu');
+  this.populate('items.menuItem');
   next();
 });
 

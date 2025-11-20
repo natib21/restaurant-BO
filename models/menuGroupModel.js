@@ -103,6 +103,7 @@ const menuGroupSchema = new mongoose.Schema(
       default: Date.now,
       select: false,
     },
+    isSystemDefault:Boolean
   },
   {
     toJSON: { virtuals: true },
@@ -124,12 +125,12 @@ menuGroupSchema.pre('save', function (next) {
 });
 
 // Optional: Auto-cleanup empty items or hidden ones on query
-menuGroupSchema.pre(/^find/, function (next) {
+/* menuGroupSchema.pre(/^find/, function (next) {
   this.populate({
     path: 'items.menu',
     match: { available: true, inStock: true }, // only active items
   });
   next();
-});
+}); */
 
 module.exports = mongoose.model('MenuGroup', menuGroupSchema);

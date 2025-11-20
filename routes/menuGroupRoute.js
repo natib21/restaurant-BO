@@ -9,12 +9,17 @@ const router = express.Router();
 router.use(authController.protect, authController.restrictTo()); // Or your roles: 'SUPER-ADMIN', etc.
 
 router
+  .route('/light')
+  .get(menuGroupController.getAllMenuGroupsLight)
+
+router
   .route('/')
   .get(menuGroupController.getAllMenuGroups)
   .post(menuGroupController.createMenuGroup);
 
 router
   .route('/:id')
+  .get(menuGroupController.getMenuGroup)
   .patch(menuGroupController.updateMenuGroup)
   .delete(menuGroupController.deleteMenuGroup);
 

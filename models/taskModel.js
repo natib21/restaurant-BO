@@ -22,11 +22,26 @@ const taskSchema = new Schema({
     type: String,
     trim: true,
   },
+ /*  category: {
+    type: String,
+    required: true,
+    enum: [
+      'Merchant Management',
+      'Merchant Profile',
+      'Staff Management',
+      'Roles & Permissions',
+      'Menu Management',
+      'Order Management',
+      'System Permissions',
+    ]
+  }, */
+  // Optional: hide from merchant UI
   isMerchant: { type: Boolean, default: false },
   createdAt: {
     type: Date,
     default: Date.now,
   },
+  hidden: { type: Boolean, default: false },
 });
 
 const Task = mongoose.model('Task', taskSchema);
