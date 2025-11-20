@@ -439,3 +439,5 @@
 {"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-19T13:23:10.667Z"}
 {"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-19T13:23:12.238Z"}
 {"level":"info","message":"Shutting down gracefully...","timestamp":"2025-11-19T13:50:04.497Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-20T06:41:43.236Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-20T06:41:45.635Z"}
