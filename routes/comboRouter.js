@@ -1,23 +1,38 @@
-// routes/comboRoutes.js
+
 const express = require('express');
 const comboController = require('../controllers/comboController');
 const authController = require('../controllers/authController');
 
-const router = express.Router({ mergeParams: true });
+const router = express.Router({ mergeParams: true }); // Important if nested
 
-// Public (customer)
-router.get('/active', comboController.getActiveCombos);
+// ====================== PUBLIC / CUSTOMER ROUTES ======================
+// Anyone can view active combos (no auth needed for customer view)
+router
+  .route('/active/:id') // :id = merchantId (for public menu)
+  .get(comboController.getActiveCombos);
 
-// Protected (merchant only)
-router.use(authController.protect, authController.restrictTo('merchant', 'admin'));
+// If you want public access without merchantId in params (optional)
+// router.route('/active').get(comboController.getActiveCombos);
 
-router.post('/', comboController.createCombo);
-router.get('/', comboController.getAllCombos);
+// ====================== PROTECT ALL BELOW ======================
+router.use(authController.protect,authController.restrictTo()); // ← Login required from here
+
+// ====================== MERCHANT ADMIN ROUTES ======================
+router
+  .route('/')
+  .get(comboController.getAllCombos)        // Admin: See all combos (active + inactive)
+  .post(comboController.createCombo);       // Create new combo
 
 router
   .route('/:id')
-  .get(comboController.getCombo)
-  .patch(comboController.updateCombo)
-  .delete(comboController.deleteCombo);
+  .get(comboController.getCombo)            // Get single combo (for editing)
+  .patch(comboController.updateCombo)       // Update combo
+  .delete(comboController.deleteCombo);     // Delete combo
+
+// ====================== ORDER WEBHOOK (Protected but accessible by order service) ======================
+// Only authenticated services/users can increment sold count
+router
+  .route('/increment-sold')
+  .post(comboController.incrementComboSold);
 
 module.exports = router;

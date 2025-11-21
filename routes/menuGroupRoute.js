@@ -6,7 +6,11 @@ const authController = require('../controllers/authController'); // Assuming you
 const router = express.Router();
 
 // All routes protected for merchants only
-router.use(authController.protect, authController.restrictTo()); // Or your roles: 'SUPER-ADMIN', etc.
+router.use(authController.protect/* , authController.restrictTo() */); // Or your roles: 'SUPER-ADMIN', etc.
+
+router
+  .route('/light')
+  .get(menuGroupController.getAllMenuGroupsLight)
 
 router
   .route('/')
@@ -15,6 +19,7 @@ router
 
 router
   .route('/:id')
+  .get(menuGroupController.getMenuGroup)
   .patch(menuGroupController.updateMenuGroup)
   .delete(menuGroupController.deleteMenuGroup);
 

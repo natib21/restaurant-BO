@@ -108,7 +108,7 @@ app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/merchants', merchantRouter);
 app.use('/api/v1/menu', menuRouter);
 app.use('/api/v1/menuGroup', menuGroupRouter);
-app.use('/api/v1/combo',comboRouter)
+app.use('/api/v1/menuCombo',comboRouter)
 app.use('/api/v1/table', tableRouter);
 app.use('/api/v1/order', orderRouter);
 

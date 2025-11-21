@@ -20,7 +20,7 @@ const server = createSocketServer(app);
 const DB = process.env.DATABASE.replace('<PASSWORD>', process.env.DATABASE_PASSWORD);
 const Local_Db = process.env.DATABASE_LOCAL;
 
-mongoose.connect(DB).then(() => {
+mongoose.connect(Local_Db).then(() => {
   logger.info(chalk.white.bgGreen('MongoDB connected successfully!'));
 });
 

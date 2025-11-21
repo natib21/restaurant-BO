@@ -1,6 +1,6 @@
 // controllers/comboController.js
 const Combo = require('../models/comboModel');
-const MenuItem = require('../models/menuModel');
+const Menu = require('../models/menuModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
@@ -9,12 +9,13 @@ exports.createCombo = catchAsync(async (req, res, next) => {
   const { name, description, items, originalPrice, comboPrice, image, validFrom, validUntil, availableOnDays, timeSlots, maxPerOrder, priority, tags } = req.body;
 
   // Merchant comes from protect middleware (req.user.merchant or req.user._id)
-  const merchant = req.user.merchant || req.user._id;
+  const merchant = req.user.merchant._id || req.user._id;
 
   // Validate and enrich items with fallback names
+  console.log(items)
   const enrichedItems = await Promise.all(
     items.map(async (item) => {
-      const menuItem = await MenuItem.findById(item.menuItem);
+      const menuItem = await Menu.findById(item.menuItem).select('name image available inStock');;
       if (!menuItem) throw new AppError(`Menu item not found: ${item.menuItem}`, 404);
       if (!menuItem.available || !menuItem.inStock) throw new AppError(`Item "${menuItem.name}" is not available`, 400);
 
@@ -22,6 +23,7 @@ exports.createCombo = catchAsync(async (req, res, next) => {
         menuItem: item.menuItem,
         nameFallback: menuItem.name,
         quantity: item.quantity || 1,
+        
       };
     })
   );
@@ -42,7 +44,7 @@ exports.createCombo = catchAsync(async (req, res, next) => {
     priority: priority || 0,
     tags,
   });
-
+await combo.populate('items.menuItem', 'name image variants');
   res.status(201).json({
     status: 'success',
     data: { combo },
@@ -83,11 +85,11 @@ exports.getActiveCombos = catchAsync(async (req, res, next) => {
 
 // ========================= GET ALL COMBOS (Admin Panel) =========================
 exports.getAllCombos = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id || req.user._id;
+  const merchantId = req.user.merchant._id;
 
   const combos = await Combo.find({ merchant: merchantId })
     .sort({ priority: -1, createdAt: -1 })
-    .populate('items.menu');
+    .populate('items.menuItem');
 
   res.status(200).json({
     status: 'success',
@@ -98,11 +100,16 @@ exports.getAllCombos = catchAsync(async (req, res, next) => {
 
 // ========================= GET SINGLE COMBO =========================
 exports.getCombo = catchAsync(async (req, res, next) => {
-  const combo = await Combo.findById(req.params.id).populate('items.menu');
 
-  if (!combo) return next(new AppError('Combo not found', 404));
-  if (combo.merchant.toString() !== (req.user.merchant || req.user._id).toString()) {
-    return next(new AppError('Not authorized', 403));
+  const merchantId = req.user.merchant._id;
+
+  const combo = await Combo.findOne({
+    _id: req.params.id,
+    merchant: merchantId,
+  }).populate('items.menuItem');
+
+  if (!combo) {
+    return next(new AppError('Combo not found', 404));
   }
 
   res.status(200).json({
@@ -113,31 +120,48 @@ exports.getCombo = catchAsync(async (req, res, next) => {
 
 // ========================= UPDATE COMBO =========================
 exports.updateCombo = catchAsync(async (req, res, next) => {
-  const combo = await Combo.findById(req.params.id);
+ const merchantId = req.user.merchant._id;
+
+ const combo = await Combo.findOne({
+    _id: req.params.id,
+    merchant: merchantId,
+  })
+
   if (!combo) return next(new AppError('Combo not found', 404));
-  if (combo.merchant.toString() !== (req.user.merchant || req.user._id).toString()) {
-    return next(new AppError('Not authorized', 403));
-  }
+ 
 
   // If items are being updated, re-validate
-  if (req.body.items) {
-    req.body.items = await Promise.all(
+ if (req.body.items) {
+    const enrichedItems = await Promise.all(
       req.body.items.map(async (item) => {
-        const menuItem = await Menu.findById(item.menu);
-        if (!menuItem) throw new AppError(`Invalid menu item: ${item.menu}`, 400);
+        const menuItem = await Menu.findById(item.menuItem).select('name image available inStock');
+        
+        if (!menuItem) {
+          throw new AppError(`Menu item not found: ${item.menuItem}`, 404);
+        }
+        if (!menuItem.available || !menuItem.inStock) {
+          throw new AppError(`"${menuItem.name}" is currently unavailable or out of stock`, 400);
+        }
+
         return {
-          menu: item.menu,
-          nameFallback: menu.name,
+          menuItem: item.menuItem,           // ← CORRECT field name
+          nameFallback: menuItem.name,       // ← Correct reference
           quantity: item.quantity || 1,
         };
       })
     );
+
+    req.body.items = enrichedItems; // ← Replace with validated + enriched items
   }
 
-  const updatedCombo = await Combo.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true,
-  }).populate('items.menu');
+const updatedCombo = await Combo.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).populate('items.menuItem', 'name image variants price available inStock');
 
   res.status(200).json({
     status: 'success',

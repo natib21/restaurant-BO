@@ -8,8 +8,8 @@ const AppError = require('../utils/appError');
 // CREATE NEW MENU GROUP (e.g., Breakfast, Ramadan, Kids Menu)
 // =============================================================
 exports.createMenuGroup = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id || req.user._id;
-
+  const merchantId = req.user.merchant._id;
+    console.log(merchantId)
   const { name, description, bannerImage, visibility, priority, timeSlots, activeDays, blockedDays, isAlcoholMenu ,items} = req.body;
 
   const menuGroup = await MenuGroup.create({
@@ -36,7 +36,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
 // GET ALL MENU GROUPS (Merchant Admin Panel)
 // =============================================================
 exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id || req.user._id;
+  const merchantId = req.user.merchant._id ;
 
   const menuGroups = await MenuGroup.find({ merchant: merchantId })
     .sort({ priority: -1, createdAt: -1 })
@@ -45,19 +45,48 @@ exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
       path: 'items.menu',
       select: 'name image variants available inStock',
     });
-
+  
   res.status(200).json({
     status: 'success',
     results: menuGroups.length,
     data: { menuGroups },
   });
 });
+// LIGHTWEIGHT VERSION – Only IDs + basic group info
+exports.getAllMenuGroupsLight = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id || req.user._id;
 
+  const menuGroups = await MenuGroup.find({ merchant: merchantId })
+    .sort({ priority: -1, createdAt: -1 })
+    .select('name description bannerImage visibility priority isAlcoholMenu isSystemDefault slug items.menu items.sortOrder items.isHidden items.overridePrice items.customName')
+    .lean(); // ← Important: skip Mongoose docs for speed
+
+  // Transform: only keep menu IDs, not full objects
+  const lightGroups = menuGroups.map(group => ({
+    ...group,
+    items: group.items.map(item => ({
+      menu: item.menu,           // ← Just the ObjectId (string)
+      sortOrder: item.sortOrder,
+      overridePrice: item.overridePrice,
+      customName: item.customName,
+      customDescription: item.customDescription,
+      isHidden: item.isHidden,
+      _id: item._id
+    }))
+  }));
+
+  res.status(200).json({
+    status: 'success',
+    results: lightGroups.length,
+    data: { menuGroups: lightGroups }
+  });
+});
 // =============================================================
 // GET SINGLE MENU GROUP (for editing in admin)
 // =============================================================
 exports.getMenuGroup = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id || req.user._id;
+  console.log(req.user)
+  const merchantId = req.user.merchant.id;
 
   const menuGroup = await MenuGroup.findOne({
     _id: req.params.id,
@@ -65,7 +94,7 @@ exports.getMenuGroup = catchAsync(async (req, res, next) => {
   }).populate({
     path: 'items.menu',
     select: 'name image type variants available inStock',
-  });
+  }).lean();
 
   if (!menuGroup) return next(new AppError('Menu group not found', 404));
 

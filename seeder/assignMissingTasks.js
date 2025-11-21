@@ -1,71 +1,71 @@
-/**
- * @file assignMissingTasks.js
- * @description ONE-TIME SCRIPT
- *              → Finds all tasks where isMerchant: true
- *              → Adds them to SUPER-MERCHANT-ADMIN role (if not already)
- *              → Safe, idempotent, logs results
- */
-
+// seeders/seedAllRealTasksWithCategories.js
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Task = require('../models/taskModel');
-const Role = require('../models/roleModel');
-const logger = require('../utils/logger');
 
-const MONGO_URI =
-  `mongodb+srv://nathnaelzelalem:UZ8NzyORmOcIPUK9@restaurant.k0gc3.mongodb.net/?retryWrites=true&w=majority&appName=Restaurant` ||
-  'mongodb://localhost:27017/your-db-name';
+const MONGO_URI = process.env.LOCAL_DATABASE || 'mongodb+srv://nathnaelzelalem:UZ8NzyORmOcIPUK9@restaurant.k0gc3.mongodb.net/Restaurant?retryWrites=true&w=majority';
 
-async function assignMerchantTasks() {
+const tasks = [
+  // System Permissions
+  { name: "Create Task", endpoint: "/api/v1/tasks", method: "POST", description: "Create a new task, assignable to roles", isMerchant: false, category: "System Permissions", hidden: true },
+  { name: "List All Roles", endpoint: "/api/v1/roles", method: "GET", category: "System Permissions", isMerchant: false,category: "System Permissions", hidden: true },
+  { name: "Create New Role", endpoint: "/api/v1/roles", method: "POST", category: "System Permissions", isMerchant: false,category: "System Permissions", hidden: true },
+  { name: "View Role Details", endpoint: "/api/v1/roles/:id", method: "GET", category: "System Permissions", isMerchant: false,category: "System Permissions", hidden: true },
+  { name: "Update Role", endpoint: "/api/v1/roles/:id", method: "PATCH", category: "System Permissions", isMerchant: false,category: "System Permissions", hidden: true },
+  { name: "Delete Role", endpoint: "/api/v1/roles/:id", method: "DELETE", category: "System Permissions", isMerchant: false,category: "System Permissions", hidden: true },
+
+  // Merchant Management (Super Admin)
+  { name: "Approve Merchant", endpoint: "/api/v1/merchants/:id/approve", method: "PATCH", isMerchant: false, category: "Merchant Management" },
+  { name: "List All Merchants", endpoint: "/api/v1/merchants", method: "GET", isMerchant: false, category: "Merchant Management" },
+  { name: "Update Merchant Profile", endpoint: "/api/v1/merchants/:id", method: "PATCH", isMerchant: false, category: "Merchant Management" },
+  { name: "Suspend Merchant", endpoint: "/api/v1/merchants/:id/suspend", method: "PATCH", isMerchant: false, category: "Merchant Management" },
+  { name: "Reactivate Merchant", endpoint: "/api/v1/merchants/:id/activate", method: "PATCH", isMerchant: false, category: "Merchant Management" },
+
+  // Merchant Profile
+  { name: "KYC Merchant", endpoint: "/api/v1/merchants/kyc", method: "POST", isMerchant: true, category: "Merchant Profile" },
+  { name: "View Merchant Stats", endpoint: "/api/v1/merchants/:id/stats", method: "GET", isMerchant: true, category: "Merchant Profile" },
+  { name: "Change Subscription Plan", endpoint: "/api/v1/merchants/subscription", method: "PATCH", isMerchant: true, category: "Merchant Profile" },
+
+  // Staff Management
+  { name: "View Merchant User List", endpoint: "/api/v1/merchants/users", method: "GET", isMerchant: true, category: "Staff Management" },
+  { name: "Add New Merchant User", endpoint: "/api/v1/merchants/users", method: "POST", isMerchant: true, category: "Staff Management" },
+  { name: "View Merchant User By Id", endpoint: "/api/v1/merchants/users/:id", method: "GET", isMerchant: true, category: "Staff Management" },
+  { name: "Update Merchant User", endpoint: "/api/v1/merchants/users/:id", method: "PATCH", isMerchant: true, category: "Staff Management" },
+  { name: "Deactivate Merchant User", endpoint: "/api/v1/merchants/users/:id", method: "DELETE", isMerchant: true, category: "Staff Management" },
+  { name: "Activate Merchant User", endpoint: "/api/v1/merchants/users/:id/activate", method: "PATCH", isMerchant: true, category: "Staff Management" },
+
+  // Roles & Permissions
+  { name: "Get All Merchant Roles", endpoint: "/api/v1/merchants/roles", method: "GET", isMerchant: true, category: "Roles & Permissions" },
+  { name: "Create Merchant Role", endpoint: "/api/v1/merchants/roles", method: "POST", isMerchant: true, category: "Roles & Permissions" },
+  { name: "Get Merchant Role by ID", endpoint: "/api/v1/merchants/roles/:id", method: "GET", isMerchant: true, category: "Roles & Permissions" },
+  { name: "Update Merchant Role", endpoint: "/api/v1/merchants/roles/:id", method: "PUT", isMerchant: true, category: "Roles & Permissions" },
+  { name: "Delete Merchant Role", endpoint: "/api/v1/merchants/roles/:id", method: "DELETE", isMerchant: true, category: "Roles & Permissions" },
+  { name: "Activate Merchant Role", endpoint: "/api/v1/merchants/roles/:id/activate", method: "PATCH", isMerchant: true, category: "Roles & Permissions" },
+
+  // Menu Management
+  { name: "Get All Menu Groups (Admin)", endpoint: "/api/v1/menuGroup", method: "GET", isMerchant: true, category: "Menu Management" },
+  { name: "Create Menu Group", endpoint: "/api/v1/menuGroup", method: "POST", isMerchant: true, category: "Menu Management" },
+  { name: "Update Menu Group", endpoint: "/api/v1/menuGroup/:id", method: "PATCH", isMerchant: true, category: "Menu Management" },
+  { name: "Delete Menu Group", endpoint: "/api/v1/menuGroup/:id", method: "DELETE", isMerchant: true, category: "Menu Management" },
+  { name: "Get All Menu", endpoint: "/api/v1/menu", method: "GET", isMerchant: true, category: "Menu Management" },
+  { name: "Get Single Menu Item", endpoint: "/api/v1/menu/:id", method: "GET", isMerchant: true, category: "Menu Management" },
+  { name: "Create New Menu Item", endpoint: "/api/v1/menu", method: "POST", isMerchant: true, category: "Menu Management" },
+  { name: "Update Menu Item", endpoint: "/api/v1/menu/:id", method: "PATCH", isMerchant: true, category: "Menu Management" },
+  { name: "Delete Menu Item", endpoint: "/api/v1/menu/:id", method: "DELETE", isMerchant: true, category: "Menu Management" },
+];
+
+(async () => {
   try {
-    // 1. Connect to DB
-    await mongoose.connect(MONGO_URI).then(() => {
-      logger.info('MongoDB connected successfully!');
-    });
+    await mongoose.connect(MONGO_URI);
+    console.log('Connected');
 
-    console.log('Connected to database.');
+    await Task.deleteMany({});
+    await Task.insertMany(tasks);
 
-    // 2. Find SUPER-MERCHANT-ADMIN role
-    const merchantAdminRole = await Role.findOne({ name: 'SUPER-MERCHANT-ADMIN' });
-    if (!merchantAdminRole) {
-      throw new Error('SUPER-MERCHANT-ADMIN role not found. Create it first.');
-    }
-    console.log(`Found role: ${merchantAdminRole.name} (ID: ${merchantAdminRole._id})`);
-
-    // 3. Find all tasks where isMerchant: true
-    const merchantTasks = await Task.find({ isMerchant: true }).select('_id');
-    const taskIds = merchantTasks.map(t => t._id);
-    console.log(`Found ${taskIds.length} tasks with isMerchant: true`);
-
-    if (taskIds.length === 0) {
-      console.log('No merchant tasks found. Nothing to do.');
-      return;
-    }
-
-    // 4. Filter out tasks already in the role
-    const existingTaskIds = merchantAdminRole.tasks.map(id => id.toString());
-    const missingTaskIds = taskIds.filter(id => !existingTaskIds.includes(id.toString()));
-
-    console.log(`Already assigned: ${existingTaskIds.length}`);
-    console.log(`Missing: ${missingTaskIds.length}`);
-
-    if (missingTaskIds.length === 0) {
-      console.log('All merchant tasks are already assigned. Done!');
-      return;
-    }
-
-    // 5. Add missing tasks
-    merchantAdminRole.tasks.push(...missingTaskIds);
-    await merchantAdminRole.save({ validateBeforeSave: false });
-
-    console.log(`Successfully added ${missingTaskIds.length} tasks to SUPER-MERCHANT-ADMIN`);
-    console.log('One-time fix completed!');
+    console.log(`Successfully seeded ${tasks.length} tasks with categories!`);
   } catch (err) {
-    console.error('Error:', err.message);
+    console.error(err);
   } finally {
-    await mongoose.disconnect();
-    console.log('Disconnected from MongoDB');
+    mongoose.disconnect();
   }
-}
-
-assignMerchantTasks();
+})();
