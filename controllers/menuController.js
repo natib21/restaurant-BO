@@ -99,7 +99,7 @@ exports.getFoodOnly = (req, res, next) => {
    ============================================================= */
 exports.getPublicMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.params.id;
-  const requestedType = req.query.type?.toLowerCase(); // food | drink | alcohol
+  const requestedType = req.query.type?.toLowerCase();
 
   const merchant = await Merchant.findById(merchantId).select('businessName isActive');
   if (!merchant || !merchant.isActive) {
@@ -108,23 +108,22 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
 
   const now = new Date();
   const dayName = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
-  const currentTimeStr = now.toTimeString().slice(0, 5); // "14:30"
-  const today = now.toISOString().split('T')[0]; // "2025-11-20"
+  const currentTimeStr = now.toTimeString().slice(0, 5);
+  const today = now.toISOString().split('T')[0];
 
-  // Helper: Convert "HH:MM" → minutes since midnight
   const timeToMinutes = (time) => {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
   };
   const currentMinutes = timeToMinutes(currentTimeStr);
 
-  // Step 1: Get all groups
+  // Step 1: Get ALL groups with priority
   const allGroups = await MenuGroup.find({ merchant: merchant._id })
     .select('priority visibility activeDays blockedDays timeSlots specialDates isAlcoholMenu items name')
-    .sort({ priority: -1 });
+    .sort({ priority: -1 }); // HIGHEST PRIORITY FIRST ← crucial
 
   const activeGroupIds = new Set();
-  console.log("all Groups "+allGroups)
+
   for (const group of allGroups) {
     if (group.visibility === 'hidden') continue;
 
@@ -134,13 +133,12 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
       const onActiveDay = !group.activeDays?.length || 
         group.activeDays.map(d => d.toLowerCase()).includes(dayName);
 
-      const notBlocked = !group.blockedDays?.length || 
+      const notBlocked = !group.blockedDays?.length ||
         !group.blockedDays.map(d => d.toLowerCase()).includes(dayName);
 
       const inTimeSlot = !group.timeSlots?.length || group.timeSlots.some(slot => {
         const startMin = timeToMinutes(slot.start);
         const endMin = timeToMinutes(slot.end);
-        // Handle overnight slots (e.g., 22:00 - 02:00)
         if (endMin < startMin) {
           return currentMinutes >= startMin || currentMinutes <= endMin;
         }
@@ -150,41 +148,46 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
       const isSpecialDate = group.specialDates?.some(d => {
         const dateStr = d.date.toISOString().split('T')[0];
         if (d.recurringYearly) {
-          const groupMonthDay = `${d.date.getMonth()}-${d.date.getDate()}`;
-          const todayMonthDay = `${now.getMonth()}-${now.getDate()}`;
-          return groupMonthDay === todayMonthDay;
+          const monthDay = `${d.date.getMonth() + 1}-${d.date.getDate()}`;
+          const todayMD = `${now.getMonth() + 1}-${now.getDate()}`;
+          return monthDay === todayMD;
         }
         return dateStr === today;
       });
 
       isActive = (onActiveDay || isSpecialDate) && notBlocked && inTimeSlot;
-      console.log(onActiveDay, isSpecialDate, notBlocked , inTimeSlot)
     }
 
-    console.log(isActive)
     if (isActive) {
       activeGroupIds.add(group._id.toString());
     }
   }
 
-  // Step 2: Populate active groups
-  const activeMenuGroups = await MenuGroup.find({
+  // Step 2: Fetch active groups with populated items (sorted by priority already)
+  const activeGroups = await MenuGroup.find({
     _id: { $in: Array.from(activeGroupIds) },
     merchant: merchantId
-  }).populate({
+  })
+  .sort({ priority: -1 }) // ← again, highest first
+  .populate({
     path: 'items.menu',
     match: { available: true, inStock: true },
     select: 'name description image variants price type isVeg isSpicy isAlcoholic prepTime tags ingredients allergens ratingAverage'
   });
-console.log("Active Date "+activeMenuGroups , "Id "+ activeGroupIds)
+
   const baseUrl = `${req.protocol}://${req.get('host')}/img/menu/`;
-  let allItems = [];
 
-  for (const group of activeMenuGroups) {
-    const isAlcoholGroup = group.isAlcoholMenu;
+  // Key: Track which menu items we've already added (by _id)
+  const seenItemIds = new Set();
+  const finalItems = [];
 
+  // Loop through groups in priority order
+  for (const group of activeGroups) {
     for (const item of group.items) {
       if (!item.menu || item.isHidden) continue;
+      if (seenItemIds.has(item.menu._id.toString())) continue; // Skip if already added from higher group
+
+      seenItemIds.add(item.menu._id.toString());
 
       const menu = item.menu;
       const defaultPrice = item.overridePrice || menu.variants?.[0]?.price || menu.price || 0;
@@ -199,31 +202,30 @@ console.log("Active Date "+activeMenuGroups , "Id "+ activeGroupIds)
         type: menu.type,
         isVeg: menu.isVeg,
         isSpicy: menu.isSpicy,
-        isAlcoholic: !!menu.isAlcoholic || isAlcoholGroup,
+        isAlcoholic: !!menu.isAlcoholic || group.isAlcoholMenu,
         prepTime: menu.prepTime || '15-25 min',
         tags: menu.tags || [],
         ingredients: menu.ingredients || [],
         allergens: menu.allergens || [],
-        rating: menu.ratingAverage || 0,
-        groupName: group.name // optional: helpful for frontend
+        rating: menu.ratingAverage || 4.5,
+        displayedIn: group.name // optional: show where it came from
       };
 
-      allItems.push(menuItem);
+      finalItems.push(menuItem);
     }
   }
 
-  // Step 3: Apply filters
-  let finalItems = allItems;
-
+  // Apply type filter (food/drink/alcohol)
+  let filteredItems = finalItems;
   if (requestedType === 'food') {
-    finalItems = allItems.filter(i => i.type === 'food');
+    filteredItems = finalItems.filter(i => i.type === 'food');
   } else if (requestedType === 'drink') {
-    finalItems = allItems.filter(i => i.type === 'drink' && !i.isAlcoholic);
+    filteredItems = finalItems.filter(i => i.type === 'drink' && !i.isAlcoholic);
   } else if (requestedType === 'alcohol') {
-    finalItems = allItems.filter(i => i.isAlcoholic);
+    filteredItems = finalItems.filter(i => i.isAlcoholic);
   }
 
-  const specialOffers = finalItems
+  const specialOffers = filteredItems
     .filter(i => i.tags.some(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t)))
     .slice(0, 10);
 
@@ -231,10 +233,9 @@ console.log("Active Date "+activeMenuGroups , "Id "+ activeGroupIds)
     status: 'success',
     restaurant: merchant.businessName,
     generatedAt: new Date().toISOString(),
-    filtersApplied: requestedType ? { type: requestedType } : null,
-    totalItems: finalItems.length,
+    totalItems: filteredItems.length,
     data: {
-      menus: finalItems.map(i => ({
+      menus: filteredItems.map(i => ({
         id: i._id,
         name: i.name,
         description: i.description,
@@ -248,20 +249,18 @@ console.log("Active Date "+activeMenuGroups , "Id "+ activeGroupIds)
         ingredients: i.ingredients,
         allergens: i.allergens,
         rating: i.rating,
-        group: i.groupName
+        displayedIn: i.displayedIn
       })),
       specialOffers: specialOffers.map(i => ({
         id: i._id,
         name: i.name,
         image: i.image,
         price: i.price,
-        prepTime: i.prepTime,
         tag: i.tags.find(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t))
       }))
     }
   });
 });
-
 /* ===================================================================
    5. PRIVATE: Merchant CRUD (your exact style)
    =================================================================== */

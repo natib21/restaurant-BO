@@ -6,11 +6,8 @@ const variantSchema = new mongoose.Schema({
   size: {
     type: String,
     required: [true, 'Variant must have a size'],
-    enum: [
-      'XS', 'S', 'M', 'L', 'XL',
-      '250ml', '330ml', '500ml', '1L', '2L',
-      'Regular', 'Large', 'Small', 'Medium'
-    ],
+    trim: true,
+    maxlength: 50,
   },
   volume: { type: String }, // e.g., "500g", "1 piece"
   price: {

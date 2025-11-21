@@ -128,7 +128,7 @@ exports.signup = catchAsync(async (req, res, next) => {
   // Fetch full user with populated role + tasks
   let finalUser = await User.findById(newUser._id).populate({
     path: 'role',
-    select: 'name context description tasks',
+    select: 'name endpoint description tasks',
     populate: { path: 'tasks', select: 'name description target method' },
   });
 
@@ -166,7 +166,7 @@ exports.login = catchAsync(async (req, res, next) => {
   // Populate role and permissions
   const populatedUser = await User.findById(user._id).populate({
     path: 'role',
-    select: 'name context description tasks',
+    select: 'name endpoint description tasks',
     populate: {
       path: 'tasks',
       select: 'name endpoint method description',

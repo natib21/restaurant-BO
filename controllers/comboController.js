@@ -6,13 +6,13 @@ const AppError = require('../utils/appError');
 
 // ========================= CREATE COMBO =========================
 exports.createCombo = catchAsync(async (req, res, next) => {
+
   const { name, description, items, originalPrice, comboPrice, image, validFrom, validUntil, availableOnDays, timeSlots, maxPerOrder, priority, tags } = req.body;
-
   // Merchant comes from protect middleware (req.user.merchant or req.user._id)
-  const merchant = req.user.merchant._id || req.user._id;
-
+  const merchant = req.user.merchant._id ;
   // Validate and enrich items with fallback names
   console.log(items)
+
   const enrichedItems = await Promise.all(
     items.map(async (item) => {
       const menuItem = await Menu.findById(item.menuItem).select('name image available inStock');;
@@ -53,10 +53,10 @@ await combo.populate('items.menuItem', 'name image variants');
 
 // ========================= GET ALL ACTIVE COMBOS (Customer View) =========================
 exports.getActiveCombos = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.id || req.user.merchant || req.user._id;
+ const merchantId = req.user.merchant._id;
   const now = new Date();
   const todayStr = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
-
+ console.log("Today :- "+ todayStr)
   const combos = await Combo.find({
     merchant: merchantId,
     isActive: true,

@@ -8,7 +8,7 @@ const router = express.Router({ mergeParams: true }); // Important if nested
 // ====================== PUBLIC / CUSTOMER ROUTES ======================
 // Anyone can view active combos (no auth needed for customer view)
 router
-  .route('/active/:id') // :id = merchantId (for public menu)
+  .route('/active') // :id = merchantId (for public menu)
   .get(comboController.getActiveCombos);
 
 // If you want public access without merchantId in params (optional)
