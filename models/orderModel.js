@@ -24,7 +24,7 @@ const orderItemSchema = new Schema({
 
 // Main order schema
 const orderSchema = new Schema({
-  restaurant: {
+  merchant: {
     type: Schema.Types.ObjectId,
     ref: 'Merchant',
     required: true,

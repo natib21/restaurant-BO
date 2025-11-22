@@ -9,7 +9,7 @@ const router = express.Router();
 // =============================================================
 
 // Main public menu (auto detects lunch/dinner/happy hour etc.)
-router.get('/:id/public', menuController.getPublicMenu);
+router.get('/:MID/public', menuController.getPublicMenu);
 
 // FILTERED VERSIONS – All these MUST use SAME :merchantId
 

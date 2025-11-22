@@ -1,49 +1,78 @@
+// models/tableModel.js
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
 
-const tableSchema = new Schema(
+const tableSchema = new mongoose.Schema(
   {
-    restaurant: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Merchant',
-      required: true,
-    },
-    tableNumber: {
-      type: String,
-      required: true,
-      trim: true,
-      unique: true,
-    },
-    capacity: {
-      type: Number,
-      required: true,
-      min: 1,
-    },
-    status: {
-      type: String,
-      enum: ['available', 'occupied', 'reserved', 'needs-cleaning'],
-      default: 'available',
-    },
-    location: {
-      type: String,
-      enum: ['indoor', 'outdoor', 'rooftop', 'vip'],
-      default: 'indoor',
-    },
     merchant: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Merchant',
       required: true,
+      index: true,
     },
-    currentOrder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Order',
+
+    tableNumber: {
+      type: String,
+      required: [true, 'Table number is required'],
+      trim: true,
+      uppercase: true,
+    },
+
+    capacity: {
+      type: Number,
+      required: true,
+      min: [1, 'Capacity must be at least 1'],
+    },
+
+    status: {
+      type: String,
+      enum: ['available', 'occupied', 'reserved', 'needs-cleaning', 'disabled'],
+      default: 'available',
+    },
+
+    location: {
+      type: String,
+      enum: ['indoor', 'outdoor', 'rooftop', 'terrace', 'vip', 'bar', 'window', 'balcony'],
+      default: 'indoor',
+    },
+
+    section: {
+      type: String,
+      trim: true,
       default: null,
+      // Example: "Main Hall", "Terrace A", "VIP Lounge"
     },
-    qr: { type: String },
+
+    qrCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
-const Table = mongoose.model('Table', tableSchema);
+// Virtual: Get current assigned staff (real-time view without storing on Table)
+tableSchema.virtual('currentStaff', {
+  ref: 'StaffAssignment',
+  localField: '_id',
+  foreignField: 'tables.table',
+  justOne: false,
+  match: { isActive: true },
+});
 
-module.exports = Table;
+// Indexes
+tableSchema.index({ merchant: 1, tableNumber: 1 }, { unique: true });
+tableSchema.index({ merchant: 1, status: 1 });
+tableSchema.index({ merchant: 1, section: 1 });
+tableSchema.index({ merchant: 1, isActive: 1 });
+
+module.exports = mongoose.model('Table', tableSchema);

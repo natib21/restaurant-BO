@@ -18,6 +18,8 @@ exports.getAllOrder = catchAsync(async (req, res) => {
     order: allOrders,
   });
 });
+
+
 exports.createNewOrder = catchAsync(async (req, res, next) => {
   const newOrder = await Order.create(req.body);
   const io = getIo();
@@ -33,6 +35,7 @@ exports.getOrder = (req, res) => {
     message: 'This route is not defined',
   });
 };
+
 exports.updateOrder = async (req, res, next) => {
   const updatedOrder = await Order.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
@@ -51,12 +54,16 @@ exports.updateOrder = async (req, res, next) => {
     },
   });
 };
+
+
 exports.deleteOrder = (req, res) => {
   res.status(500).json({
     status: 'Error',
     message: 'This route is not defined',
   });
 };
+
+
 
 exports.acceptOrder = async (req, res, next) => {
   try {
@@ -77,3 +84,5 @@ exports.acceptOrder = async (req, res, next) => {
     next(err);
   }
 };
+
+

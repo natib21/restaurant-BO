@@ -13,7 +13,7 @@ const MenuGroup = require('../models/menuGroupModel');
 const Merchant = require('../models/merchantModel');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
-
+const Table  = require('../models/tabelModel')
 /* ===================================================================
    1. MULTER CONFIG: Handle image upload (single 'image' field)
    =================================================================== */
@@ -98,7 +98,27 @@ exports.getFoodOnly = (req, res, next) => {
    Supports: scheduling, ?type=food/drink/alcohol, specials, banners
    ============================================================= */
 exports.getPublicMenu = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.id;
+  const merchantId = req.params.MID;
+  const tableId = req.query.tableId;
+  if (!merchantId) {
+    return next(new AppError('Merchant ID is required', 400));
+  }
+
+  let tableNumber = null;
+
+  if (tableId) {
+    const table = await Table.findOne({
+      _id: tableId,
+      merchant: merchantId,
+      isActive: true,
+    }).select('tableNumber');
+
+    if (!table) {
+      return next(new AppError('Invalid or inactive table', 400));
+    }
+    tableNumber = table.tableNumber;
+  }
+
   const requestedType = req.query.type?.toLowerCase();
 
   const merchant = await Merchant.findById(merchantId).select('businessName isActive');
