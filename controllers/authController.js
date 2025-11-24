@@ -9,13 +9,12 @@ const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
 const sendEmail = require('./../utils/email');
 const crypto = require('crypto');
-const MenuGroup = require('../models/menuGroupModel')
+const MenuGroup = require('../models/menuGroupModel');
 
 /**
  * Generates a JWT token for a user
  * Payload includes: user ID and optionally merchant ID
  */
-
 
 const signToken = user => {
   console.log('user : -', user);
@@ -117,14 +116,14 @@ exports.signup = catchAsync(async (req, res, next) => {
   });
 
   await MenuGroup.create({
-        merchant: newMerchant._id,
-        name: 'All Items (System Default)',
-        description: 'Hidden system group for all menu items. Used for public fallback.',
-        priority: -100, // Lowest priority
-        visibility: 'always',
-        isSystemDefault: true, // Marker for system management
-        items: [] // Starts empty
-    });
+    merchant: newMerchant._id,
+    name: 'All Items (System Default)',
+    description: 'Hidden system group for all menu items. Used for public fallback.',
+    priority: -100, // Lowest priority
+    visibility: 'always',
+    isSystemDefault: true, // Marker for system management
+    items: [], // Starts empty
+  });
   // Fetch full user with populated role + tasks
   let finalUser = await User.findById(newUser._id).populate({
     path: 'role',

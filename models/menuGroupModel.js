@@ -77,7 +77,7 @@ const menuGroupSchema = new mongoose.Schema(
     timeSlots: [
       {
         start: { type: String }, // e.g., "09:00"
-        end: { type: String },   // e.g., "23:00"
+        end: { type: String }, // e.g., "23:00"
       },
     ],
 
@@ -103,7 +103,7 @@ const menuGroupSchema = new mongoose.Schema(
       default: Date.now,
       select: false,
     },
-    isSystemDefault:Boolean
+    isSystemDefault: Boolean,
   },
   {
     toJSON: { virtuals: true },

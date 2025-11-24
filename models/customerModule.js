@@ -1,56 +1,42 @@
 // models/Customer.js
 const mongoose = require('mongoose');
+const { Schema } = mongoose;   // ← THIS LINE WAS MISSING! NOW FIXED
 
-const customerSchema = new mongoose.Schema(
+const customerSchema = new Schema(
   {
     merchant: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: 'Merchant',
-      required: [true, 'Customer must belong to a merchant'],
+      required: true,
       index: true,
     },
-
-    // Core info – always required
     fullName: {
       type: String,
-      required: [true, 'Customer name is required'],
+      required: true,
       trim: true,
-      minlength: [2, 'Name too short'],
-      maxlength: [50, 'Name too long'],
+      minlength: 2,
+      maxlength: 50,
     },
-
     phone: {
       type: String,
       trim: true,
-      sparse: true, // allows multiple nulls
+      sparse: true,
       validate: {
-        validator: function (v) {
-          if (!v) return true;
-          return /^\+?251[79]\d{8}$/.test(v.replace(/\s/g, ''));
-        },
+        validator: v => !v || /^\+?251[79]\d{8}$/.test(v.replace(/\s/g, '')),
         message: 'Invalid Ethiopian phone number',
       },
     },
 
-    // Social connections (optional)
-    facebook: {
-      id: { type: String, sparse: true },
+    // Social logins
+    facebook: { id: String, username: String, profilePic: String },
+    tiktok: { id: String, username: String, profilePic: String },
+    telegram: {
+      id: String,
       username: String,
-      profilePic: String, // URL to profile picture
-    },
-    tiktok: {
-      id: { type: String, sparse: true },
-      username: String,
+      firstName: String,
       profilePic: String,
     },
-    telegram: {
-      id: { type: String, sparse: true }, // Telegram user ID (numeric string)
-      username: String, // @username or null
-      firstName: String, // Telegram first name
-      profilePic: String, // Telegram file_id or URL
-    },
 
-    // Where did this customer come from?
     source: {
       type: String,
       enum: ['guest', 'facebook', 'tiktok', 'telegram'],
@@ -58,12 +44,51 @@ const customerSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Optional session info
-    tableNumber: { type: String, trim: true },
-
-    // Timestamps
+    currentTable: { type: String, trim: true },
     lastSeen: { type: Date, default: Date.now },
-    createdAt: { type: Date, default: Date.now },
+
+    // ────── CRM & LOYALTY SYSTEM ──────
+    loyalty: {
+      points: { type: Number, default: 0 },
+      totalPointsEarned: { type: Number, default: 0 },
+      totalPointsSpent: { type: Number, default: 0 },
+      tier: {
+        type: String,
+        enum: ['bronze', 'silver', 'gold', 'platinum'],
+        default: 'bronze',
+      },
+      joinedAt: { type: Date, default: Date.now },
+      gifts: [
+        {
+          name: String,
+          type: { type: String, enum: ['free_item', 'discount', 'cash_value'] },
+          value: Number,
+          menuItem: { type: Schema.Types.ObjectId, ref: 'Menu' },
+          claimed: { type: Boolean, default: false },
+          claimedAt: Date,
+          expiresAt: Date,
+          givenBy: { type: Schema.Types.ObjectId, ref: 'User' },
+          givenAt: { type: Date, default: Date.now },
+          reason: String,
+        },
+      ],
+    },
+
+    // Staff notes & tags
+    tags: [
+      {
+        value: String,
+        addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        addedAt: { type: Date, default: Date.now },
+      },
+    ],
+    notes: [
+      {
+        text: String,
+        addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        addedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -72,29 +97,28 @@ const customerSchema = new mongoose.Schema(
   }
 );
 
-// ────── Compound Indexes for Fast Lookups (Multi-Tenant Safe) ──────
-customerSchema.index({ merchant: 1, 'facebook.id': 1 }, { unique: true, sparse: true });
-customerSchema.index({ merchant: 1, 'tiktok.id': 1 }, { unique: true, sparse: true });
-customerSchema.index({ merchant: 1, 'telegram.id': 1 }, { unique: true, sparse: true });
-customerSchema.index({ merchant: 1, source: 1, fullName: 1 }); // For guest deduplication
-
-// ────── Auto-delete guest sessions after 2 hours ──────
-customerSchema.index(
-  { createdAt: 1 },
-  {
-    expireAfterSeconds: 7200, // 2 hours
-    partialFilterExpression: { source: 'guest' },
-  }
-);
-
-// ────── Virtual: Easy way to get profile picture ──────
+// Virtual: Profile image fallback
 customerSchema.virtual('profileImage').get(function () {
   return (
     this.facebook?.profilePic ||
     this.tiktok?.profilePic ||
     this.telegram?.profilePic ||
-    '/default-avatar.png' // fallback
+    '/images/default-avatar.png'
   );
 });
+
+// Indexes
+customerSchema.index({ merchant: 1, 'facebook.id': 1 }, { unique: true, sparse: true });
+customerSchema.index({ merchant: 1, 'tiktok.id': 1 }, { unique: true, sparse: true });
+customerSchema.index({ merchant: 1, 'telegram.id': 1 }, { unique: true, sparse: true });
+customerSchema.index({ merchant: 1, phone: 1 }, { unique: true, sparse: true });
+customerSchema.index({ merchant: 1, lastSeen: -1 });
+customerSchema.index({ 'loyalty.tier': 1, merchant: 1 });
+
+// Auto-clean old inactive guests after 90 days
+customerSchema.index(
+  { lastSeen: 1 },
+  { expireAfterSeconds: 60 * 60 * 24 * 90, partialFilterExpression: { source: 'guest' } }
+);
 
 module.exports = mongoose.model('Customer', customerSchema);

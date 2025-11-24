@@ -8,77 +8,14 @@ const StaffAssignment = require('../models/staffAssignTabelModel');
 // ====================================================================
 // ASSIGN TABLES TO STAFF (Main function – used by manager)
 // ====================================================================
-exports.assignTablesToStaff = catchAsync(async (req, res, next) => {
-  const { staffId, tableIds, section, shift = 'full-day', notes } = req.body;
-
-  // Validation
-  if (!staffId || !tableIds || !Array.isArray(tableIds) || tableIds.length === 0) {
-    return next(new AppError('Please provide staffId and array of tableIds', 400));
-  }
-
-  // Verify all tables exist and belong to merchant
-  const tables = await Table.find({
-    _id: { $in: tableIds },
-    merchant: req.user.merchant._id,
-    isActive: true,
-  });
-
-  if (tables.length !== tableIds.length) {
-    return next(new AppError('One or more tables not found or not active', 400));
-  }
-
-  // End previous active assignments for these tables
-  await StaffAssignment.updateMany(
-    { 
-      merchant: req.user.merchant._id,
-      'tables.table': { $in: tableIds },
-      isActive: true 
-    },
-    { isActive: false, endedAt: new Date() }
-  );
-
-  // Create new assignment
-  const assignment = await StaffAssignment.create({
-    merchant: req.user.merchant._id,
-    staff: staffId,
-    tables: tables.map(t => ({
-      table: t._id,
-      tableNumber: t.tableNumber,
-    })),
-    section,
-    shift,
-    notes,
-    assignedBy: req.user._id,
-    assignedAt: new Date(),
-    isActive: true,
-  });
-
-  await assignment.populate([
-    { path: 'staff', select: 'name phone photo' },
-    { path: 'assignedBy', select: 'name' },
-    { path: 'tables.table', select: 'tableNumber capacity status' }
-  ]);
-
-  res.status(201).json({
-    status: 'success',
-    data: { assignment },
-  });
-});
-
-/* // controllers/staffAssignmentController.js
-const Table = require('../models/tableModel');
-const StaffAssignment = require('../models/staffAssignmentModel');
-const User = require('../models/userModel'); // assuming you have User model
-const Role = require('../models/roleModel');  // your Role model
-const catchAsync = require('../utils/catchAsync');
-const AppError = require('../utils/appError');
+// controllers/staffAssignmentController.js
 
 // List of REQUIRED task names for serving tables
 const REQUIRED_TASKS_FOR_TABLE_ASSIGNMENT = [
-  'accept-order',
-  'view-order',
-  'serve-table',
-  'call-bill'
+  'Accept Order',
+  'View Order',
+  'Serve Table',
+  'Call Bill',
   // add more as needed
 ];
 
@@ -95,7 +32,7 @@ exports.assignTablesToStaff = catchAsync(async (req, res, next) => {
     _id: staffId,
     merchant: req.user.merchant._id,
     isActive: true,
-    role: { $exists: true }
+    role: { $exists: true },
   }).populate('role');
 
   if (!staff) {
@@ -120,11 +57,13 @@ exports.assignTablesToStaff = catchAsync(async (req, res, next) => {
   );
 
   if (!hasRequiredPermission) {
-    return next(new AppError(
-      `Staff "${staff.name}" does not have permission to serve tables. ` +
-      `Required tasks: ${REQUIRED_TASKS_FOR_TABLE_ASSIGNMENT.join(', ')}`,
-      403
-    ));
+    return next(
+      new AppError(
+        `Staff "${staff.name}" does not have permission to serve tables. ` +
+          `Required tasks: ${REQUIRED_TASKS_FOR_TABLE_ASSIGNMENT.join(', ')}`,
+        403
+      )
+    );
   }
 
   // 4. Verify all tables exist and belong to merchant
@@ -140,10 +79,10 @@ exports.assignTablesToStaff = catchAsync(async (req, res, next) => {
 
   // 5. End previous active assignments for these tables
   await StaffAssignment.updateMany(
-    { 
+    {
       merchant: req.user.merchant._id,
       'tables.table': { $in: tableIds },
-      isActive: true 
+      isActive: true,
     },
     { isActive: false, endedAt: new Date() }
   );
@@ -167,7 +106,7 @@ exports.assignTablesToStaff = catchAsync(async (req, res, next) => {
   await assignment.populate([
     { path: 'staff', select: 'name phone avatar' },
     { path: 'assignedBy', select: 'name' },
-    { path: 'tables.table', select: 'tableNumber capacity status location' }
+    { path: 'tables.table', select: 'tableNumber capacity status location' },
   ]);
 
   res.status(201).json({
@@ -175,8 +114,7 @@ exports.assignTablesToStaff = catchAsync(async (req, res, next) => {
     message: `Tables successfully assigned to ${staff.name}`,
     data: { assignment },
   });
-}); */
-
+});
 
 // ====================================================================
 // GET CURRENT ACTIVE ASSIGNMENTS (for floor plan / dashboard)

@@ -1,76 +1,79 @@
 // models/staffAssignmentModel.js
 const mongoose = require('mongoose');
 
-const staffAssignmentSchema = new mongoose.Schema({
-  merchant: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Merchant',
-    required: true,
-    index: true,
-  },
-
-  staff: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',  // or 'Staff' if you have a separate model
-    required: true,
-  },
-
-  tables: [
-    {
-      table: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Table',
-        required: true,
-      },
-      tableNumber: {
-        type: String,
-        required: true,
-      },
+const staffAssignmentSchema = new mongoose.Schema(
+  {
+    merchant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Merchant',
+      required: true,
+      index: true,
     },
-  ],
 
-  section: {
-    type: String,
-    trim: true,
-  },
+    staff: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User', // or 'Staff' if you have a separate model
+      required: true,
+    },
 
-  shift: {
-    type: String,
-    enum: ['morning', 'lunch', 'evening', 'night', 'full-day', 'custom'],
-    default: 'full-day',
-  },
+    tables: [
+      {
+        table: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Table',
+          required: true,
+        },
+        tableNumber: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
 
-  assignedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
+    section: {
+      type: String,
+      trim: true,
+    },
 
-  assignedAt: {
-    type: Date,
-    default: Date.now,
-    required: true,
-  },
+    shift: {
+      type: String,
+      enum: ['morning', 'lunch', 'evening', 'night', 'full-day', 'custom'],
+      default: 'full-day',
+    },
 
-  endedAt: {
-    type: Date,
-    default: null,
-  },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
 
-  isActive: {
-    type: Boolean,
-    default: true,
-    index: true,
-  },
+    assignedAt: {
+      type: Date,
+      default: Date.now,
+      required: true,
+    },
 
-  notes: {
-    type: String,
-    trim: true,
-    maxlength: 200,
+    endedAt: {
+      type: Date,
+      default: null,
+    },
+
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: 200,
+    },
   },
-}, {
-  timestamps: true,
-});
+  {
+    timestamps: true,
+  }
+);
 
 // Indexes for performance
 staffAssignmentSchema.index({ merchant: 1, isActive: 1 });

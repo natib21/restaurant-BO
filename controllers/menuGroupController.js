@@ -9,8 +9,19 @@ const AppError = require('../utils/appError');
 // =============================================================
 exports.createMenuGroup = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-    console.log(merchantId)
-  const { name, description, bannerImage, visibility, priority, timeSlots, activeDays, blockedDays, isAlcoholMenu ,items} = req.body;
+  console.log(merchantId);
+  const {
+    name,
+    description,
+    bannerImage,
+    visibility,
+    priority,
+    timeSlots,
+    activeDays,
+    blockedDays,
+    isAlcoholMenu,
+    items,
+  } = req.body;
 
   const menuGroup = await MenuGroup.create({
     merchant: merchantId,
@@ -23,7 +34,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
     activeDays,
     blockedDays,
     isAlcoholMenu: isAlcoholMenu || false,
-    items, 
+    items,
   });
 
   res.status(201).json({
@@ -36,7 +47,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
 // GET ALL MENU GROUPS (Merchant Admin Panel)
 // =============================================================
 exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id ;
+  const merchantId = req.user.merchant._id;
 
   const menuGroups = await MenuGroup.find({ merchant: merchantId })
     .sort({ priority: -1, createdAt: -1 })
@@ -45,7 +56,7 @@ exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
       path: 'items.menu',
       select: 'name image variants available inStock',
     });
-  
+
   res.status(200).json({
     status: 'success',
     results: menuGroups.length,
@@ -58,43 +69,47 @@ exports.getAllMenuGroupsLight = catchAsync(async (req, res, next) => {
 
   const menuGroups = await MenuGroup.find({ merchant: merchantId })
     .sort({ priority: -1, createdAt: -1 })
-    .select('name description bannerImage visibility priority isAlcoholMenu isSystemDefault slug items.menu items.sortOrder items.isHidden items.overridePrice items.customName')
+    .select(
+      'name description bannerImage visibility priority isAlcoholMenu isSystemDefault slug items.menu items.sortOrder items.isHidden items.overridePrice items.customName'
+    )
     .lean(); // ← Important: skip Mongoose docs for speed
 
   // Transform: only keep menu IDs, not full objects
   const lightGroups = menuGroups.map(group => ({
     ...group,
     items: group.items.map(item => ({
-      menu: item.menu,           // ← Just the ObjectId (string)
+      menu: item.menu, // ← Just the ObjectId (string)
       sortOrder: item.sortOrder,
       overridePrice: item.overridePrice,
       customName: item.customName,
       customDescription: item.customDescription,
       isHidden: item.isHidden,
-      _id: item._id
-    }))
+      _id: item._id,
+    })),
   }));
 
   res.status(200).json({
     status: 'success',
     results: lightGroups.length,
-    data: { menuGroups: lightGroups }
+    data: { menuGroups: lightGroups },
   });
 });
 // =============================================================
 // GET SINGLE MENU GROUP (for editing in admin)
 // =============================================================
 exports.getMenuGroup = catchAsync(async (req, res, next) => {
-  console.log(req.user)
+  console.log(req.user);
   const merchantId = req.user.merchant.id;
 
   const menuGroup = await MenuGroup.findOne({
     _id: req.params.id,
     merchant: merchantId,
-  }).populate({
-    path: 'items.menu',
-    select: 'name image type variants available inStock',
-  }).lean();
+  })
+    .populate({
+      path: 'items.menu',
+      select: 'name image type variants available inStock',
+    })
+    .lean();
 
   if (!menuGroup) return next(new AppError('Menu group not found', 404));
 
@@ -205,8 +220,8 @@ exports.reorderItems = catchAsync(async (req, res, next) => {
   if (!menuGroup) return next(new AppError('Menu group not found', 404));
 
   // Update sortOrder for each item
-  menuGroup.items.forEach((item) => {
-    const newOrder = items.find((i) => i.menuId === item.menu.toString());
+  menuGroup.items.forEach(item => {
+    const newOrder = items.find(i => i.menuId === item.menu.toString());
     if (newOrder) item.sortOrder = newOrder.sortOrder;
   });
 

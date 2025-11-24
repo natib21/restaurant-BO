@@ -13,7 +13,7 @@ const MenuGroup = require('../models/menuGroupModel');
 const Merchant = require('../models/merchantModel');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
-const Table  = require('../models/tabelModel')
+const Table = require('../models/tabelModel');
 /* ===================================================================
    1. MULTER CONFIG: Handle image upload (single 'image' field)
    =================================================================== */
@@ -131,7 +131,7 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
   const currentTimeStr = now.toTimeString().slice(0, 5);
   const today = now.toISOString().split('T')[0];
 
-  const timeToMinutes = (time) => {
+  const timeToMinutes = time => {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
   };
@@ -139,7 +139,9 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
 
   // Step 1: Get ALL groups with priority
   const allGroups = await MenuGroup.find({ merchant: merchant._id })
-    .select('priority visibility activeDays blockedDays timeSlots specialDates isAlcoholMenu items name')
+    .select(
+      'priority visibility activeDays blockedDays timeSlots specialDates isAlcoholMenu items name'
+    )
     .sort({ priority: -1 }); // HIGHEST PRIORITY FIRST ← crucial
 
   const activeGroupIds = new Set();
@@ -150,20 +152,23 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
     let isActive = group.visibility === 'always';
 
     if (!isActive && group.visibility === 'scheduled') {
-      const onActiveDay = !group.activeDays?.length || 
-        group.activeDays.map(d => d.toLowerCase()).includes(dayName);
+      const onActiveDay =
+        !group.activeDays?.length || group.activeDays.map(d => d.toLowerCase()).includes(dayName);
 
-      const notBlocked = !group.blockedDays?.length ||
+      const notBlocked =
+        !group.blockedDays?.length ||
         !group.blockedDays.map(d => d.toLowerCase()).includes(dayName);
 
-      const inTimeSlot = !group.timeSlots?.length || group.timeSlots.some(slot => {
-        const startMin = timeToMinutes(slot.start);
-        const endMin = timeToMinutes(slot.end);
-        if (endMin < startMin) {
-          return currentMinutes >= startMin || currentMinutes <= endMin;
-        }
-        return currentMinutes >= startMin && currentMinutes <= endMin;
-      });
+      const inTimeSlot =
+        !group.timeSlots?.length ||
+        group.timeSlots.some(slot => {
+          const startMin = timeToMinutes(slot.start);
+          const endMin = timeToMinutes(slot.end);
+          if (endMin < startMin) {
+            return currentMinutes >= startMin || currentMinutes <= endMin;
+          }
+          return currentMinutes >= startMin && currentMinutes <= endMin;
+        });
 
       const isSpecialDate = group.specialDates?.some(d => {
         const dateStr = d.date.toISOString().split('T')[0];
@@ -186,14 +191,15 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
   // Step 2: Fetch active groups with populated items (sorted by priority already)
   const activeGroups = await MenuGroup.find({
     _id: { $in: Array.from(activeGroupIds) },
-    merchant: merchantId
+    merchant: merchantId,
   })
-  .sort({ priority: -1 }) // ← again, highest first
-  .populate({
-    path: 'items.menu',
-    match: { available: true, inStock: true },
-    select: 'name description image variants price type isVeg isSpicy isAlcoholic prepTime tags ingredients allergens ratingAverage'
-  });
+    .sort({ priority: -1 }) // ← again, highest first
+    .populate({
+      path: 'items.menu',
+      match: { available: true, inStock: true },
+      select:
+        'name description image variants price type isVeg isSpicy isAlcoholic prepTime tags ingredients allergens ratingAverage',
+    });
 
   const baseUrl = `${req.protocol}://${req.get('host')}/img/menu/`;
 
@@ -228,7 +234,7 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
         ingredients: menu.ingredients || [],
         allergens: menu.allergens || [],
         rating: menu.ratingAverage || 4.5,
-        displayedIn: group.name // optional: show where it came from
+        displayedIn: group.name, // optional: show where it came from
       };
 
       finalItems.push(menuItem);
@@ -246,7 +252,9 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
   }
 
   const specialOffers = filteredItems
-    .filter(i => i.tags.some(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t)))
+    .filter(i =>
+      i.tags.some(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t))
+    )
     .slice(0, 10);
 
   res.status(200).json({
@@ -269,16 +277,16 @@ exports.getPublicMenu = catchAsync(async (req, res, next) => {
         ingredients: i.ingredients,
         allergens: i.allergens,
         rating: i.rating,
-        displayedIn: i.displayedIn
+        displayedIn: i.displayedIn,
       })),
       specialOffers: specialOffers.map(i => ({
         id: i._id,
         name: i.name,
         image: i.image,
         price: i.price,
-        tag: i.tags.find(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t))
-      }))
-    }
+        tag: i.tags.find(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t)),
+      })),
+    },
   });
 });
 /* ===================================================================
@@ -319,7 +327,7 @@ exports.getMenu = catchAsync(async (req, res, next) => {
 
 exports.createNewMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-  console.log(merchantId)
+  console.log(merchantId);
   // Extract body
   const { name, type, category, variants, isSpecial, comboOffer } = req.body;
 
@@ -347,21 +355,21 @@ exports.createNewMenu = catchAsync(async (req, res, next) => {
 
   const newMenuItem = await Menu.create({ ...req.body, merchant: merchantId });
 
-// 2. AUTOMATICALLY ADD TO SYSTEM DEFAULT GROUP
-    // Finds the system-managed group and pushes the new item's reference.
-    await MenuGroup.findOneAndUpdate(
-        { merchant: merchantId, isSystemDefault: true },
-        {
-            $push: {
-                items: {
-                    menu: newMenuItem._id,
-                    sortOrder: Date.now(), // Initial sort order
-                },
-            },
+  // 2. AUTOMATICALLY ADD TO SYSTEM DEFAULT GROUP
+  // Finds the system-managed group and pushes the new item's reference.
+  await MenuGroup.findOneAndUpdate(
+    { merchant: merchantId, isSystemDefault: true },
+    {
+      $push: {
+        items: {
+          menu: newMenuItem._id,
+          sortOrder: Date.now(), // Initial sort order
         },
-        // The rest of the request body might include a menuGroup ID for a *custom* group.
-        // If so, you should handle that separately, but for now, we focus on the system group.
-    );
+      },
+    }
+    // The rest of the request body might include a menuGroup ID for a *custom* group.
+    // If so, you should handle that separately, but for now, we focus on the system group.
+  );
 
   res.status(201).json({ status: 'success', data: { menu: newMenuItem } });
 });
@@ -398,11 +406,11 @@ exports.deleteMenu = catchAsync(async (req, res, next) => {
   });
 
   if (!menuItem) return next(new AppError('Menu item not found.', 404));
-// 2. CRITICAL CLEANUP: Remove the item's reference from ALL MenuGroups 
-    await MenuGroup.updateMany(
-        { merchant: merchantId },
-        { $pull: { items: { menu: req.params.id } } }
-    );
+  // 2. CRITICAL CLEANUP: Remove the item's reference from ALL MenuGroups
+  await MenuGroup.updateMany(
+    { merchant: merchantId },
+    { $pull: { items: { menu: req.params.id } } }
+  );
   res.status(204).json({
     status: 'success',
     data: null,
@@ -419,28 +427,20 @@ exports.getActiveMenu = catchAsync(async (req, res, next) => {
   const menuGroups = await MenuGroup.find({
     merchant: merchantId,
     visibility: { $in: ['always', 'scheduled'] },
-    $or: [
-      { activeDays: currentDay },
-      { activeDays: { $size: 0 } }
-    ],
-    $or: [
-      { blockedDays: { $ne: currentDay } },
-      { blockedDays: { $size: 0 } }
-    ]
+    $or: [{ activeDays: currentDay }, { activeDays: { $size: 0 } }],
+    $or: [{ blockedDays: { $ne: currentDay } }, { blockedDays: { $size: 0 } }],
   })
-  .sort({ priority: -1 })
-  .populate({
-    path: 'items.menu',
-    match: { available: true, inStock: true },
-    populate: { path: 'variants' }
-  });
+    .sort({ priority: -1 })
+    .populate({
+      path: 'items.menu',
+      match: { available: true, inStock: true },
+      populate: { path: 'variants' },
+    });
 
   // Filter out groups with no visible items + clean up
   const cleanedGroups = menuGroups
     .map(group => {
-      const visibleItems = group.items.filter(i => 
-        i.menuItem && !i.isHidden
-      );
+      const visibleItems = group.items.filter(i => i.menuItem && !i.isHidden);
       if (visibleItems.length === 0) return null;
 
       return {
@@ -458,13 +458,15 @@ exports.getActiveMenu = catchAsync(async (req, res, next) => {
           isVeg: i.menuItem.isVeg,
           isSpicy: i.menuItem.isSpicy,
           prepTime: i.menuItem.prepTime,
-        }))
+        })),
       };
     })
     .filter(Boolean);
 
   // Also get active combos
-  const combos = await Combo.find({ /* same logic as before */ })
+  const combos = await Combo.find({
+    /* same logic as before */
+  })
     .sort({ priority: -1 })
     .populate('items.menuItem');
 
@@ -473,7 +475,7 @@ exports.getActiveMenu = catchAsync(async (req, res, next) => {
     data: {
       menu: cleanedGroups,
       combos,
-      generatedAt: new Date()
-    }
+      generatedAt: new Date(),
+    },
   });
 });

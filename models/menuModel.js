@@ -109,7 +109,7 @@ const menuSchema = new mongoose.Schema(
       default: 4.5,
       min: [1, 'Rating must be above 1.0'],
       max: [5, 'Rating must be below 5.0'],
-      set: (v) => Math.round(v * 10) / 10,
+      set: v => Math.round(v * 10) / 10,
     },
     ratingQuantity: { type: Number, default: 0 },
 

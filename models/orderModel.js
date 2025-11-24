@@ -1,67 +1,140 @@
+// models/Order.js
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
+const {Schema} = mongoose;
 
-// Embedded schema for order items
-const orderItemSchema = new Schema({
-  name: {
-    type: String, // Menu item name (not a reference)
-    required: true,
+const orderItemSchema = new mongoose.Schema(
+  {
+    menuItem: {
+      type: Schema.Types.ObjectId,
+      ref: 'Menu',
+      required: true,
+    },
+    name: {
+      type: String,
+      required: true,
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    unitPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    totalPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    notes: {
+      type: String,
+      trim: true,
+    },
   },
-  quantity: {
-    type: Number,
-    required: true,
-    min: 1,
+  { _id: false }
+);
+
+const orderSchema = new Schema(
+  {
+    merchant: {
+      type: Schema.Types.ObjectId,
+      ref: 'Merchant',
+      required: true,
+      index: true,
+    },
+
+    customer: {
+      type: Schema.Types.ObjectId,
+      ref: 'Customer',
+      required: true,
+      index: true,
+    },
+    customerName: {
+      type: String,
+      required: true,
+    }, // snapshot
+    customerPhone: {
+      type: String,
+    }, // snapshot
+
+    // THIS IS WHERE THE TABLE BELONGS
+    table: {
+      type: Schema.Types.ObjectId,
+      ref: 'Table',
+      index: true,
+    },
+    tableNumber: {
+      type: String,
+      trim: true,
+    }, // e.g. "T5" – denormalized for speed
+
+    orderType: {
+      type: String,
+      enum: ['dine_in', 'takeaway', 'delivery'],
+      default: 'dine_in',
+    },
+
+    status: {
+      type: String,
+      enum: ['pending', 'accepted', 'preparing', 'ready', 'served', 'completed', 'canceled'],
+      default: 'pending',
+    },
+
+    items: {
+      type: [orderItemSchema],
+      required: true,
+    },
+    subtotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    taxAmount: {
+      type: Number,
+      default: 0,
+    },
+    discountAmount: {
+      type: Number,
+      default: 0,
+    },
+    totalAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    paymentStatus: {
+      type: String,
+      enum: ['unpaid', 'paid', 'refunded'],
+      default: 'unpaid',
+    },
+
+    placedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    acceptedAt: Date,
+    readyAt: Date,
+    servedAt: Date,
+    completedAt: Date,
   },
-  price: {
-    type: Number,
-    required: true,
-  },
-  totalPrice: {
-    type: Number,
-    required: true,
-  },
+  { timestamps: true, toJSON: { virtuals: true } }
+);
+
+// Virtuals
+orderSchema.virtual('tableDetails', {
+  ref: 'Table',
+  localField: 'table',
+  foreignField: '_id',
+  justOne: true,
 });
 
-// Main order schema
-const orderSchema = new Schema({
-  merchant: {
-    type: Schema.Types.ObjectId,
-    ref: 'Merchant',
-    required: true,
-  },
-  name: {
-    type: String,
-  },
-  phone: {
-    type: String,
-    required: false, // optional for guest users
-  },
-  table: {
-    type: String,
-    required: false, // for dine-in orders
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'preparing', 'served', 'completed', 'canceled'],
-    default: 'pending',
-  },
-  cart: {
-    type: [orderItemSchema],
-    require: true,
-  },
-  totalPrice: {
-    type: Number,
-    require: [true, 'total amount must be set'],
-  },
-  assignedRole: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' }, // who handles
-  assignedUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // staff assigned
-  paymentStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
-  createdAt: {
-    type: Date,
-    default: Date.now(),
-  },
-});
+// Critical indexes for real-time dashboards
+orderSchema.index({ merchant: 1, status: 1, placedAt: -1 });
+orderSchema.index({ merchant: 1, table: 1 });
+orderSchema.index({ tableNumber: 1, status: 1 });
+orderSchema.index({ customer: 1, placedAt: -1 });
 
-const Order = mongoose.model('Order', orderSchema);
-
-module.exports = Order;
+module.exports = mongoose.model('Order', orderSchema);

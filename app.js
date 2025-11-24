@@ -25,7 +25,9 @@ const roleRouter = require('./routes/roleRouter');
 const taskRouter = require('./routes/taskRouter');
 const merchantRouter = require('./routes/merchantRouter');
 const comboRouter = require('./routes/comboRouter');
-const assignTableRouter = require('./routes/staffAssignTabelRouter')
+const assignTableRouter = require('./routes/staffAssignTabelRouter');
+const customerRouter = require('./routes/customerRouter');
+const customerSessionRouter = require('./routes/customerSessionRouter');
 // ──────────────────────────────────────────────────────────────
 // App
 // ──────────────────────────────────────────────────────────────
@@ -108,9 +110,11 @@ app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/merchants', merchantRouter);
 app.use('/api/v1/menu', menuRouter);
 app.use('/api/v1/menuGroup', menuGroupRouter);
-app.use('/api/v1/menuCombo',comboRouter)
+app.use('/api/v1/menuCombo', comboRouter);
 app.use('/api/v1/table', tableRouter);
-app.use('/api/v1/staff-assignments',assignTableRouter)
+app.use('/api/v1/staff-assignments', assignTableRouter);
+app.use('/api/v1/customer', customerRouter);
+// app.use('/api/v1/customerSession', customerSessionRouter);
 app.use('/api/v1/order', orderRouter);
 
 // ----------------------------------------------------------------

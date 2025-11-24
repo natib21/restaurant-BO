@@ -100,7 +100,7 @@ const comboSchema = new mongoose.Schema(
     timeSlots: [
       {
         start: String, // "11:00"
-        end: String,   // "15:00"
+        end: String, // "15:00"
       },
     ],
 
@@ -142,7 +142,7 @@ const comboSchema = new mongoose.Schema(
 // ========================= INDEXES =========================
 comboSchema.index({ merchant: 1, isActive: 1 });
 comboSchema.index({ merchant: 1, priority: -1 });
-comboSchema.index({ 'validUntil': 1 });
+comboSchema.index({ validUntil: 1 });
 comboSchema.index({ tags: 1 });
 
 // ========================= MIDDLEWARE =========================

@@ -22,7 +22,7 @@ const taskSchema = new Schema({
     type: String,
     trim: true,
   },
- /*  category: {
+  /*  category: {
     type: String,
     required: true,
     enum: [

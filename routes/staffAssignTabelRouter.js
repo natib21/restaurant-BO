@@ -12,11 +12,11 @@ router.use(authController.restrictTo());
 // Main routes
 router
   .route('/')
-  .post(staffAssignmentController.assignTablesToStaff)      // Assign tables
-  .get(staffAssignmentController.getAllAssignments);        // History + filter
+  .post(staffAssignmentController.assignTablesToStaff) // Assign tables
+  .get(staffAssignmentController.getAllAssignments); // History + filter
 
 router.get('/current', staffAssignmentController.getCurrentAssignments); // Active now
 
-router.patch('/:id/end', staffAssignmentController.endAssignment);       // End shift
+router.patch('/:id/end', staffAssignmentController.endAssignment); // End shift
 
 module.exports = router;

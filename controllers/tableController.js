@@ -1,9 +1,9 @@
 // controllers/tableController.js
-const StaffAssignment = require('../models/staffAssignTabelModel')
+const StaffAssignment = require('../models/staffAssignTabelModel');
 const ApiFeatures = require('../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
-const Table = require('../models/tabelModel')
+const Table = require('../models/tabelModel');
 const QRCode = require('qrcode');
 
 // CREATE TABLE — with validation + auto QR
@@ -26,7 +26,7 @@ exports.createTable = catchAsync(async (req, res, next) => {
     location: req.body.location || 'indoor',
     section: req.body.section || null,
     status: req.body.status || 'available',
-    merchant: req.user.merchant._id, 
+    merchant: req.user.merchant._id,
   };
 
   // 3. Create table
@@ -56,9 +56,9 @@ exports.createTable = catchAsync(async (req, res, next) => {
 // GET ALL TABLES (for this merchant only)
 exports.getAllTables = catchAsync(async (req, res, next) => {
   const features = new ApiFeatures(
-    Table.find({ 
-      merchant: req.user.merchant._id, 
-      isActive: true 
+    Table.find({
+      merchant: req.user.merchant._id,
+      isActive: true,
     }),
     req.query
   )
@@ -103,20 +103,13 @@ exports.getTable = catchAsync(async (req, res, next) => {
 
 // UPDATE TABLE — safe fields only
 exports.updateTable = catchAsync(async (req, res, next) => {
-  const allowedFields = [
-    'tableNumber',
-    'capacity',
-    'status',
-    'location',
-    'section',
-  ];
+  const allowedFields = ['tableNumber', 'capacity', 'status', 'location', 'section'];
 
   const updates = {};
   allowedFields.forEach(field => {
     if (req.body[field] !== undefined) {
-      updates[field] = field === 'tableNumber' 
-        ? req.body[field].trim().toUpperCase()
-        : req.body[field];
+      updates[field] =
+        field === 'tableNumber' ? req.body[field].trim().toUpperCase() : req.body[field];
     }
   });
 
@@ -162,5 +155,35 @@ exports.deleteTable = catchAsync(async (req, res, next) => {
   res.status(204).json({
     status: 'success',
     data: null,
+  });
+});
+
+// CHANGE TABLE — transfer orders to new table
+exports.changeTable = catchAsync(async (req, res, next) => {
+  const { currentTableId, newTableId } = req.body;
+
+  if (!currentTableId || !newTableId) {
+    return next(new AppError('Current and new table IDs are required', 400));
+  }
+
+  if (currentTableId === newTableId) {
+    return next(new AppError('Current and new table must be different', 400));
+  }
+
+  const currentTable = await Table.findOne({
+    _id: currentTableId,
+    merchant: req.user.merchant._id,
+  });
+
+  if (!currentTable) {
+    return next(new AppError('Current table not found or not authorized', 404));
+  }
+
+  // Call the model method to handle the change
+  const result = await currentTable.changeTable(newTableId);
+
+  res.status(200).json({
+    status: 'success',
+    data: result,
   });
 });

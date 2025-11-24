@@ -19,7 +19,6 @@ exports.getAllOrder = catchAsync(async (req, res) => {
   });
 });
 
-
 exports.createNewOrder = catchAsync(async (req, res, next) => {
   const newOrder = await Order.create(req.body);
   const io = getIo();
@@ -55,15 +54,12 @@ exports.updateOrder = async (req, res, next) => {
   });
 };
 
-
 exports.deleteOrder = (req, res) => {
   res.status(500).json({
     status: 'Error',
     message: 'This route is not defined',
   });
 };
-
-
 
 exports.acceptOrder = async (req, res, next) => {
   try {
@@ -84,5 +80,3 @@ exports.acceptOrder = async (req, res, next) => {
     next(err);
   }
 };
-
-
