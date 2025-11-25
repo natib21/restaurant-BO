@@ -1,15 +1,40 @@
 // controllers/customerController.js
-const Customer = require('../models/customerModule')
-const Order = require('../models/orderModel')
+const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const Customer = require('../models/customerModule');
+const Order = require('../models/orderModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 
 // ====================== LOYALTY CONFIG ======================
-const POINTS_PER_BIRR = 1; // 1 point per 1 ETB spent
+const POINTS_PER_BIRR = 1;
 const TIERS = { bronze: 0, silver: 5000, gold: 20000, platinum: 50000 };
 
-// ====================== 1. SOCIAL + GUEST LOGIN (Public) ======================
+// ====================== JWT HELPER ======================
+const signToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '90d',
+  });
+};
+
+const createSendToken = (customer, statusCode, res) => {
+  const token = signToken(customer._id);
+  const cookieOptions = {
+    expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+  };
+  res.cookie('jwt', token, cookieOptions);
+
+  res.status(statusCode).json({
+    status: 'success',
+    token,
+    data: { customer },
+  });
+};
+
+// ====================== 1. LOGIN / CREATE (Public) → JWT ======================
 exports.loginOrCreate = catchAsync(async (req, res, next) => {
   const {
     merchantId,
@@ -22,9 +47,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     tiktokToken,
   } = req.body;
 
-  if (!merchantId) {
-    return next(new AppError('merchantId is required', 400));
-  }
+  if (!merchantId) return next(new AppError('merchantId is required', 400));
 
   let customerData = {
     merchant: merchantId,
@@ -37,10 +60,8 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
 
   let filter = { merchant: merchantId };
 
-  // ——————— TELEGRAM LOGIN (Most Popular in Ethiopia) ———————
   if (source === 'telegram' && telegramUser) {
     const { id, username, first_name, last_name, photo_url } = telegramUser;
-
     customerData.source = 'telegram';
     customerData.fullName = `${first_name} ${last_name || ''}`.trim();
     customerData.telegram = {
@@ -50,37 +71,25 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
       profilePic: photo_url || null,
     };
     filter['telegram.id'] = String(id);
-  }
-
-  // ——————— FACEBOOK LOGIN ———————
-  else if (source === 'facebook' && facebookToken) {
+  } else if (source === 'facebook' && facebookToken) {
     try {
       const { data: fb } = await axios.get('https://graph.facebook.com/v20.0/me', {
         params: { fields: 'id,name,picture.type(large)', access_token: facebookToken },
       });
-
       customerData.source = 'facebook';
       customerData.fullName = fb.name;
-      customerData.facebook = {
-        id: fb.id,
-        username: fb.name,
-        profilePic: fb.picture?.data?.url || null,
-      };
+      customerData.facebook = { id: fb.id, profilePic: fb.picture?.data?.url || null };
       filter['facebook.id'] = fb.id;
-    } catch (err) {
+    } catch {
       return next(new AppError('Invalid Facebook token', 401));
     }
-  }
-
-  // ——————— TIKTOK LOGIN ———————
-  else if (source === 'tiktok' && tiktokToken) {
+  } else if (source === 'tiktok' && tiktokToken) {
     try {
       const { data } = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
         headers: { Authorization: `Bearer ${tiktokToken}` },
         params: { fields: 'open_id,username,avatar_url,display_name' },
       });
       const user = data.data.user;
-
       customerData.source = 'tiktok';
       customerData.fullName = user.display_name || user.username;
       customerData.tiktok = {
@@ -89,19 +98,14 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
         profilePic: user.avatar_url || null,
       };
       filter['tiktok.id'] = user.open_id;
-    } catch (err) {
+    } catch {
       return next(new AppError('Invalid TikTok token', 401));
     }
-  }
-
-  // ——————— GUEST / PHONE ———————
-  else {
+  } else {
     customerData.source = phone ? 'phone' : 'guest';
     if (phone) filter.phone = customerData.phone;
-    else filter.fullName = customerData.fullName;
   }
 
-  // Final upsert
   const customer = await Customer.findOneAndUpdate(filter, customerData, {
     upsert: true,
     new: true,
@@ -109,26 +113,87 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     runValidators: true,
   });
 
+  createSendToken(customer, 200, res);
+});
+// ADD THIS AT THE END OF customerController.js
+exports.protectCustomer = catchAsync(async (req, res, next) => {
+  let token;
+  if (req.headers.authorization?.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies?.jwt) {
+    token = req.cookies.jwt;
+  }
+
+  if (!token) {
+    return next(new AppError('You are not logged in. Please login again.', 401));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const customer = await Customer.findById(decoded.id);
+    if (!customer) {
+      return next(new AppError('Customer no longer exists', 401));
+    }
+
+    req.customer = customer;
+    next();
+  } catch (err) {
+    return next(new AppError('Invalid or expired token', 401));
+  }
+});
+// ====================== CUSTOMER (JWT Required) ======================
+exports.getMe = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
-    data: {
-      customer: {
-        _id: customer._id,
-        fullName: customer.fullName,
-        profileImage: customer.profileImage,
-        source: customer.source,
-        currentTable: customer.currentTable,
-      },
-    },
+    data: { customer: req.customer },
   });
 });
 
-// ====================== 2. FULL CRM PROFILE (Staff View) ======================
-exports.getCustomerCRM = catchAsync(async (req, res, next) => {
+exports.updateMe = catchAsync(async (req, res, next) => {
+  const { fullName, phone } = req.body;
+  const customer = req.customer;
+
+  if (fullName) customer.fullName = fullName.trim();
+  if (phone) {
+    if (!/^\+?251[79]\d{8}$/.test(phone.replace(/\s/g, ''))) {
+      return next(new AppError('Invalid phone number', 400));
+    }
+    customer.phone = phone.replace(/\s/g, '');
+  }
+
+  await customer.save();
+  res.status(200).json({ status: 'success', data: { customer } });
+});
+
+exports.getMyOrders = catchAsync(async (req, res, next) => {
+  const orders = await Order.find({ customer: req.customer._id })
+    .select('orderNumber items totalAmount status createdAt table')
+    .sort('-createdAt');
+
+  res.status(200).json({
+    status: 'success',
+    results: orders.length,
+    data: { orders },
+  });
+});
+
+exports.claimGift = catchAsync(async (req, res, next) => {
+  const { giftId } = req.body;
+  const gift = req.customer.loyalty.gifts.id(giftId);
+  if (!gift || gift.claimed || (gift.expiresAt && gift.expiresAt < new Date())) {
+    return next(new AppError('Invalid or expired gift', 400));
+  }
+  gift.claimed = true;
+  gift.claimedAt = new Date();
+  await req.customer.save();
+  res.status(200).json({ status: 'success', message: 'Gift claimed!' });
+});
+
+// ====================== STAFF / ADMIN CRUD (Full Access) ======================
+// Get One Customer (CRM Detail)
+exports.getCustomer = catchAsync(async (req, res, next) => {
   const customer = await Customer.findById(req.params.id)
-    .select('-__v')
-    .populate('loyalty.gifts.menuItem', 'name price image')
-    .lean();
+    .populate('loyalty.gifts.menuItem', 'name price image');
 
   if (!customer || customer.merchant.toString() !== req.merchant._id.toString()) {
     return next(new AppError('Customer not found', 404));
@@ -136,159 +201,66 @@ exports.getCustomerCRM = catchAsync(async (req, res, next) => {
 
   const stats = await Order.aggregate([
     { $match: { customer: customer._id, status: 'completed' } },
-    {
-      $group: {
-        _id: null,
-        totalSpent: { $sum: '$totalAmount' },
-        totalOrders: { $sum: 1 },
-        avgOrderValue: { $avg: '$totalAmount' },
-        firstOrder: { $min: '$completedAt' },
-        lastOrder: { $max: '$completedAt' },
-        items: { $push: '$items' },
-      },
-    },
-  ]).then(r => r[0] || { totalSpent: 0, totalOrders: 0, avgOrderValue: 0 });
-
-  const itemCount = {};
-  stats.items?.flat().forEach(i => {
-    const name = i.name.toLowerCase();
-    itemCount[name] = (itemCount[name] || 0) + i.quantity;
-  });
-  const topItems = Object.entries(itemCount)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, qty]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), qty }));
-
-  const daysSinceLastVisit = Math.floor((Date.now() - new Date(customer.lastSeen)) / 86400000);
+    { $group: { _id: null, totalSpent: { $sum: '$totalAmount' }, visits: { $sum: 1 } } },
+  ]);
 
   res.status(200).json({
     status: 'success',
     data: {
-      profile: {
-        _id: customer._id,
-        fullName: customer.fullName,
-        phone: customer.phone,
-        source: customer.source,
-        currentTable: customer.currentTable,
-        profileImage: customer.profileImage,
-        memberSince: customer.createdAt,
-        lastSeen: customer.lastSeen,
-        daysSinceLastVisit,
-        tags: customer.tags || [],
-        notes: customer.notes || [],
-      },
-      loyalty: {
-        tier: customer.loyalty.tier,
-        points: customer.loyalty.points,
-        totalEarned: customer.loyalty.totalPointsEarned,
-        activeGifts: customer.loyalty.gifts.filter(
-          g => !g.claimed && (!g.expiresAt || g.expiresAt > new Date())
-        ),
-      },
-      lifetime: {
-        totalSpent: Number(stats.totalSpent.toFixed(2)),
-        totalVisits: stats.totalOrders,
-        avgOrderValue: Number(stats.avgOrderValue?.toFixed(2) || 0),
-        firstVisit: stats.firstOrder,
-        lastVisit: stats.lastOrder,
-        topItems,
-      },
-      insights: {
-        isVIP: stats.totalSpent >= 50000,
-        atRisk: daysSinceLastVisit > 60 && stats.totalOrders > 3,
-        needsAttention: daysSinceLastVisit > 90,
-        suggestedAction:
-          daysSinceLastVisit > 90
-            ? 'Send 15% off coupon via SMS'
-            : stats.totalSpent >= 50000
-              ? 'Offer free dessert on next visit'
-              : null,
-      },
+      customer,
+      stats: stats[0] || { totalSpent: 0, visits: 0 },
     },
   });
 });
 
-// ====================== 3. CRM DASHBOARD LIST ======================
-exports.getAllCustomersCRM = catchAsync(async (req, res, next) => {
+// Get All Customers (CRM List)
+exports.getAllCustomers = catchAsync(async (req, res, next) => {
   const customers = await Customer.find({ merchant: req.merchant._id })
-    .select(
-      'fullName phone currentTable lastSeen loyalty.tier loyalty.points tags profileImage source createdAt'
-    )
-    .sort('-lastSeen')
-    .limit(200)
-    .lean();
-
-  const enriched = await Promise.all(
-    customers.map(async c => {
-      const stats = await Order.aggregate([
-        { $match: { customer: c._id, status: 'completed' } },
-        {
-          $group: {
-            _id: null,
-            spent: { $sum: '$totalAmount' },
-            visits: { $sum: 1 },
-            last: { $max: '$completedAt' },
-          },
-        },
-      ]);
-      const s = stats[0] || { spent: 0, visits: 0, last: null };
-      const daysAgo = s.last ? Math.floor((Date.now() - new Date(s.last)) / 86400000) : null;
-
-      return {
-        ...c,
-        stats: {
-          totalSpent: Number(s.spent.toFixed(2)),
-          visits: s.visits,
-          lastVisitDaysAgo: daysAgo,
-          isVIP: s.spent >= 50000,
-          atRisk: daysAgo > 60 && s.visits > 3,
-        },
-      };
-    })
-  );
+    .select('fullName phone currentTable lastSeen loyalty.tier loyalty.points source createdAt')
+    .sort('-lastSeen');
 
   res.status(200).json({
     status: 'success',
-    results: enriched.length,
-    data: { customers: enriched },
+    results: customers.length,
+    data: { customers },
   });
 });
 
-// ====================== 4. AWARD POINTS (Call after order completed) ======================
-exports.awardPoints = catchAsync(async (customerId, amount) => {
-  const points = Math.floor(amount * POINTS_PER_BIRR);
-  const customer = await Customer.findById(customerId);
-  if (!customer) return;
+// Update Customer (Staff)
+exports.updateCustomer = catchAsync(async (req, res, next) => {
+  const allowed = ['fullName', 'phone', 'tags', 'notes', 'loyalty.points', 'loyalty.tier'];
+  const updates = {};
+  allowed.forEach(field => {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  });
 
-  customer.loyalty.points += points;
-  customer.loyalty.totalPointsEarned += points;
+  const customer = await Customer.findOneAndUpdate(
+    { _id: req.params.id, merchant: req.merchant._id },
+    updates,
+    { new: true, runValidators: true }
+  );
 
-  const newTier = Object.keys(TIERS)
-    .reverse()
-    .find(t => customer.loyalty.totalPointsEarned >= TIERS[t]);
-  if (newTier && newTier !== customer.loyalty.tier) {
-    customer.loyalty.tier = newTier;
-    customer.loyalty.gifts.push({
-      name: `${newTier.toUpperCase()} Tier Unlocked!`,
-      type: 'free_item',
-      value: newTier === 'platinum' ? 1000 : newTier === 'gold' ? 500 : 200,
-      reason: `Welcome to ${newTier} tier!`,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
-  }
-  await customer.save();
+  if (!customer) return next(new AppError('Customer not found', 404));
+
+  res.status(200).json({ status: 'success', data: { customer } });
 });
 
-// ====================== 5. GIVE MANUAL GIFT (Staff) ======================
+// Delete Customer (Soft Delete)
+exports.deleteCustomer = catchAsync(async (req, res, next) => {
+  const customer = await Customer.findOneAndUpdate(
+    { _id: req.params.id, merchant: req.merchant._id },
+    { isActive: false },
+    { new: true }
+  );
+
+  if (!customer) return next(new AppError('Customer not found', 404));
+
+  res.status(204).json({ status: 'success', data: null });
+});
+
+// Give Gift / Add Note / Tag
 exports.giveGift = catchAsync(async (req, res, next) => {
-  const {
-    name,
-    type = 'free_item',
-    value,
-    menuItemId,
-    expiresInDays = 30,
-    reason = 'Staff Reward',
-  } = req.body;
+  const { name, type = 'free_item', value, menuItemId, expiresInDays = 30, reason } = req.body;
 
   const customer = await Customer.findOne({ _id: req.params.id, merchant: req.merchant._id });
   if (!customer) return next(new AppError('Customer not found', 404));
@@ -297,40 +269,16 @@ exports.giveGift = catchAsync(async (req, res, next) => {
     name,
     type,
     value,
-    menuItem: menuItemId || undefined,
+    menuItem: menuItemId,
     expiresAt: new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000),
     givenBy: req.user._id,
     reason,
   });
 
   await customer.save();
-  res.status(200).json({
-    status: 'success',
-    message: `Gift "${name}" sent to ${customer.fullName}!`,
-  });
+  res.status(200).json({ status: 'success', message: 'Gift sent!' });
 });
 
-// ====================== 6. CLAIM GIFT (Customer) ======================
-exports.claimGift = catchAsync(async (req, res, next) => {
-  const { giftId } = req.body;
-  const gift = req.customer.loyalty.gifts.id(giftId);
-
-  if (!gift || gift.claimed || (gift.expiresAt && gift.expiresAt < new Date())) {
-    return next(new AppError('Invalid or expired gift', 400));
-  }
-
-  gift.claimed = true;
-  gift.claimedAt = new Date();
-  await req.customer.save();
-
-  res.status(200).json({
-    status: 'success',
-    message: `Enjoy your ${gift.name}!`,
-    data: { gift },
-  });
-});
-
-// ====================== 7. ADD TAG / NOTE (Staff) ======================
 exports.addTagOrNote = catchAsync(async (req, res, next) => {
   const { tag, note } = req.body;
   const update = { $push: {} };
@@ -345,4 +293,20 @@ exports.addTagOrNote = catchAsync(async (req, res, next) => {
 
   if (!customer) return next(new AppError('Customer not found', 404));
   res.status(200).json({ status: 'success', data: { customer } });
+});
+
+// Award Points (Internal)
+exports.awardPoints = catchAsync(async (customerId, amount) => {
+  const points = Math.floor(amount * POINTS_PER_BIRR);
+  const customer = await Customer.findById(customerId);
+  if (!customer) return;
+
+  customer.loyalty.points += points;
+  customer.loyalty.totalPointsEarned += points;
+
+  const newTier = Object.keys(TIERS).reverse().find(t => customer.loyalty.totalPointsEarned >= TIERS[t]);
+  if (newTier && newTier !== customer.loyalty.tier) {
+    customer.loyalty.tier = newTier;
+  }
+  await customer.save();
 });

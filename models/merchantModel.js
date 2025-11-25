@@ -135,6 +135,13 @@ const merchantSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   },
+  qr_secret_key: {
+    type: String,
+    select: false, // NEVER expose in API responses
+    default: function () {
+      return require('crypto').randomBytes(64).toString('hex');
+    },
+  },
   // Social connections
   facebookPageId: String,
   facebookPageToken: String,
@@ -150,7 +157,13 @@ merchantSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
-
+merchantSchema.pre('save', function (next) {
+  if (!this.qr_secret_key) {
+    this.qr_secret_key = require('crypto').randomBytes(64).toString('hex');
+  }
+  this.updatedAt = Date.now();
+  next();
+});
 merchantSchema.index({ location: '2dsphere' });
 
 merchantSchema.index({ status: 1, isActive: 1 });

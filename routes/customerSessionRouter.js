@@ -1,30 +1,51 @@
-// routes/customerAuthRoutes.js
+// routes/customerSessionRoutes.js
 const express = require('express');
-const customerAuthController = require('../controllers/customerSessionController');
-const authController = require('../controllers/authController'); // your merchant/staff auth
+const router = express.Router();
 
-const router = express.Router({ mergeParams: true });
+const customerAuthController = require('../controllers/customerAuthController');
+const authController = require('../controllers/authController'); // protect, restrictTo
 
-// ====================== 1. PUBLIC: Create Session (After loginOrCreate) ======================
-router.post('/session', customerAuthController.createSession);
+/* ==================== PUBLIC ROUTE (QR SCAN) ==================== */
+// QR → Validate → Create Table Session
+router.post('/start-session', customerAuthController.startTableSession);
 
-// ====================== 2. CUSTOMER PROTECTED ROUTES (Customer JWT) ======================
-// All below require valid customer JWT (from createSession)
-router.use(customerAuthController.protectCustomer);
+/* ==================== CUSTOMER SESSION PROTECTED ROUTES ==================== */
+// Used for menu, cart, order, payment etc.
+router.use('/menu', customerAuthController.protectTableSession);
+router.use('/order', customerAuthController.protectTableSession);
+router.use('/payment', customerAuthController.protectTableSession);
 
-router.post('/logout', customerAuthController.logout);
-router.post('/logout-all', customerAuthController.logoutAll);
-router.get('/my-sessions', customerAuthController.getMySessions);
+/* Example protected routes (optional) */
+// router.get('/menu/list', menuController.getMenu);
 
-// ====================== 3. MERCHANT / STAFF PROTECTED ROUTES ======================
-// All below require merchant login + role (admin, manager, staff)
-router.use(authController.protect);
-router.use(authController.restrictTo());
+/* ==================== LINK ACCOUNT AFTER LOGIN ==================== */
+router.post(
+  '/link-account',
+  authController.protectCustomer,     // JWT auth for logged customers
+  customerAuthController.linkAccount
+);
 
-// Admin Dashboard Features
-router.get('/sessions/all', customerAuthController.getAllActiveSessions);           // All active diners
-router.get('/sessions/count', customerAuthController.getActiveDinersCount);        // Real-time count
-router.delete('/sessions/:sessionId', customerAuthController.forceKillSession);     // Kill one device
-router.delete('/customer/:customerId/sessions', customerAuthController.forceLogoutCustomer); // Kick customer
+/* ==================== STAFF ONLY ROUTES ==================== */
+router.patch(
+  '/free-table/:tableId',
+  authController.protect,              // staff/admin JWT
+  authController.restrictTo(),
+  customerAuthController.freeTable
+);
+
+/* ==================== ADMIN ROUTES ==================== */
+router.get(
+  '/sessions',
+  authController.protect,
+  authController.restrictTo(),
+  customerAuthController.getAllSessions
+);
+
+router.get(
+  '/sessions/table/:tableId',
+  authController.protect,
+  authController.restrictTo(),
+  customerAuthController.getSessionByTable
+);
 
 module.exports = router;

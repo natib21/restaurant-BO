@@ -4,62 +4,68 @@ const ApiFeatures = require('../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const Table = require('../models/tabelModel');
-const QRCode = require('qrcode');
 
-// CREATE TABLE — with validation + auto QR
+// Secure QR Helper (no nonce → reusable forever)
+const { generateSecureQR } = require('../utils/secureQR');
+
+/* ==================================================================
+   CREATE TABLE + AUTO GENERATE REUSABLE SECURE QR CODE
+   ================================================================== */
 exports.createTable = catchAsync(async (req, res, next) => {
-  // 1. Required fields check
-  const { tableNumber, capacity } = req.body;
+  const { tableNumber, capacity, location, section, status } = req.body;
+  const merchantId = req.user.merchant._id;
 
+  // ——— Validation ———
   if (!tableNumber || !capacity) {
     return next(new AppError('Table number and capacity are required', 400));
   }
-
   if (isNaN(capacity) || capacity < 1) {
-    return next(new AppError('Capacity must be a number greater than 0', 400));
+    return next(new AppError('Capacity must be a number ≥ 1', 400));
   }
 
-  // 2. Build data (merchant from logged-in user)
-  const data = {
+  // ——— Create the table document ———
+  const table = await Table.create({
     tableNumber: tableNumber.trim().toUpperCase(),
     capacity: Number(capacity),
-    location: req.body.location || 'indoor',
-    section: req.body.section || null,
-    status: req.body.status || 'available',
-    merchant: req.user.merchant._id,
-  };
+    location: location || 'indoor',
+    section: section || null,
+    status: status || 'available',
+    merchant: merchantId,
+  });
 
-  // 3. Create table
-  const table = await Table.create(data);
-
-  // 4. Generate QR Code
-  const tableUrl = `${process.env.FRONTEND_URL || 'http://localhost:7000'}/api/v1/menu/MID=${table.merchant}/public?tableId=${table._id}`;
-
+  // ——— Generate Secure, Reusable QR Code (no nonce) ———
   try {
-    table.qrCode = await QRCode.toDataURL(tableUrl, {
-      width: 300,
-      margin: 2,
-      color: { dark: '#000000', light: '#ffffff' },
-    });
+    const { qrImage, data, signature, url } = await generateSecureQR(merchantId, table._id);
+
+    // Save QR image + signed data to table
+    table.qrCode = qrImage;           // base64 PNG → display directly in admin panel
+    table.qrData = data;              // base64url payload (for regeneration if needed)
+    table.qrSignature = signature;    // HMAC signature (for verification)
+    table.qrGeneratedAt = new Date();
+
+    // Debug: See the full deep link in console
+    console.log('QR Deep Link →', url);
+
+    await table.save({ validateBeforeSave: false });
   } catch (err) {
-    return next(new AppError('Failed to generate QR code', 500));
+    console.error('Secure QR generation failed:', err);
+    return next(new AppError('Failed to generate secure QR code', 500));
   }
 
-  await table.save({ validateBeforeSave: false });
-
+  // ——— Success Response ———
   res.status(201).json({
     status: 'success',
+    message: 'Table created with permanent secure QR code',
     data: { table },
   });
 });
 
-// GET ALL TABLES (for this merchant only)
+/* ==================================================================
+   GET ALL TABLES (for current merchant only)
+   ================================================================== */
 exports.getAllTables = catchAsync(async (req, res, next) => {
   const features = new ApiFeatures(
-    Table.find({
-      merchant: req.user.merchant._id,
-      isActive: true,
-    }),
+    Table.find({ merchant: req.user.merchant._id, isActive: true }),
     req.query
   )
     .filter()
@@ -75,13 +81,14 @@ exports.getAllTables = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    requestedAt: req.requestTime,
     results: tables.length,
     data: { tables },
   });
 });
 
-// GET SINGLE TABLE
+/* ==================================================================
+   GET SINGLE TABLE
+   ================================================================== */
 exports.getTable = catchAsync(async (req, res, next) => {
   const table = await Table.findOne({
     _id: req.params.id,
@@ -91,9 +98,7 @@ exports.getTable = catchAsync(async (req, res, next) => {
     populate: { path: 'staff', select: 'name phone' },
   });
 
-  if (!table) {
-    return next(new AppError('No table found with that ID', 404));
-  }
+  if (!table) return next(new AppError('Table not found', 404));
 
   res.status(200).json({
     status: 'success',
@@ -101,40 +106,58 @@ exports.getTable = catchAsync(async (req, res, next) => {
   });
 });
 
-// UPDATE TABLE — safe fields only
+/* ==================================================================
+   UPDATE TABLE (and regenerate QR automatically)
+   ================================================================== */
 exports.updateTable = catchAsync(async (req, res, next) => {
   const allowedFields = ['tableNumber', 'capacity', 'status', 'location', 'section'];
-
   const updates = {};
-  allowedFields.forEach(field => {
+
+  // Only allow safe fields
+  allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
       updates[field] =
         field === 'tableNumber' ? req.body[field].trim().toUpperCase() : req.body[field];
     }
   });
 
-  // Extra validation
+  // Validate capacity
   if (updates.capacity && (isNaN(updates.capacity) || updates.capacity < 1)) {
-    return next(new AppError('Capacity must be a number ≥ 1', 400));
+    return next(new AppError('Capacity must be ≥ 1', 400));
   }
 
+  // Update the table
   const table = await Table.findOneAndUpdate(
     { _id: req.params.id, merchant: req.user.merchant._id },
     updates,
     { new: true, runValidators: true }
   );
 
-  if (!table) {
-    return next(new AppError('No table found with that ID', 404));
-  }
+  if (!table) return next(new AppError('Table not found', 404));
+
+  // ——— Regenerate QR Code on every update (recommended) ———
+  const { qrImage, data, signature } = await generateSecureQR(
+    req.user.merchant._id,
+    table._id
+  );
+
+  table.qrCode = qrImage;
+  table.qrData = data;
+  table.qrSignature = signature;
+  table.qrGeneratedAt = new Date();
+
+  await table.save({ validateBeforeSave: false });
 
   res.status(200).json({
     status: 'success',
+    message: 'Table updated + QR code refreshed',
     data: { table },
   });
 });
 
-// DELETE TABLE (soft delete)
+/* ==================================================================
+   SOFT DELETE TABLE
+   ================================================================== */
 exports.deleteTable = catchAsync(async (req, res, next) => {
   const table = await Table.findOneAndUpdate(
     { _id: req.params.id, merchant: req.user.merchant._id },
@@ -142,11 +165,9 @@ exports.deleteTable = catchAsync(async (req, res, next) => {
     { new: true }
   );
 
-  if (!table) {
-    return next(new AppError('No table found with that ID', 404));
-  }
+  if (!table) return next(new AppError('Table not found', 404));
 
-  // End any active staff assignments for this table
+  // End any active staff assignments
   await StaffAssignment.updateMany(
     { 'tables.table': req.params.id, isActive: true },
     { isActive: false, endedAt: new Date() }
@@ -158,14 +179,15 @@ exports.deleteTable = catchAsync(async (req, res, next) => {
   });
 });
 
-// CHANGE TABLE — transfer orders to new table
+/* ==================================================================
+   CHANGE TABLE (transfer active orders to new table)
+   ================================================================== */
 exports.changeTable = catchAsync(async (req, res, next) => {
   const { currentTableId, newTableId } = req.body;
 
   if (!currentTableId || !newTableId) {
     return next(new AppError('Current and new table IDs are required', 400));
   }
-
   if (currentTableId === newTableId) {
     return next(new AppError('Current and new table must be different', 400));
   }
@@ -179,7 +201,7 @@ exports.changeTable = catchAsync(async (req, res, next) => {
     return next(new AppError('Current table not found or not authorized', 404));
   }
 
-  // Call the model method to handle the change
+  // This method is defined in your Table model
   const result = await currentTable.changeTable(newTableId);
 
   res.status(200).json({

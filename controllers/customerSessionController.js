@@ -1,259 +1,183 @@
 // controllers/customerAuthController.js
-const jwt = require('jsonwebtoken');
-const { promisify } = require('util');
 const crypto = require('crypto');
-const Customer = require('../models/customerModule');
-const CustomerSession = require('../models/customerSessionModule');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const Table = require('../models/tabelModel')
+const Merchant = require('../models/merchantModel');
+const CustomerSession = require('../models/customerSessionModule');
 
-/**
- * Generate JWT for Customer
- */
-const signToken = (customerId, merchantId) => {
-  return jwt.sign({ id: customerId, merchant: merchantId.toString() }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE_IN || '7d',
+/* ====================== 1. QR SCAN → START TABLE SESSION (Anonymous) ====================== */
+exports.startTableSession = catchAsync(async (req, res, next) => {
+  const { data, s: signature } = req.body;
+  if (!data || !signature) return next(new AppError('Invalid QR code', 400));
+
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+  } catch {
+    return next(new AppError('Corrupted QR code', 400));
+  }
+
+  const { m: merchantId, t: tableId } = payload;
+  if (!merchantId || !tableId) return next(new AppError('QR missing data', 400));
+
+  const merchant = await Merchant.findById(merchantId).select('+qr_secret_key');
+  if (!merchant || !merchant.qr_secret_key) return next(new AppError('Invalid merchant', 404));
+
+  const expectedSig = crypto
+    .createHmac('sha256', merchant.qr_secret_key)
+    .update(Buffer.from(data, 'base64url').toString('utf8'))
+    .digest('hex');
+
+  if (!crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(signature))) {
+    return next(new AppError('Fake QR code', 403));
+  }
+
+  const table = await Table.findOne({ _id: tableId, merchant: merchantId });
+  if (!table) return next(new AppError('Table not found', 404));
+
+  // Block if table already in use
+  const active = await CustomerSession.findOne({
+    tableId: table._id,
+    isActive: true,
+    expiresAt: { $gt: new Date() },
   });
-};
-
-const createSendToken = (customer, statusCode, res) => {
-  const token = signToken(customer._id, customer.merchant);
-
-  const cookieOptions = {
-    expires: new Date(Date.now() + (process.env.JWT_COOKIE_EXPIRES_IN || 7) * 24 * 60 * 60 * 1000),
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
-  };
-
-  res.cookie('jwt', token, cookieOptions);
-
-  res.status(statusCode).json({
-    status: 'success',
-    token,
-    data: {
-      customer: {
-        _id: customer._id,
-        fullName: customer.fullName,
-        phone: customer.phone,
-        currentTable: customer.currentTable || null,
-        profileImage: customer.profileImage,
-        source: customer.source,
-        merchant: customer.merchant,
-      },
-    },
-  });
-};
-
-// ────────────────────────── CUSTOMER AUTH ──────────────────────────
-
-// 1. Create Session + Issue JWT
-exports.createSession = catchAsync(async (req, res, next) => {
-  const { customerId } = req.body;
-  if (!customerId || !mongoose.Types.ObjectId.isValid(customerId))
-    return next(new AppError('Valid customerId is required', 400));
-
-  const customer = await Customer.findById(customerId).select(
-    'merchant fullName phone currentTable profileImage source lastSeen'
-  );
-
-  if (!customer) return next(new AppError('Customer not found', 404));
+  if (active) {
+    return next(new AppError('Table is in use. Please wait or ask staff.', 409));
+  }
 
   const sessionToken = crypto.randomBytes(32).toString('hex');
   await CustomerSession.create({
-    customer: customer._id,
+    customer: null,
+    merchant: merchantId,
+    tableId: table._id,
     token: sessionToken,
-    deviceInfo: {
-      userAgent: req.get('User-Agent') || 'Unknown',
-      ip: req.ip || req.connection?.remoteAddress || 'Unknown',
-    },
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours
+    isActive: true,
   });
 
-  customer.lastSeen = new Date();
-  await customer.save({ validateBeforeSave: false });
+  table.status = 'occupied';
+  await table.save({ validateBeforeSave: false });
 
-  createSendToken(customer, 200, res);
+  res.status(200).json({
+    status: 'success',
+    data: {
+      sessionToken,
+      tableId: table._id,
+      tableNumber: table.tableNumber,
+      message: 'Welcome!',
+    },
+  });
 });
 
-// 2. Protect Customer Routes
-exports.protectCustomer = catchAsync(async (req, res, next) => {
-  let token;
-  if (req.headers.authorization?.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  } else if (req.cookies?.jwt) {
-    token = req.cookies.jwt;
-  }
+/* ====================== 2. PROTECT TABLE SESSION (All Menu/Order Routes) ====================== */
+exports.protectTableSession = catchAsync(async (req, res, next) => {
+  let token = req.headers.authorization?.split(' ')[1];
+  if (!token) return next(new AppError('Session token required', 401));
 
-  if (!token) return next(new AppError('You are not logged in', 401));
+  const session = await CustomerSession.findOne({
+    token,
+    isActive: true,
+    expiresAt: { $gt: new Date() },
+  });
 
-  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
-  const customer = await Customer.findById(decoded.id);
-  if (!customer) return next(new AppError('Customer no longer exists', 401));
+  if (!session) return next(new AppError('Invalid or expired session', 401));
 
-  if (req.merchantId && decoded.merchant !== req.merchantId)
-    return next(new AppError('Invalid merchant context', 403));
+  req.tableSession = session;
+  req.merchantId = session.merchant;
+  req.tableId = session.tableId;
+  req.customer = session.customer; // null or real customer ID
 
-  req.customer = customer;
   next();
 });
 
-// 3. Customer: Logout (Current Device)
-exports.logout = catchAsync(async (req, res, next) => {
-  const token = req.cookies.jwt || req.headers.authorization?.split(' ')[1];
-  if (token) {
-    await CustomerSession.updateOne({ token }, { isActive: false, expiresAt: new Date() });
-  }
+/* ====================== 3. FREE TABLE (Staff Only) ====================== */
+exports.freeTable = catchAsync(async (req, res, next) => {
+  const { tableId } = req.params;
+  const merchantId = req.user.merchant._id;
 
-  res.clearCookie('jwt', {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
-  });
-  res.status(200).json({ status: 'success', message: 'Logged out successfully' });
-});
+  const table = await Table.findOne({ _id: tableId, merchant: merchantId });
+  if (!table) return next(new AppError('Table not found', 404));
 
-// 4. Customer: Logout All Devices
-exports.logoutAll = catchAsync(async (req, res, next) => {
-  await CustomerSession.updateMany(
-    { customer: req.customer._id },
+  await CustomerSession.updateOne(
+    { tableId: table._id, isActive: true },
     { isActive: false, expiresAt: new Date() }
   );
 
-  res.clearCookie('jwt', {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
+  table.status = 'available';
+  await table.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Table freed',
+    data: { tableNumber: table.tableNumber },
   });
-  res.status(200).json({ status: 'success', message: 'Logged out from all devices' });
 });
 
-// 5. Customer: Get My Active Sessions
-exports.getMySessions = catchAsync(async (req, res, next) => {
+/* ====================== 4. LINK ACCOUNT (After loginOrCreate) ====================== */
+exports.linkAccount = catchAsync(async (req, res, next) => {
+  const { sessionToken } = req.body;
+  const customer = req.customer; // from your JWT protect middleware
+
+  const session = await CustomerSession.findOne({
+    token: sessionToken,
+    customer: null,
+    isActive: true,
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!session) return next(new AppError('No active table session', 404));
+
+  session.customer = customer._id;
+  await session.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Account linked! Welcome back.',
+    data: { fullName: customer.fullName },
+  });
+});
+
+// ===================== GET ALL ACTIVE TABLE SESSIONS (Admin) =====================
+exports.getAllSessions = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id;
+
   const sessions = await CustomerSession.find({
-    customer: req.customer._id,
+    merchant: merchantId,
     isActive: true,
     expiresAt: { $gt: new Date() },
   })
-    .select('deviceInfo.userAgent deviceInfo.ip createdAt expiresAt')
-    .sort('-createdAt');
+    .populate('tableId', 'tableNumber status')
+    .populate('customer', 'fullName phone');
 
   res.status(200).json({
     status: 'success',
     results: sessions.length,
-    data: { sessions },
+    data: sessions,
   });
 });
 
-// ────────────────────────── ADMIN / MERCHANT FEATURES ──────────────────────────
 
-// 6. Admin: Get All Active Sessions in This Merchant
-exports.getAllActiveSessions = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant._id; // from admin protect middleware
+// ===================== GET SESSION BY TABLE =====================
+exports.getSessionByTable = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id;
+  const { tableId } = req.params;
 
-  const sessions = await CustomerSession.find({
+  const session = await CustomerSession.findOne({
+    tableId,
+    merchant: merchantId,
     isActive: true,
     expiresAt: { $gt: new Date() },
   })
-    .populate({
-      path: 'customer',
-      match: { merchant: merchantId },
-      select: 'fullName phone currentTable source profileImage lastSeen',
-    })
-    .select('deviceInfo createdAt expiresAt')
-    .sort('-createdAt');
+    .populate('customer', 'fullName phone')
+    .populate('tableId', 'tableNumber status');
 
-  const validSessions = sessions
-    .filter(s => s.customer) // only sessions belonging to this merchant
-    .map(s => ({
-      sessionId: s._id,
-      customer: {
-        _id: s.customer._id,
-        fullName: s.customer.fullName,
-        phone: s.customer.phone,
-        table: s.customer.currentTable,
-        source: s.customer.source,
-        profileImage: s.customer.profileImage,
-      },
-      device: s.deviceInfo,
-      loggedInAt: s.createdAt,
-      expiresAt: s.expiresAt,
-    }));
-
-  res.status(200).json({
-    status: 'success',
-    activeDiners: validSessions.length,
-    data: { sessions: validSessions },
-  });
-});
-
-// 7. Admin: Force Kill One Session
-exports.forceKillSession = catchAsync(async (req, res, next) => {
-  const { sessionId } = req.params;
-
-  const session = await CustomerSession.findById(sessionId).populate({
-    path: 'customer',
-    match: { merchant: req.merchant._id },
-  });
-
-  if (!session || !session.customer) {
-    return next(new AppError('Session not found or access denied', 404));
+  if (!session) {
+    return next(new AppError('No active session for this table.', 404));
   }
 
-  await CustomerSession.findByIdAndUpdate(sessionId, {
-    isActive: false,
-    expiresAt: new Date(),
-  });
-
   res.status(200).json({
     status: 'success',
-    message: 'Session terminated',
-    data: { terminatedSession: sessionId },
-  });
-});
-
-// 8. Admin: Force Logout Entire Customer
-exports.forceLogoutCustomer = catchAsync(async (req, res, next) => {
-  const { customerId } = req.params;
-
-  const customer = await Customer.findOne({ _id: customerId, merchant: req.merchant._id });
-  if (!customer) return next(new AppError('Customer not found', 404));
-
-  await CustomerSession.updateMany(
-    { customer: customerId },
-    { isActive: false, expiresAt: new Date() }
-  );
-
-  res.status(200).json({
-    status: 'success',
-    message: `All sessions for ${customer.fullName} terminated`,
-  });
-});
-
-// 9. Admin: Real-time Active Diners Count (Dashboard Widget)
-exports.getActiveDinersCount = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchant._id;
-
-  const result = await CustomerSession.aggregate([
-    { $match: { isActive: true, expiresAt: { $gt: new Date() } } },
-    {
-      $lookup: {
-        from: 'customers',
-        localField: 'customer',
-        foreignField: '_id',
-        as: 'customer',
-      },
-    },
-    { $unwind: '$customer' },
-    { $match: { 'customer.merchant': merchantId } },
-    { $count: 'total' },
-  ]);
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      activeDiners: result[0]?.total || 0,
-      timestamp: new Date(),
-    },
+    data: session,
   });
 });

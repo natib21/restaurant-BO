@@ -963,3 +963,33 @@
 {"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T13:44:46.150Z"}
 {"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T13:48:43.081Z"}
 {"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-11-24T13:49:08.474Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T13:51:00.003Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T13:51:00.030Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T14:00:27.374Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T14:00:27.403Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T14:00:33.382Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T14:00:33.410Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T17:22:32.953Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T17:22:32.969Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T17:57:25.569Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T17:57:25.592Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T17:58:35.551Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T17:58:35.574Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:01:51.716Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:01:51.732Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:01:53.481Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:01:53.506Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:02:09.065Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:02:09.094Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:02:57.669Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:02:57.703Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:02:58.857Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:02:58.882Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:12:28.984Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:12:29.001Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-24T18:12:31.092Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-24T18:12:31.113Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-25T09:34:32.777Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-25T09:34:32.791Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2025-11-25T13:38:54.491Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2025-11-25T13:38:54.524Z"}

@@ -14,21 +14,21 @@ router.post('/login', customerController.loginOrCreate);
 router.use(authController.protect);
 
 // CRM Dashboard & Analytics
-router.get('/crm', customerController.getAllCustomersCRM);           // List all customers with stats
-router.get('/:id/crm', customerController.getCustomerCRM);          // Full 360° profile
+router.get('/crm', customerController.getAllCustomers); // List all customers with stats
+router.get('/:id/crm', customerController.getCustomer); // Full 360° profile
 
 // Staff Actions
-router.post('/:id/gift', customerController.giveGift);              // Give free coffee, discount, etc.
-router.patch('/:id/tag', customerController.addTagOrNote);          // Add "VIP", "Allergic", note
+router.post('/:id/gift', customerController.giveGift); // Give free coffee, discount, etc.
+router.patch('/:id/tag', customerController.addTagOrNote); // Add "VIP", "Allergic", note
 
 // Legacy (if still needed)
-router.get('/', customerController.getAllCustomersCRM);                // Basic list
-router.get('/:id', customerController.getCustomerCRM);                 // Basic single view
+router.get('/', customerController.getAllCustomers); // Basic list
+router.get('/:id', customerController.getCustomer); // Basic single view
 
 // ====================== 3. CUSTOMER PROTECTED ROUTES (Customer JWT) ======================
 // Below require customer session (from customerAuthController.createSession)
-router.use(customerAuthController.protectCustomer);
+router.use(customerController.protectCustomer);
 
-router.post('/gift/claim', customerController.claimGift);           // Customer claims a gift during order
+router.post('/gift/claim', customerController.claimGift); // Customer claims a gift during order
 
 module.exports = router;

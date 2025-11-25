@@ -1,6 +1,6 @@
 // models/Order.js
 const mongoose = require('mongoose');
-const {Schema} = mongoose;
+const { Schema } = mongoose;
 
 const orderItemSchema = new mongoose.Schema(
   {

@@ -1,6 +1,6 @@
 // models/Customer.js
 const mongoose = require('mongoose');
-const { Schema } = mongoose;   // ← THIS LINE WAS MISSING! NOW FIXED
+const { Schema } = mongoose; // ← THIS LINE WAS MISSING! NOW FIXED
 
 const customerSchema = new Schema(
   {

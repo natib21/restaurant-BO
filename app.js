@@ -27,7 +27,7 @@ const merchantRouter = require('./routes/merchantRouter');
 const comboRouter = require('./routes/comboRouter');
 const assignTableRouter = require('./routes/staffAssignTabelRouter');
 const customerRouter = require('./routes/customerRouter');
-const customerSessionRouter = require('./routes/customerSessionRouter');
+// const customerSessionRouter = require('./routes/customerSessionRouter');
 // ──────────────────────────────────────────────────────────────
 // App
 // ──────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ app.use('/api/v1/menuGroup', menuGroupRouter);
 app.use('/api/v1/menuCombo', comboRouter);
 app.use('/api/v1/table', tableRouter);
 app.use('/api/v1/staff-assignments', assignTableRouter);
-app.use('/api/v1/customer', customerRouter);
+// app.use('/api/v1/customer', customerRouter);
 // app.use('/api/v1/customerSession', customerSessionRouter);
 app.use('/api/v1/order', orderRouter);
 
