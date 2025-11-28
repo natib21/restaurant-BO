@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const customerAuthController = require('../controllers/customerAuthController');
+const customerAuthController = require('../controllers/customerSessionController');
 const authController = require('../controllers/authController'); // protect, restrictTo
 
 /* ==================== PUBLIC ROUTE (QR SCAN) ==================== */
@@ -21,14 +21,14 @@ router.use('/payment', customerAuthController.protectTableSession);
 /* ==================== LINK ACCOUNT AFTER LOGIN ==================== */
 router.post(
   '/link-account',
-  authController.protectCustomer,     // JWT auth for logged customers
+  customerAuthController.protectTableSession, // JWT auth for logged customers
   customerAuthController.linkAccount
 );
 
 /* ==================== STAFF ONLY ROUTES ==================== */
 router.patch(
   '/free-table/:tableId',
-  authController.protect,              // staff/admin JWT
+  authController.protect, // staff/admin JWT
   authController.restrictTo(),
   customerAuthController.freeTable
 );
@@ -37,7 +37,7 @@ router.patch(
 router.get(
   '/sessions',
   authController.protect,
-  authController.restrictTo(),
+  // authController.restrictTo(),
   customerAuthController.getAllSessions
 );
 

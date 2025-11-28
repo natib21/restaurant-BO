@@ -1,6 +1,6 @@
 // models/Customer.js
 const mongoose = require('mongoose');
-const { Schema } = mongoose; // ← THIS LINE WAS MISSING! NOW FIXED
+const { Schema } = mongoose;
 
 const customerSchema = new Schema(
   {
@@ -10,6 +10,7 @@ const customerSchema = new Schema(
       required: true,
       index: true,
     },
+
     fullName: {
       type: String,
       required: true,
@@ -17,10 +18,12 @@ const customerSchema = new Schema(
       minlength: 2,
       maxlength: 50,
     },
+
     phone: {
       type: String,
       trim: true,
       sparse: true,
+      unique: true,
       validate: {
         validator: v => !v || /^\+?251[79]\d{8}$/.test(v.replace(/\s/g, '')),
         message: 'Invalid Ethiopian phone number',
@@ -47,7 +50,7 @@ const customerSchema = new Schema(
     currentTable: { type: String, trim: true },
     lastSeen: { type: Date, default: Date.now },
 
-    // ────── CRM & LOYALTY SYSTEM ──────
+    // ───────────────── CRM & LOYALTY SYSTEM ─────────────────
     loyalty: {
       points: { type: Number, default: 0 },
       totalPointsEarned: { type: Number, default: 0 },
@@ -74,7 +77,7 @@ const customerSchema = new Schema(
       ],
     },
 
-    // Staff notes & tags
+    // ───────────────── TAGS & STAFF NOTES ─────────────────
     tags: [
       {
         value: String,
@@ -89,6 +92,38 @@ const customerSchema = new Schema(
         addedAt: { type: Date, default: Date.now },
       },
     ],
+
+    // ───────────────── CUSTOMER ORDERS ─────────────────
+    orders: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Order',
+      },
+    ],
+
+    // ───────────────── CUSTOMER RATING ─────────────────
+    rating: {
+      average: { type: Number, default: 0, min: 0, max: 5 },
+      totalReviews: { type: Number, default: 0 },
+    },
+
+    // ───────────────── CUSTOMER STATS ─────────────────
+    stats: {
+      totalOrders: { type: Number, default: 0 },
+      totalSpent: { type: Number, default: 0 }, // lifetime spend
+      lastOrderAt: { type: Date },
+    },
+
+    // ───────────────── CUSTOMER HISTORY ─────────────────
+    history: [
+      {
+        action: { type: String, required: true }, // ex: "place_order"
+        details: { type: String },
+        order: { type: Schema.Types.ObjectId, ref: 'Order' },
+        addedAt: { type: Date, default: Date.now },
+        addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -97,7 +132,7 @@ const customerSchema = new Schema(
   }
 );
 
-// Virtual: Profile image fallback
+// ───────────────── VIRTUAL: PROFILE IMAGE ─────────────────
 customerSchema.virtual('profileImage').get(function () {
   return (
     this.facebook?.profilePic ||
@@ -107,15 +142,12 @@ customerSchema.virtual('profileImage').get(function () {
   );
 });
 
-// Indexes
-customerSchema.index({ merchant: 1, 'facebook.id': 1 }, { unique: true, sparse: true });
-customerSchema.index({ merchant: 1, 'tiktok.id': 1 }, { unique: true, sparse: true });
-customerSchema.index({ merchant: 1, 'telegram.id': 1 }, { unique: true, sparse: true });
+// ───────────────── INDEXES ─────────────────
 customerSchema.index({ merchant: 1, phone: 1 }, { unique: true, sparse: true });
 customerSchema.index({ merchant: 1, lastSeen: -1 });
 customerSchema.index({ 'loyalty.tier': 1, merchant: 1 });
 
-// Auto-clean old inactive guests after 90 days
+// Auto-delete inactive guests after 90 days
 customerSchema.index(
   { lastSeen: 1 },
   { expireAfterSeconds: 60 * 60 * 24 * 90, partialFilterExpression: { source: 'guest' } }

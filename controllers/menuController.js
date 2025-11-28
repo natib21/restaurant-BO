@@ -92,14 +92,9 @@ exports.getFoodOnly = (req, res, next) => {
   next();
 };
 
-/* =============================================================
-   4. PUBLIC: Get active menu for customer (FINAL WORKING VERSION)
-   Works 100% with your current Menu model (no menuGroup field!)
-   Supports: scheduling, ?type=food/drink/alcohol, specials, banners
-   ============================================================= */
 exports.getPublicMenu = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.MID;
-  const tableId = req.query.tableId;
+  const merchantId = req.merchantId;
+  const tableId = req.tableId;
   if (!merchantId) {
     return next(new AppError('Merchant ID is required', 400));
   }

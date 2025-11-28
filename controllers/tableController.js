@@ -5,7 +5,7 @@ const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const Table = require('../models/tabelModel');
 
-// Secure QR Helper (no nonce → reusable forever)
+// Secure QR Helper
 const { generateSecureQR } = require('../utils/secureQR');
 
 /* ==================================================================
@@ -23,6 +23,20 @@ exports.createTable = catchAsync(async (req, res, next) => {
     return next(new AppError('Capacity must be a number ≥ 1', 400));
   }
 
+  const trimmedTableNumber = tableNumber.trim().toUpperCase();
+
+  // ——— Check for duplicate tableNumber under the same merchant ———
+  const existingTable = await Table.findOne({
+    tableNumber: trimmedTableNumber,
+    merchant: merchantId,
+  });
+
+  if (existingTable) {
+    return next(
+      new AppError(`Table number "${trimmedTableNumber}" already exists for this restaurant`, 400)
+    );
+  }
+
   // ——— Create the table document ———
   const table = await Table.create({
     tableNumber: tableNumber.trim().toUpperCase(),
@@ -35,12 +49,16 @@ exports.createTable = catchAsync(async (req, res, next) => {
 
   // ——— Generate Secure, Reusable QR Code (no nonce) ———
   try {
-    const { qrImage, data, signature, url } = await generateSecureQR(merchantId, table._id);
+    const { qrImage, data, signature, url } = await generateSecureQR(
+      merchantId,
+      table._id
+      // tableNumber.trim().toUpperCase()
+    );
 
     // Save QR image + signed data to table
-    table.qrCode = qrImage;           // base64 PNG → display directly in admin panel
-    table.qrData = data;              // base64url payload (for regeneration if needed)
-    table.qrSignature = signature;    // HMAC signature (for verification)
+    table.qrCode = qrImage; // base64 PNG → display directly in admin panel
+    table.qrData = data; // base64url payload (for regeneration if needed)
+    table.qrSignature = signature; // HMAC signature (for verification)
     table.qrGeneratedAt = new Date();
 
     // Debug: See the full deep link in console
@@ -114,7 +132,7 @@ exports.updateTable = catchAsync(async (req, res, next) => {
   const updates = {};
 
   // Only allow safe fields
-  allowedFields.forEach((field) => {
+  allowedFields.forEach(field => {
     if (req.body[field] !== undefined) {
       updates[field] =
         field === 'tableNumber' ? req.body[field].trim().toUpperCase() : req.body[field];
@@ -136,10 +154,7 @@ exports.updateTable = catchAsync(async (req, res, next) => {
   if (!table) return next(new AppError('Table not found', 404));
 
   // ——— Regenerate QR Code on every update (recommended) ———
-  const { qrImage, data, signature } = await generateSecureQR(
-    req.user.merchant._id,
-    table._id
-  );
+  const { qrImage, data, signature } = await generateSecureQR(req.user.merchant._id, table._id);
 
   table.qrCode = qrImage;
   table.qrData = data;

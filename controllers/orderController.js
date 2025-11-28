@@ -1,82 +1,801 @@
-const catchAsync = require('../utils/catchAsync');
-const ApiFeatures = require('../utils/apiFeatures');
+// controllers/orderController.js
 const Order = require('../models/orderModel');
+const MenuItem = require('../models/menuModel');
+const Customer = require('../models/customerModule');
+const Table = require('../models/tabelModel');
+const CustomerSession = require('../models/customerSessionModule');
+const AppError = require('../utils/appError');
+const catchAsync = require('../utils/catchAsync');
 const { getIo } = require('../socket');
+// ====================================================
+//  HELPER: Multi-tenant scoped query
+// ====================================================
+const merchantScopedQuery = (query = {}, req) => ({
+  ...query,
+  merchant: req.merchant._id,
+});
 
-exports.getAllOrder = catchAsync(async (req, res) => {
-  const features = new ApiFeatures(Order.find(), req.query)
-    .filter()
-    .sort()
-    .limitFields()
-    .paginate();
+// ====================================================
+//  HELPER: Build Order Items (fully multi-tenant safe)
+// ====================================================
+const buildOrderItems = async (items, merchantId) => {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new AppError('Order must contain at least one item', 400);
+  }
 
-  const allOrders = await features.query;
+  let subtotal = 0;
+  const orderItems = [];
+
+  for (const item of items) {
+    const menuItem = await MenuItem.findOne({
+      _id: item.menuItem,
+      merchant: merchantId, // ⛑ multi-tenant protection
+      isAvailable: true,
+    });
+
+    if (!menuItem) {
+      throw new AppError('Menu item not found or unavailable', 400);
+    }
+
+    const quantity = item.quantity || 1;
+    const unitPrice = menuItem.price;
+    const totalPrice = quantity * unitPrice;
+
+    orderItems.push({
+      menuItem: menuItem._id,
+      name: menuItem.name,
+      quantity,
+      unitPrice,
+      totalPrice,
+      notes: item.notes || '',
+    });
+
+    subtotal += totalPrice;
+  }
+
+  return { orderItems, subtotal };
+};
+
+// order status transitions
+const VALID_TRANSITIONS = {
+  pending: ['accepted', 'canceled'],
+  accepted: ['preparing'],
+  preparing: ['ready'],
+  ready: ['served'],
+  served: ['completed'],
+};
+// ====================================================
+//  REUSABLE: Get orders by status + optional filters
+// ====================================================
+const getOrdersByStatus = async (req, statusArray, extraFilter = {}) => {
+  const merchantId = req.merchant._id;
+
+  return await Order.find({
+    merchant: merchantId,
+    status: { $in: statusArray },
+    ...extraFilter,
+  })
+    .populate('table', 'tableNumber')
+    .populate('assignedWaiter', 'fullName')
+    .populate('assignedKitchenStaff', 'fullName')
+    .select(
+      'orderNumber status tableNumber totalAmount placedAt readyAt items assignedWaiter assignedKitchenStaff'
+    )
+    .sort({ placedAt: 1 })
+    .lean()
+    .then(orders =>
+      orders.map(order => ({
+        ...order,
+        itemCount: order.items.reduce((s, i) => s + i.quantity, 0),
+        elapsed: formatElapsed(order.placedAt),
+        urgency: getUrgency(order.placedAt),
+      }))
+    );
+};
+
+// Helper: "12 min ago"
+const formatElapsed = date => {
+  const mins = Math.floor((Date.now() - new Date(date)) / 60000);
+  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h${mins % 60}m`;
+};
+
+// Helper: red/orange/green
+const getUrgency = date => {
+  const mins = Math.floor((Date.now() - new Date(date)) / 60000);
+  if (mins > 25) return 'high';
+  if (mins > 15) return 'medium';
+  return 'low';
+};
+
+// Summary for completed
+const calculateSummary = orders => ({
+  totalOrders: orders.length,
+  totalRevenue: orders.reduce((s, o) => s + o.totalAmount, 0),
+  avgOrderValue: orders.length
+    ? Math.round(orders.reduce((s, o) => s + o.totalAmount, 0) / orders.length)
+    : 0,
+});
+// ====================================================
+//  1. PLACE ORDER (Customer)
+// ====================================================
+exports.placeOrder = catchAsync(async (req, res, next) => {
+  const { items } = req.body;
+  const { tableId, customerId } = req;
+
+  // Verify table belongs to this merchant
+  const table = await Table.findOne(merchantScopedQuery({ _id: tableId }, req));
+  if (!table) return next(new AppError('Table not found', 404));
+
+  // Build safe items
+  const { orderItems, subtotal } = await buildOrderItems(
+    items,
+    req.merchant._id // pass merchantId FIXED 🔥
+  );
+
+  const totalAmount = subtotal;
+
+  const order = await Order.create({
+    merchant: req.merchant._id,
+    customer: customerId,
+    customerName: req.customer?.fullName || 'Guest',
+    customerPhone: req.customer?.phone || null,
+    table: tableId,
+    tableNumber: table.tableNumber,
+    orderType: 'dine_in',
+    items: orderItems,
+    subtotal,
+    totalAmount,
+    paymentStatus: 'unpaid',
+    placedAt: new Date(),
+  });
+
+  // update customer stats
+  if (req.customer) {
+    req.customer.stats.totalOrders += 1;
+    req.customer.stats.totalSpent += totalAmount;
+    req.customer.stats.lastOrderAt = new Date();
+
+    req.customer.history.push({
+      action: 'place_order',
+      details: `Placed order ${order.orderNumber}`,
+      order: order._id,
+      addedAt: new Date(),
+    });
+
+    await req.customer.save({ validateBeforeSave: false });
+  }
+  const io = getIo();
+
+  io.emit('new-order', {
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    tableNumber: table.tableNumber,
+    totalAmount: order.totalAmount,
+    placedAt: order.placedAt,
+    items: orderItems,
+  });
+  res.status(201).json({
+    status: 'success',
+    message: `Order ${order.orderNumber} sent to kitchen!`,
+    data: {
+      order: {
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        placedAt: order.placedAt,
+      },
+    },
+  });
+});
+
+// ====================================================
+//  2. GET CUSTOMER ACTIVE ORDER
+// ====================================================
+exports.getMyActiveOrder = catchAsync(async (req, res) => {
+  const order = await Order.findOne(
+    merchantScopedQuery(
+      {
+        customer: req.customerId,
+        table: req.tableId,
+        status: { $in: ['pending', 'accepted', 'preparing', 'ready', 'served'] },
+      },
+      req
+    )
+  )
+    .populate('items.menuItem', 'name image')
+    .sort('-placedAt');
 
   res.status(200).json({
     status: 'success',
-    result: allOrders.length,
-    order: allOrders,
+    data: { order: order || null },
   });
 });
 
-exports.createNewOrder = catchAsync(async (req, res, next) => {
-  const newOrder = await Order.create(req.body);
-  const io = getIo();
-  io.emit('new-order', newOrder);
-  res.status(201).json({
+// ====================================================
+//  3. STAFF: GET ACTIVE ORDERS
+// ====================================================
+exports.getActiveOrders = catchAsync(async (req, res) => {
+  const orders = await Order.find(
+    merchantScopedQuery({ status: ['pending', 'accepted', 'preparing', 'ready'] }, req)
+  )
+    .populate('table', 'tableNumber')
+    .populate('items.menuItem', 'name')
+    .sort({ placedAt: 1 });
+
+  res.status(200).json({
     status: 'success',
-    order: newOrder,
+    results: orders.length,
+    data: { orders },
   });
 });
-exports.getOrder = (req, res) => {
-  res.status(500).json({
-    status: 'Error',
-    message: 'This route is not defined',
-  });
-};
 
-exports.updateOrder = async (req, res, next) => {
-  const updatedOrder = await Order.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-  });
-  console.log(updatedOrder);
-  if (!updatedOrder) {
-    return next(new AppError('No Menu item Found with that ID', 404));
+// ====================================================
+//  4. UPDATE ORDER STATUS
+// ====================================================
+exports.updateOrderStatus = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+  const { status, assignedWaiter, assignedKitchenStaff } = req.body;
+
+  const order = await Order.findOne(merchantScopedQuery({ _id: orderId }, req));
+
+  if (!order) return next(new AppError('Order not found', 404));
+  if (!VALID_TRANSITIONS[order.status]?.includes(status)) {
+    return next(new AppError(`Cannot change status from ${order.status} to ${status}`, 400));
   }
-  // Emit the updated order event
-  io.emit('update-order', updatedOrder);
+
+  order.status = status;
+  if (status === 'accepted') order.acceptedAt = new Date();
+  if (status === 'ready') order.readyAt = new Date();
+  if (status === 'served') order.servedAt = new Date();
+  if (status === 'completed') order.completedAt = new Date();
+
+  if (assignedWaiter) order.assignedWaiter = assignedWaiter;
+  if (assignedKitchenStaff) order.assignedKitchenStaff = assignedKitchenStaff;
+
+  await order.save();
+
+  // Cleanup table + session
+  if (status === 'completed' && order.paymentStatus === 'paid') {
+    await CustomerSession.updateOne(
+      merchantScopedQuery({ tableId: order.table, isActive: true }, req),
+      { isActive: false }
+    );
+
+    const table = await Table.findOne(merchantScopedQuery({ _id: order.table }, req));
+
+    if (table) {
+      table.status = 'available';
+      await table.save({ validateBeforeSave: false });
+    }
+  }
+  const io = getIo();
+  io.emit('order-updated', {
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    assignedWaiter: order.assignedWaiter,
+    assignedKitchenStaff: order.assignedKitchenStaff,
+    readyAt: order.readyAt,
+    servedAt: order.servedAt,
+    completedAt: order.completedAt,
+  });
+  res.status(200).json({
+    status: 'success',
+    message: `Order ${status}`,
+    data: { order },
+  });
+});
+
+// ====================================================
+//  5. MARK ORDER AS PAID
+// ====================================================
+exports.markAsPaid = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+
+  const order = await Order.findOne(merchantScopedQuery({ _id: orderId }, req));
+
+  if (!order) return next(new AppError('Order not found', 404));
+  if (order.paymentStatus === 'paid') {
+    return next(new AppError('Order already paid', 400));
+  }
+
+  order.paymentStatus = 'paid';
+  await order.save();
+
+  // loyalty points
+  if (req.customer) {
+    const points = Math.floor(order.totalAmount);
+    req.customer.loyalty.points += points;
+    req.customer.loyalty.totalPointsEarned += points;
+
+    const tiers = { bronze: 0, silver: 5000, gold: 20000, platinum: 50000 };
+    const newTier = Object.keys(tiers)
+      .reverse()
+      .find(t => req.customer.loyalty.totalPointsEarned >= tiers[t]);
+
+    if (newTier && newTier !== req.customer.loyalty.tier) {
+      req.customer.loyalty.tier = newTier;
+    }
+
+    req.customer.history.push({
+      action: 'award_points',
+      details: `Earned ${points} points from order ${order.orderNumber}`,
+      addedAt: new Date(),
+    });
+
+    await req.customer.save({ validateBeforeSave: false });
+  }
+
+  // mark completed
+  if (order.status !== 'completed') {
+    order.status = 'completed';
+    order.completedAt = new Date();
+    await order.save();
+  }
+
+  await CustomerSession.updateOne(
+    merchantScopedQuery({ tableId: order.table, isActive: true }, req),
+    { isActive: false }
+  );
+
+  const table = await Table.findOne(merchantScopedQuery({ _id: order.table }, req));
+
+  if (table) {
+    table.status = 'available';
+    await table.save({ validateBeforeSave: false });
+  }
+  const io = getIo();
+  io.emit('order-paid', {
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    totalAmount: order.totalAmount,
+    completedAt: order.completedAt,
+  });
+  res.status(200).json({
+    status: 'success',
+    message: 'Payment confirmed!',
+    data: { order },
+  });
+});
+
+// ====================================================
+//  6. GET CUSTOMER ORDER HISTORY
+// ====================================================
+exports.getMyOrderHistory = catchAsync(async (req, res) => {
+  const orders = await Order.find(
+    merchantScopedQuery(
+      {
+        customer: req.customerId,
+        status: ['completed', 'canceled'],
+      },
+      req
+    )
+  )
+    .select('orderNumber items totalAmount status placedAt')
+    .sort('-placedAt')
+    .limit(50);
+
+  res.status(200).json({
+    status: 'success',
+    results: orders.length,
+    data: { orders },
+  });
+});
+
+// ====================================================
+//  7. GET ORDER BY ORDER NUMBER (Customer OR Staff)
+// ====================================================
+exports.getOrderByNumber = catchAsync(async (req, res, next) => {
+  const { orderNumber } = req.params; // e.g. #T5-467 or T5-467 → we normalize
+
+  if (!orderNumber) {
+    return next(new AppError('Order number is required', 400));
+  }
+
+  // Normalize: accept both "#T5-467" and "T5-467"
+  const cleanNumber = orderNumber.trim().toUpperCase().replace(/^#/, '#');
+
+  // Base query: find by orderNumber + merchant
+  const baseQuery = merchantScopedQuery({ orderNumber: cleanNumber }, req);
+
+  // Build final query based on role
+  let query = Order.findOne(baseQuery);
+
+  // STAFF / ADMIN → can see everything (including deleted/canceled if needed)
+  if (req.user || req.isStaff) {
+    query = query.select('+isDeleted'); // if you add soft delete later
+  }
+  // CUSTOMER → can only see their own orders
+  else if (req.customerId) {
+    query = query.and({ customer: req.customerId });
+  }
+  // ANONYMOUS TABLE SESSION → allow if table matches
+  else if (req.tableId) {
+    query = query.and({ table: req.tableId });
+  } else {
+    return next(new AppError('Unauthorized', 401));
+  }
+
+  const order = await query
+    .populate('table', 'tableNumber status')
+    .populate('items.menuItem', 'name image')
+    .populate('assignedWaiter', 'fullName')
+    .populate('assignedKitchenStaff', 'fullName')
+    .lean(); // faster + cleaner
+
+  if (!order) {
+    return next(new AppError('Order not found or access denied', 404));
+  }
+
+  // Optional: Hide sensitive fields from customer
+  if (!req.user && !req.isStaff) {
+    delete order.assignedWaiter;
+    delete order.assignedKitchenStaff;
+  }
 
   res.status(200).json({
     status: 'success',
     data: {
-      order: updatedOrder,
+      order: {
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        orderType: order.orderType,
+        tableNumber: order.tableNumber,
+        customerName: order.customerName,
+        totalAmount: order.totalAmount,
+        placedAt: order.placedAt,
+        acceptedAt: order.acceptedAt,
+        readyAt: order.readyAt,
+        servedAt: order.servedAt,
+        completedAt: order.completedAt,
+        items: order.items.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          notes: item.notes || null,
+          image: item.menuItem?.image || null,
+        })),
+        timeline: {
+          placed: order.placedAt,
+          accepted: order.acceptedAt,
+          ready: order.readyAt,
+          served: order.servedAt,
+          completed: order.completedAt,
+        },
+        assigned: {
+          waiter: order.assignedWaiter?.fullName || null,
+          kitchen: order.assignedKitchenStaff?.fullName || null,
+        },
+      },
     },
   });
-};
+});
 
-exports.deleteOrder = (req, res) => {
-  res.status(500).json({
-    status: 'Error',
-    message: 'This route is not defined',
+// ====================================================
+//  8. GET ALL ORDERS (Staff / Admin) — PAGINATED + FILTERS
+// ====================================================
+exports.getAllOrders = catchAsync(async (req, res, next) => {
+  const merchantId = req.merchant._id;
+
+  // ============================
+  //  FILTERS & SEARCH
+  // ============================
+  let queryObj = { merchant: merchantId };
+
+  const {
+    status,
+    paymentStatus,
+    orderType,
+    tableNumber,
+    customerPhone,
+    dateFrom,
+    dateTo,
+    search, // search by orderNumber or customer name
+    page = 1,
+    limit = 20,
+    sort = '-placedAt',
+  } = req.query;
+
+  // Status filters
+  if (status && status !== 'all') queryObj.status = status;
+  if (paymentStatus && paymentStatus !== 'all') queryObj.paymentStatus = paymentStatus;
+  if (orderType && orderType !== 'all') queryObj.orderType = orderType;
+  if (tableNumber) queryObj.tableNumber = { $regex: tableNumber, $options: 'i' };
+
+  // Customer phone search
+  if (customerPhone) {
+    queryObj.customerPhone = { $regex: customerPhone.trim(), $options: 'i' };
+  }
+
+  // Date range
+  if (dateFrom || dateTo) {
+    queryObj.placedAt = {};
+    if (dateFrom) queryObj.placedAt.$gte = new Date(dateFrom);
+    if (dateTo) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      queryObj.placedAt.$lte = end;
+    }
+  }
+
+  // Full text search
+  if (search) {
+    const searchRegex = { $regex: search.trim(), $options: 'i' };
+    queryObj.$or = [{ orderNumber: searchRegex }, { customerName: searchRegex }];
+  }
+
+  // ============================
+  //  EXECUTE QUERY
+  // ============================
+  const total = await Order.countDocuments(queryObj);
+
+  const orders = await Order.find(queryObj)
+    .populate('table', 'tableNumber status')
+    .populate('customer', 'fullName phone')
+    .populate('assignedWaiter', 'fullName')
+    .populate('assignedKitchenStaff', 'fullName')
+    .select(
+      'orderNumber status paymentStatus totalAmount placedAt tableNumber customerName customerPhone orderType items assignedWaiter assignedKitchenStaff'
+    )
+    .sort(sort)
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit))
+    .lean();
+
+  // Add item summary count
+  const ordersWithSummary = orders.map(order => ({
+    ...order,
+    itemCount: order.items.reduce((sum, i) => sum + i.quantity, 0),
+  }));
+
+  // ============================
+  //  SUMMARY STATS (Dashboard Gold)
+  // ============================
+  const stats = await Order.aggregate([
+    { $match: queryObj },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: '$totalAmount' },
+        totalOrders: { $sum: 1 },
+        paidOrders: {
+          $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] },
+        },
+        avgOrderValue: { $avg: '$totalAmount' },
+      },
+    },
+  ]);
+
+  const summary = stats[0] || {
+    totalRevenue: 0,
+    totalOrders: 0,
+    paidOrders: 0,
+    avgOrderValue: 0,
+  };
+
+  res.status(200).json({
+    status: 'success',
+    results: ordersWithSummary.length,
+    total,
+    page: parseInt(page),
+    pages: Math.ceil(total / limit),
+    summary: {
+      totalRevenue: summary.totalRevenue,
+      totalOrders: summary.totalOrders,
+      paidOrders: summary.paidOrders,
+      avgOrderValue: Math.round(summary.avgOrderValue || 0),
+    },
+    data: {
+      orders: ordersWithSummary,
+    },
   });
-};
+});
 
-exports.acceptOrder = async (req, res, next) => {
-  try {
-    const order = await Order.findById(req.params.id);
-    order.status = 'Accepted';
-    await order.save();
-
-    // Emit the order acceptance event
-    io.emit('accept-order', order._id);
-
+// ====================================================
+//  2–8. STATUS ENDPOINTS (ALL REUSE ONE FUNCTION)
+// ====================================================
+const createStatusEndpoint = status =>
+  catchAsync(async (req, res) => {
+    const orders = await getOrdersByStatus(req, status);
     res.status(200).json({
       status: 'success',
-      data: {
-        order,
-      },
+      count: orders.length,
+      data: { orders },
     });
-  } catch (err) {
-    next(err);
+  });
+
+exports.getPendingOrders = createStatusEndpoint('pending');
+exports.getAcceptedOrders = createStatusEndpoint('accepted');
+exports.getPreparingOrders = createStatusEndpoint('preparing');
+exports.getReadyOrders = createStatusEndpoint('ready');
+exports.getServedOrders = createStatusEndpoint('served');
+exports.getCanceledOrders = createStatusEndpoint('canceled');
+
+exports.getCompletedOrders = catchAsync(async (req, res) => {
+  const orders = await getOrdersByStatus(req, 'completed', { paymentStatus: 'paid' });
+  const summary = {
+    totalOrders: orders.length,
+    totalRevenue: orders.reduce((s, o) => s + o.totalAmount, 0),
+    avgOrderValue: orders.length
+      ? Math.round(orders.reduce((s, o) => s + o.totalAmount, 0) / orders.length)
+      : 0,
+  };
+
+  res.status(200).json({
+    status: 'success',
+    count: orders.length,
+    summary,
+    data: { orders },
+  });
+});
+
+// ====================================================
+//  9. STAFF: MERGE ORDERS (e.g., combining tables)
+// ====================================================
+exports.mergeOrders = catchAsync(async (req, res, next) => {
+  const { orderIds, targetOrderId } = req.body;
+  if (!orderIds || orderIds.length < 1) {
+    return next(new AppError('Must provide orders to merge', 400));
   }
-};
+
+  const merchantId = req.merchant._id;
+
+  // 1. Validate Target Order
+  const targetOrder = await Order.findOne(
+    merchantScopedQuery({ _id: targetOrderId, status: { $ne: 'completed' } }, req)
+  );
+  if (!targetOrder) return next(new AppError('Target order not found or completed', 404));
+
+  // 2. Find and Validate Source Orders
+  const sourceOrders = await Order.find(
+    merchantScopedQuery({ _id: { $in: orderIds }, status: { $ne: 'completed' } }, req)
+  );
+
+  if (sourceOrders.length !== orderIds.length) {
+    return next(new AppError('One or more source orders not found or completed', 404));
+  }
+
+  // 3. Perform Merge Logic
+  let subtotalIncrease = 0;
+
+  for (const sourceOrder of sourceOrders) {
+    // Add items
+    targetOrder.items.push(...sourceOrder.items);
+    subtotalIncrease += sourceOrder.subtotal;
+
+    // Update order status/notes (optional: track the merge in notes)
+    targetOrder.notes = targetOrder.notes || '';
+    targetOrder.notes += ` | MERGED FROM ${sourceOrder.orderNumber}`;
+
+    // Mark source order as merged/canceled and delete its customer session
+    sourceOrder.status = 'canceled'; // Or 'merged' if you add that status
+    sourceOrder.paymentStatus = 'paid'; // To prevent double payment issues, assume paid via target
+    sourceOrder.canceledReason = 'Merged into another order';
+    await sourceOrder.save({ validateBeforeSave: false });
+
+    // Clean up session for the merged table/customer
+    await CustomerSession.updateOne(
+      merchantScopedQuery({ tableId: sourceOrder.table, isActive: true }, req),
+      { isActive: false }
+    );
+
+    const table = await Table.findOne(merchantScopedQuery({ _id: sourceOrder.table }, req));
+    if (table) {
+      table.status = 'available';
+      await table.save({ validateBeforeSave: false });
+    }
+  }
+
+  // 4. Update Target Order Totals
+  targetOrder.subtotal += subtotalIncrease;
+  targetOrder.totalAmount = targetOrder.subtotal; // Assuming no tax/discount logic here
+  await targetOrder.save();
+
+  res.status(200).json({
+    status: 'success',
+    message: `Orders successfully merged into ${targetOrder.orderNumber}`,
+    data: { order: targetOrder },
+  });
+});
+
+// ====================================================
+//  11. CUSTOMER/STAFF: CANCEL ORDER
+// ====================================================
+exports.cancelOrder = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+  const { reason = 'Customer/Staff Cancellation' } = req.body;
+
+  const order = await Order.findOne(merchantScopedQuery({ _id: orderId }, req));
+
+  if (!order) return next(new AppError('Order not found', 404));
+
+  // Only allow cancellation if status is 'pending' or 'accepted' (staff override)
+  if (!['pending', 'accepted'].includes(order.status) && !req.isStaff) {
+    return next(new AppError(`Order cannot be canceled once it is ${order.status}`, 400));
+  }
+
+  if (order.status === 'canceled' || order.status === 'completed') {
+    return next(new AppError('Order is already canceled or completed', 400));
+  }
+
+  order.status = 'canceled';
+  order.canceledAt = new Date();
+  order.canceledBy = req.isStaff ? req.user._id : req.customerId; // Track who canceled
+  order.canceledReason = reason;
+
+  await order.save();
+
+  // Update customer stats (reduce total orders/spent if it was the last order)
+  // This logic is complex, often best handled by background jobs or simpler tracking.
+  const io = getIo();
+  io.emit('order-canceled', {
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    canceledBy: order.canceledBy,
+    canceledAt: order.canceledAt,
+    reason: order.canceledReason,
+  });
+  res.status(200).json({
+    status: 'success',
+    message: `Order ${order.orderNumber} successfully canceled`,
+    data: { order },
+  });
+});
+
+// ====================================================
+//  10. STAFF/CUSTOMER: ADD ITEM TO EXISTING ORDER
+// ====================================================
+exports.addItemToOrder = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+  const { items } = req.body; // Array of { menuItem, quantity, notes }
+
+  const order = await Order.findOne(
+    merchantScopedQuery(
+      { _id: orderId, status: { $in: ['pending', 'accepted', 'preparing'] } },
+      req
+    )
+  );
+
+  if (!order) {
+    return next(new AppError('Active order not found or cannot be modified', 404));
+  }
+
+  // NOTE: You'll need to add logic to restrict which status is modifiable (e.g., not 'ready' or 'served').
+
+  // Build safe items using the existing helper
+  const { orderItems: newItems, subtotal: newSubtotal } = await buildOrderItems(
+    items,
+    req.merchant._id
+  );
+
+  // Add items to the order and update totals
+  order.items.push(...newItems);
+  order.subtotal += newSubtotal;
+  order.totalAmount = order.subtotal; // Assuming totalAmount = subtotal
+
+  // Optional: Update status to 'pending' if it was 'accepted'/'preparing' to alert kitchen of change
+  if (order.status !== 'pending') {
+    order.status = 'accepted';
+  }
+
+  await order.save();
+  const io = getIo();
+  io.emit('order-updated', {
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    items: order.items,
+    totalAmount: order.totalAmount,
+  });
+  res.status(200).json({
+    status: 'success',
+    message: `Item(s) added to order ${order.orderNumber}`,
+    data: { order },
+  });
+});

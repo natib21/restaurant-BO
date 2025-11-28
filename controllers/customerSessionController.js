@@ -2,13 +2,13 @@
 const crypto = require('crypto');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
-const Table = require('../models/tabelModel')
+const Table = require('../models/tabelModel');
 const Merchant = require('../models/merchantModel');
 const CustomerSession = require('../models/customerSessionModule');
 
 /* ====================== 1. QR SCAN → START TABLE SESSION (Anonymous) ====================== */
 exports.startTableSession = catchAsync(async (req, res, next) => {
-  const { data, s: signature } = req.body;
+  const { data, s: signature } = req.query;
   if (!data || !signature) return next(new AppError('Invalid QR code', 400));
 
   let payload;
@@ -19,17 +19,23 @@ exports.startTableSession = catchAsync(async (req, res, next) => {
   }
 
   const { m: merchantId, t: tableId } = payload;
+  console.log('Merchant Id :', merchantId + 'table Id ', tableId);
   if (!merchantId || !tableId) return next(new AppError('QR missing data', 400));
 
   const merchant = await Merchant.findById(merchantId).select('+qr_secret_key');
   if (!merchant || !merchant.qr_secret_key) return next(new AppError('Invalid merchant', 404));
 
-  const expectedSig = crypto
+  // Re-create the exact same payload string that was signed
+  const payloadString = JSON.stringify({ m: merchantId.toString(), t: tableId.toString() });
+
+  // Re-compute signature (hex)
+  const expectedSignature = crypto
     .createHmac('sha256', merchant.qr_secret_key)
-    .update(Buffer.from(data, 'base64url').toString('utf8'))
+    .update(payloadString)
     .digest('hex');
 
-  if (!crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(signature))) {
+  // Compare hex strings – safe & simple
+  if (expectedSignature !== signature) {
     return next(new AppError('Fake QR code', 403));
   }
 
@@ -70,23 +76,38 @@ exports.startTableSession = catchAsync(async (req, res, next) => {
   });
 });
 
-/* ====================== 2. PROTECT TABLE SESSION (All Menu/Order Routes) ====================== */
 exports.protectTableSession = catchAsync(async (req, res, next) => {
-  let token = req.headers.authorization?.split(' ')[1];
-  if (!token) return next(new AppError('Session token required', 401));
+  // 1. Get token from header: "Bearer <token>"
+  let token;
+  if (req.headers.authorization?.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
 
+  if (!token) {
+    return next(new AppError('You are not logged in. Please scan the QR code again.', 401));
+  }
+
+  // 2. Find active session by token
   const session = await CustomerSession.findOne({
     token,
     isActive: true,
     expiresAt: { $gt: new Date() },
-  });
+  }).select('+token'); // just in case
 
-  if (!session) return next(new AppError('Invalid or expired session', 401));
+  if (!session) {
+    return next(new AppError('Session expired or invalid. Please scan the QR code again.', 401));
+  }
 
+  // 3. OPTIONAL: Extend session lifetime on every request (sliding expiration)
+  session.expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // +4 hours
+  await session.save();
+
+  // 4. Attach everything to req — this is the key!
   req.tableSession = session;
-  req.merchantId = session.merchant;
+  req.merchantId = session.merchant; // This is what you asked for
   req.tableId = session.tableId;
-  req.customer = session.customer; // null or real customer ID
+  req.customerId = session.customer; // null if anonymous, ObjectId if logged in
+  req.isAnonymous = !session.customer; // useful flag
 
   next();
 });
@@ -117,7 +138,7 @@ exports.freeTable = catchAsync(async (req, res, next) => {
 /* ====================== 4. LINK ACCOUNT (After loginOrCreate) ====================== */
 exports.linkAccount = catchAsync(async (req, res, next) => {
   const { sessionToken } = req.body;
-  const customer = req.customer; // from your JWT protect middleware
+  const customer = req.customer;
 
   const session = await CustomerSession.findOne({
     token: sessionToken,
@@ -145,7 +166,7 @@ exports.getAllSessions = catchAsync(async (req, res, next) => {
   const sessions = await CustomerSession.find({
     merchant: merchantId,
     isActive: true,
-    expiresAt: { $gt: new Date() },
+    // expiresAt: { $gt: new Date() },
   })
     .populate('tableId', 'tableNumber status')
     .populate('customer', 'fullName phone');
@@ -156,7 +177,6 @@ exports.getAllSessions = catchAsync(async (req, res, next) => {
     data: sessions,
   });
 });
-
 
 // ===================== GET SESSION BY TABLE =====================
 exports.getSessionByTable = catchAsync(async (req, res, next) => {

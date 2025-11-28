@@ -63,5 +63,5 @@ customerSessionSchema.index(
     unique: true,
   }
 );
-
+customerSessionSchema.index({ tableId: 1, isActive: true }, { unique: true, sparse: true });
 module.exports = mongoose.model('CustomerSession', customerSessionSchema);

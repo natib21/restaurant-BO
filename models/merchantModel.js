@@ -1,5 +1,7 @@
+// models/merchantModel.js
 const mongoose = require('mongoose');
 const validator = require('validator');
+const crypto = require('crypto');
 
 const officialRepresentativeSchema = new mongoose.Schema({
   fullName: {
@@ -16,7 +18,6 @@ const officialRepresentativeSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Representative phone number is required'],
     trim: true,
-    // Re-use the Ethiopian mobile pattern validation
     validate: {
       validator: function (v) {
         return /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, ''));
@@ -25,156 +26,211 @@ const officialRepresentativeSchema = new mongoose.Schema({
     },
   },
 });
-const merchantSchema = new mongoose.Schema({
-  businessName: {
-    type: String,
-    required: [true, 'Business name is required'],
-    trim: true,
-    unique: true,
-    maxlength: [100, 'Business name cannot exceed 100 characters'],
-  },
-  ownerName: {
-    type: officialRepresentativeSchema,
-    required: false,
-  },
 
-  sector: {
-    type: String,
-    enum: ['Food & Beverage', 'Retail', 'Service', 'Technology', 'Other'],
-    trim: true,
-  },
-  phone: {
-    type: String,
-    unique: true,
-    trim: true,
-    sparse: true,
-    validate: {
-      validator: function (v) {
-        return /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, '')); // Ethiopian mobile pattern
-      },
-      message: 'Please provide a valid Ethiopian phone number',
+const merchantSchema = new mongoose.Schema(
+  {
+    businessName: {
+      type: String,
+      required: [true, 'Business name is required'],
+      trim: true,
+      unique: true,
+      maxlength: [100, 'Business name cannot exceed 100 characters'],
     },
-  },
-  tinId: {
-    type: String,
-    trim: true,
-  },
-  location: {
-    type: { type: String, enum: ['Point'], default: 'Point' },
-    coordinates: {
-      type: [Number],
-      default: [0, 0],
+
+    ownerName: {
+      type: officialRepresentativeSchema,
+      required: false,
+    },
+
+    sector: {
+      type: String,
+      enum: ['Food & Beverage', 'Retail', 'Service', 'Technology', 'Other'],
+      trim: true,
+    },
+
+    phone: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
       validate: {
-        validator: function (coords) {
-          return (
-            coords.length === 2 &&
-            coords[0] >= -180 &&
-            coords[0] <= 180 &&
-            coords[1] >= -90 &&
-            coords[1] <= 90
-          );
+        validator: function (v) {
+          return v ? /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, '')) : true;
         },
-        message: 'Invalid coordinates',
+        message: 'Please provide a valid Ethiopian phone number',
       },
     },
-    wereda: { type: String, trim: true },
-    city: { type: String, trim: true },
-    subCity: { type: String, trim: true },
-    building: { type: String, trim: true },
-  },
-  status: {
-    type: String,
-    enum: ['pending', 'approved', 'suspended', 'inactive'],
-    default: 'pending',
-  },
-  cuisineType: {
-    type: [String],
-    default: [],
-  },
-  logo: {
-    type: String, // image URL
-  },
-  coverImage: {
-    type: String, // for customer-facing app branding
-  },
 
-  subscriptionPlan: {
-    type: String,
-    enum: ['free', 'basic', 'pro', 'enterprise'],
-    default: 'free',
-  },
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
-  mode: {
-    type: String,
-    default: 'Test',
-  },
-  apiKey: {
-    type: String,
-    select: false,
-  },
-  approvedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-  },
-  menu: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Menu',
-  },
-  order: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
-  },
-  table: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Tables',
-  },
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-  },
-  qr_secret_key: {
-    type: String,
-    select: false, // NEVER expose in API responses
-    default: function () {
-      return require('crypto').randomBytes(64).toString('hex');
+    tinId: {
+      type: String,
+      trim: true,
+      uppercase: true,
     },
-  },
-  // Social connections
-  facebookPageId: String,
-  facebookPageToken: String,
-  telegramBotToken: String, // same for all (or per merchant)
-  telegramChannel: String, // e.g., @selamscoffee
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
 
-merchantSchema.pre('save', function (next) {
-  this.updatedAt = Date.now();
-  next();
-});
-merchantSchema.pre('save', function (next) {
-  if (!this.qr_secret_key) {
-    this.qr_secret_key = require('crypto').randomBytes(64).toString('hex');
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        default: [0, 0],
+      },
+      wereda: String,
+      city: String,
+      subCity: String,
+      building: String,
+    },
+
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'suspended', 'inactive'],
+      default: 'pending',
+    },
+
+    cuisineType: {
+      type: [String],
+      default: [],
+    },
+
+    // ──────────────────────── BRANDING ────────────────────────
+    brandColor: {
+      type: String,
+      default: '#1A1A2E',
+      match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
+      uppercase: true,
+      trim: true,
+    },
+
+    logo: {
+      url: { type: String, validate: [validator.isURL, 'Invalid logo URL'] },
+      public_id: String,
+    },
+
+    coverImage: {
+      url: { type: String, validate: [validator.isURL, 'Invalid cover image URL'] },
+      public_id: String,
+    },
+
+    // ──────────────────────── SETTINGS (THE ONE YOU WANTED) ────────────────────────
+    settings: {
+      // QR & Table Experience
+      showTableNumberOnQR: { type: Boolean, default: true },
+      qrStyle: {
+        type: String,
+        enum: ['classic', 'modern', 'rounded', 'dots'],
+        default: 'modern',
+      },
+      qrLogoEnabled: { type: Boolean, default: true },
+      qrForegroundColor: {
+        type: String,
+        default: '#000000',
+        match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
+      },
+      qrBackgroundColor: {
+        type: String,
+        default: '#FFFFFF',
+        match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
+      },
+
+      // Ordering Workflow
+      autoAcceptOrders: { type: Boolean, default: false },
+      requireWaiterConfirmation: { type: Boolean, default: false },
+      prepTimeMinutes: {
+        type: Number,
+        default: 15,
+        min: [5, 'Prep time must be at least 5 minutes'],
+        max: [180, 'Prep time cannot exceed 3 hours'],
+      },
+
+      // Tips & Payments
+      tipsEnabled: { type: Boolean, default: true },
+      tipOptions: {
+        type: [Number],
+        default: [10, 15, 20],
+        validate: {
+          validator: arr => arr.every(n => n > 0 && n <= 100),
+          message: 'Tip percentages must be between 1 and 100',
+        },
+      },
+      allowCustomTip: { type: Boolean, default: true },
+
+      // Language
+      language: {
+        type: String,
+        enum: ['en', 'am', 'both'],
+        default: 'both',
+      },
+      defaultLanguage: {
+        type: String,
+        enum: ['en', 'am'],
+        default: 'am',
+      },
+
+      // Notifications
+      notifications: {
+        orderSoundEnabled: { type: Boolean, default: true },
+        newOrderSound: { type: String, default: 'default' },
+        smsNotifications: { type: Boolean, default: false },
+        emailNotifications: { type: Boolean, default: true },
+      },
+
+      // Currency & Tax
+      currency: {
+        type: String,
+        enum: ['ETB', 'USD'],
+        default: 'ETB',
+      },
+      taxRate: { type: Number, default: 15, min: 0, max: 100 },
+      serviceCharge: { type: Number, default: 0, min: 0, max: 100 },
+
+      // Online Features
+      onlineOrderingEnabled: { type: Boolean, default: true },
+      deliveryEnabled: { type: Boolean, default: false },
+      pickupEnabled: { type: Boolean, default: true },
+    },
+
+    subscriptionPlan: {
+      type: String,
+      enum: ['free', 'basic', 'pro', 'enterprise'],
+      default: 'free',
+    },
+
+    isActive: { type: Boolean, default: true },
+    mode: { type: String, default: 'Test' },
+
+    apiKey: { type: String, select: false },
+    qr_secret_key: {
+      type: String,
+      select: false,
+      default: () => crypto.randomBytes(64).toString('hex'),
+    },
+
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    menu: { type: mongoose.Schema.Types.ObjectId, ref: 'Menu' },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+    // Social
+    facebookPageId: String,
+    facebookPageToken: String,
+    telegramBotToken: String,
+    telegramChannel: String,
+  },
+  {
+    timestamps: true, // ← This gives you createdAt & updatedAt automatically
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
-  this.updatedAt = Date.now();
-  next();
-});
-merchantSchema.index({ location: '2dsphere' });
+);
 
+// Indexes
+merchantSchema.index({ location: '2dsphere' });
 merchantSchema.index({ status: 1, isActive: 1 });
 merchantSchema.index({ subscriptionPlan: 1 });
 merchantSchema.index({ 'location.city': 1, 'location.subCity': 1 });
 
+// Virtuals
 merchantSchema.virtual('users', {
   ref: 'User',
   localField: '_id',
   foreignField: 'merchant',
-  // match: { role: { $ne: null } },
 });
 
 merchantSchema.virtual('orderCount', {
@@ -184,24 +240,22 @@ merchantSchema.virtual('orderCount', {
   count: true,
 });
 
-// ✅ ADD - Method to check if merchant can accept orders
+// Methods
 merchantSchema.methods.canAcceptOrders = function () {
   return this.status === 'approved' && this.isActive === true;
 };
 
-// ✅ ADD - Method to get display name
 merchantSchema.methods.getDisplayName = function () {
-  return this.businessName || this.legalName || 'Unnamed Merchant';
+  return this.businessName || 'Unnamed Merchant';
 };
 
-// ✅ QUERY MIDDLEWARE - Exclude inactive merchants by default
-/* merchantSchema.pre(/^find/, function(next) {
-  this.find({ status: { $ne: 'inactive' } });
+// Ensure qr_secret_key is always set
+merchantSchema.pre('save', function (next) {
+  if (!this.qr_secret_key) {
+    this.qr_secret_key = crypto.randomBytes(64).toString('hex');
+  }
   next();
-}); */
-
-merchantSchema.set('toObject', { virtuals: true });
-merchantSchema.set('toJSON', { virtuals: true });
+});
 
 const Merchant = mongoose.model('Merchant', merchantSchema);
 module.exports = Merchant;
