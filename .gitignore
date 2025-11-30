@@ -1,0 +1,97 @@
+# ───────────────────────────────
+# Node.js & Dependencies
+# ───────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ───────────────────────────────
+# Environment Variables
+# ───────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+config.env
+.env.example       # keep example, ignore real ones
+
+# ───────────────────────────────
+# Logs
+# ───────────────────────────────
+logs/
+*.log
+error.log
+debug.log
+npm-debug.log*
+
+# ───────────────────────────────
+# Build & Dist (if you have React/Vite frontend)
+# ───────────────────────────────
+dist/
+build/
+.out/
+.vercel/
+.netlify/
+*.tsbuildinfo
+
+# ───────────────────────────────
+# OS & Editor Files
+# ───────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.project
+.settings/
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ───────────────────────────────
+# Testing & Coverage
+# ───────────────────────────────
+coverage/
+.nyc_output/
+jest-cache/
+
+# ───────────────────────────────
+# Temporary Files
+# ───────────────────────────────
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# ───────────────────────────────
+# Deployment / CI
+# ───────────────────────────────
+.deploy/
+.vercel
+
+# ───────────────────────────────
+# Optional: Local MongoDB (if using local DB)
+# ───────────────────────────────
+data/
+dump/
+
+# ───────────────────────────────
+# Cloudinary / Uploads (never commit uploaded files)
+# ───────────────────────────────
+uploads/
+public/uploads/
+
+# ───────────────────────────────
+# Keep your env example so team knows what vars are needed
+# ───────────────────────────────
+# !.env.example
+
+# ───────────────────────────────
+# End of file
+# ───────────────────────────────
