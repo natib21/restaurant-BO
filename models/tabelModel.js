@@ -16,7 +16,6 @@ const tableSchema = new mongoose.Schema(
       required: [true, 'Table number is required'],
       trim: true,
       uppercase: true,
-      unique: true, // Global unique (you already have compound index too)
     },
 
     capacity: {

@@ -12,7 +12,7 @@ const { getIo } = require('../socket');
 // ====================================================
 const merchantScopedQuery = (query = {}, req) => ({
   ...query,
-  merchant: req.merchant._id,
+  merchant: req.merchantId,
 });
 
 // ====================================================
@@ -27,17 +27,22 @@ const buildOrderItems = async (items, merchantId) => {
   const orderItems = [];
 
   for (const item of items) {
+       if (!item.menuItemId) {
+    throw new AppError('Each item must have "menuItem" field (ObjectId)', 400);
+  }
     const menuItem = await MenuItem.findOne({
-      _id: item.menuItem,
+   
+      _id: item.menuItemId,
       merchant: merchantId, // ⛑ multi-tenant protection
-      isAvailable: true,
+      available: true,
     });
-
+    console.log("Item :- ",item , " merhcant :- ",merchantId)
     if (!menuItem) {
       throw new AppError('Menu item not found or unavailable', 400);
     }
 
-    const quantity = item.quantity || 1;
+    const quantity = Number(item.quantity) || 1;
+  if (quantity < 1) throw new AppError('Quantity must be at least 1', 400);
     const unitPrice = menuItem.price;
     const totalPrice = quantity * unitPrice;
 
@@ -129,13 +134,13 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
   // Build safe items
   const { orderItems, subtotal } = await buildOrderItems(
     items,
-    req.merchant._id // pass merchantId FIXED 🔥
+    req.merchantId // pass merchantId FIXED 🔥
   );
 
   const totalAmount = subtotal;
 
   const order = await Order.create({
-    merchant: req.merchant._id,
+    merchant: req.merchantId,
     customer: customerId,
     customerName: req.customer?.fullName || 'Guest',
     customerPhone: req.customer?.phone || null,

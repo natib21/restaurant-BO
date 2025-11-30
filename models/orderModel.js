@@ -95,7 +95,6 @@ const orderSchema = new Schema(
     assignedWaiter: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     assignedKitchenStaff: { type: Schema.Types.ObjectId, ref: 'User' },
   },
-
   {
     timestamps: true,
     toJSON: { virtuals: true },

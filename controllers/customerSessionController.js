@@ -166,7 +166,7 @@ exports.getAllSessions = catchAsync(async (req, res, next) => {
   const sessions = await CustomerSession.find({
     merchant: merchantId,
     isActive: true,
-    // expiresAt: { $gt: new Date() },
+    expiresAt: { $gt: new Date() },
   })
     .populate('tableId', 'tableNumber status')
     .populate('customer', 'fullName phone');

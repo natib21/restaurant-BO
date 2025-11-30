@@ -5,11 +5,11 @@ const router = express.Router({ mergeParams: true });
 const orderController = require('../controllers/orderController');
 const authController = require('../controllers/authController'); // your staff auth
 const protectTableSession = require('../controllers/customerSessionController'); // QR session
-
+const CustomerController = require('../controllers/customerController')
 // ====================================================
 //  CUSTOMER ROUTES (Protected by Table Session)
 // ====================================================
-router.use(protectTableSession.protectTableSession); // All below require active table session
+router.use(protectTableSession.protectTableSession,CustomerController.protectCustomer); // All below require active table session
 
 // Place new order
 router.route('/').post(orderController.placeOrder);

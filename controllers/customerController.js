@@ -196,8 +196,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
   });
 });
 exports.protectCustomer = catchAsync(async (req, res, next) => {
-  const id =
-    req.headers['x-customer-id'] || req.body.customerId || req.params.customerId || req.params.id;
+  const id = req.customerId;
   if (!id)
     return next(new AppError('Customer id is required (x-customer-id / customerId / params)', 401));
 
