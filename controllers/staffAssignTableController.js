@@ -4,7 +4,7 @@ const ApiFeatures = require('../utils/apiFeatures');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const StaffAssignment = require('../models/staffAssignTabelModel');
-
+const Role =require('../models/roleModel')
 // ====================================================================
 // ASSIGN TABLES TO STAFF (Main function – used by manager)
 // ====================================================================

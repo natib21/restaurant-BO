@@ -3,8 +3,8 @@ const User = require('../models/userModel');
 const catchAsync = require('./../utils/catchAsync'); // Wraps async functions to catch errors automatically
 const AppError = require('../utils/appError'); // Custom error class for operational errors
 const { promisify } = require('util');
-const mongoose = require('mongoose');
 const Merchant = require('../models/merchantModel');
+const Branch = require('../models/branchModel')
 const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
 const sendEmail = require('./../utils/email');
@@ -16,22 +16,33 @@ const MenuGroup = require('../models/menuGroupModel');
  * Payload includes: user ID and optionally merchant ID
  */
 
-const signToken = user => {
-  console.log('user : -', user);
+const signToken = (user) => {
   if (!user || !user._id) {
     throw new AppError('Invalid user for token generation', 500);
   }
 
-  const payload = { id: user._id };
-  if (user.merchant && user.merchant._id) {
-    payload.merchant = user.merchant._id.toString(); // Attach merchant context to token
+  const payload = {
+    id: user._id.toString(),
+  };
+
+  // Add merchant if exists
+  if (user.merchant?._id) {
+    payload.merchant = user.merchant._id.toString();
   }
 
-  return jwt.sign(
-    payload,
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE_IN } // e.g., '90d'
-  );
+  // CRITICAL: Add current branch to token
+  if (user.branch?._id) {
+    payload.branch = user.branch._id.toString();
+  }
+
+  // Optional: Add role name for quick checks
+  if (user.role?.name) {
+    payload.role = user.role.name;
+  }
+
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE_IN || '90d',
+  });
 };
 
 /**
@@ -94,7 +105,13 @@ exports.signup = catchAsync(async (req, res, next) => {
     phone,
     mode: 'Test',
   });
-
+ const mainBranch = await Branch.create({
+    merchant: newMerchant._id,
+    name: `${business} - Main Branch`,
+    phone,
+    address: '',
+    isMain: true
+  });
   // Find the master SUPER-MERCHANT-ADMIN role template
   const existingSuperAdminRole = await Role.findOne({ name: 'SUPER-MERCHANT-ADMIN' });
   if (!existingSuperAdminRole) {
@@ -113,6 +130,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     passwordConfirm,
     merchant: newMerchant._id,
     role: existingSuperAdminRole._id,
+    branch: mainBranch._id 
   });
 
   await MenuGroup.create({
@@ -129,17 +147,10 @@ exports.signup = catchAsync(async (req, res, next) => {
     path: 'role',
     select: 'name endpoint description tasks',
     populate: { path: 'tasks', select: 'name description target method' },
-  });
-
-  // Bug Fix Note: This block has a typo (`populatedUser` not defined)
-  // Should be `finalUser` instead
-  if (newUser.role?.name !== 'SUPER-ADMIN') {
-    finalUser = await finalUser.populate({
+  }).populate({
       path: 'merchant',
       select: 'businessName status mode',
     });
-  }
-
   createSendToken(finalUser, 201, res);
 });
 
@@ -163,14 +174,18 @@ exports.login = catchAsync(async (req, res, next) => {
   }
 
   // Populate role and permissions
-  const populatedUser = await User.findById(user._id).populate({
-    path: 'role',
-    select: 'name endpoint description tasks',
-    populate: {
-      path: 'tasks',
-      select: 'name endpoint method description',
-    },
-  });
+ const populatedUser = await User.findById(user._id).populate({
+  path: 'role',
+  select: 'name endpoint description tasks',
+  populate: {
+    path: 'tasks',
+    select: 'name endpoint method description',
+  },
+}).populate({
+  path: 'branch',            // <--- add this
+  select: 'name location isMain merchant'
+});
+
 
   createSendToken(populatedUser, 200, res);
 });
@@ -204,10 +219,21 @@ exports.protect = catchAsync(async (req, res, next) => {
     .populate({
       path: 'merchant',
       select: 'businessName status mode',
-    });
+    })
+    .populate({
+      path:"branch",
+      select:"isMain branchCode"
+    })
+    ;
 
   if (!currentUser) {
     return next(new AppError('User belonging to this token no longer exists.', 401));
+  }
+  // NEW: Branch validation — prevent using token from different branch
+  if (decoded.branch && currentUser.branch) {
+    if (decoded.branch !== currentUser.branch._id.toString()) {
+      return next(new AppError('You have been moved to a different branch. Please log in again.', 401));
+    }
   }
 
   // 4. Prevent token reuse after merchant change

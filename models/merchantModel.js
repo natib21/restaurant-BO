@@ -36,7 +36,27 @@ const merchantSchema = new mongoose.Schema(
       unique: true,
       maxlength: [100, 'Business name cannot exceed 100 characters'],
     },
+slug: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      match: [/^[a-z0-9-]+$/i, 'Slug can only contain letters, numbers and hyphens'],
+    },
 
+    customDomain: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      sparse: true,
+      unique: true,
+      validate: {
+        validator: v => !v || /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/.test(v),
+        message: 'Invalid custom domain',
+      },
+    },
+    customDomainVerified: { type: Boolean, default: false },
     ownerName: {
       type: officialRepresentativeSchema,
       required: false,
@@ -65,18 +85,6 @@ const merchantSchema = new mongoose.Schema(
       type: String,
       trim: true,
       uppercase: true,
-    },
-
-    location: {
-      type: { type: String, enum: ['Point'], default: 'Point' },
-      coordinates: {
-        type: [Number], // [longitude, latitude]
-        default: [0, 0],
-      },
-      wereda: String,
-      city: String,
-      subCity: String,
-      building: String,
     },
 
     status: {
@@ -129,17 +137,6 @@ const merchantSchema = new mongoose.Schema(
         default: '#FFFFFF',
         match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
       },
-
-      // Ordering Workflow
-      autoAcceptOrders: { type: Boolean, default: false },
-      requireWaiterConfirmation: { type: Boolean, default: false },
-      prepTimeMinutes: {
-        type: Number,
-        default: 15,
-        min: [5, 'Prep time must be at least 5 minutes'],
-        max: [180, 'Prep time cannot exceed 3 hours'],
-      },
-
       // Tips & Payments
       tipsEnabled: { type: Boolean, default: true },
       tipOptions: {
@@ -180,11 +177,6 @@ const merchantSchema = new mongoose.Schema(
       },
       taxRate: { type: Number, default: 15, min: 0, max: 100 },
       serviceCharge: { type: Number, default: 0, min: 0, max: 100 },
-
-      // Online Features
-      onlineOrderingEnabled: { type: Boolean, default: true },
-      deliveryEnabled: { type: Boolean, default: false },
-      pickupEnabled: { type: Boolean, default: true },
     },
 
     subscriptionPlan: {
@@ -197,15 +189,10 @@ const merchantSchema = new mongoose.Schema(
     mode: { type: String, default: 'Test' },
 
     apiKey: { type: String, select: false },
-    qr_secret_key: {
-      type: String,
-      select: false,
-      default: () => crypto.randomBytes(64).toString('hex'),
-    },
+    
 
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    menu: { type: mongoose.Schema.Types.ObjectId, ref: 'Menu' },
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  
 
     // Social
     facebookPageId: String,
@@ -219,7 +206,19 @@ const merchantSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+merchantSchema.virtual('publicWebsite').get(function () {
+  if (this.customDomain && this.customDomainVerified) {
+    return `https://${this.customDomain}`;
+  }
+  return `https://${this.slug}.menuroom.et`; // Change to your domain
+});
 
+// ─────── VIRTUAL: Branches ───────
+merchantSchema.virtual('branches', {
+  ref: 'Branch',
+  localField: '_id',
+  foreignField: 'merchant',
+});
 // Indexes
 merchantSchema.index({ location: '2dsphere' });
 merchantSchema.index({ status: 1, isActive: 1 });

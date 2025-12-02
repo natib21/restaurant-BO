@@ -84,6 +84,11 @@ const orderSchema = new Schema(
       enum: ['unpaid', 'paid', 'refunded'],
       default: 'unpaid',
     },
+    branch: {
+       type: mongoose.Schema.Types.ObjectId,
+        ref: 'Branch', 
+        required: true 
+      },
 
     placedAt: { type: Date, default: Date.now, immutable: true },
     acceptedAt: Date,

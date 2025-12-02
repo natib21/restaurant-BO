@@ -9,7 +9,7 @@ const router = express.Router();
 // =============================================================
 // Main public menu (auto detects lunch/dinner/happy hour etc.)
 router.get(
-  '/:MID/public',
+  '/public',
   customerAuthController.protectTableSession,
   menuController.getPublicMenu
 );

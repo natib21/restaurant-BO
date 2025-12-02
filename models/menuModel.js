@@ -71,7 +71,15 @@ const menuSchema = new mongoose.Schema(
       ],
       default: null,
     },
-
+    branches: {
+  type: [mongoose.Schema.Types.ObjectId],
+  ref: 'Branch',
+  required: true,
+  validate: {
+    validator: v => v.length > 0,
+    message: 'At least one branch is required'
+  }
+},
     isAlcoholic: { type: Boolean, default: false },
     alcoholPercentage: { type: Number, min: 0, max: 100, default: 0 },
 
@@ -132,12 +140,10 @@ const menuSchema = new mongoose.Schema(
 );
 
 // ========================= INDEXES =========================
-menuSchema.index({ merchant: 1, name: 1 }, { unique: true }); // Prevent duplicate names per restaurant
+
 menuSchema.index({ merchant: 1, available: 1 });
-menuSchema.index({ merchant: 1, inStock: 1 });
-menuSchema.index({ slug: 1 });
-menuSchema.index({ tags: 1 });
-menuSchema.index({ category: 1 });
+menuSchema.index({ merchant: 1, branches: 1 }); // fastest query
+menuSchema.index({ branches: 1, available: 1 });
 
 // ========================= MIDDLEWARE =========================
 // Generate unique slug + update timestamp

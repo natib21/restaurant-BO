@@ -10,6 +10,7 @@ const customerSchema = new Schema(
       required: true,
       index: true,
     },
+    branch: { type: Schema.Types.ObjectId, ref: 'Branch', index: true, default: null },
 
     fullName: {
       type: String,

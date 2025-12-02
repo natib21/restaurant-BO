@@ -86,6 +86,11 @@ const comboSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    branches: {
+  type: [mongoose.Schema.Types.ObjectId],
+  ref: 'Branch',
+  default: [], // allow global combos
+},
 
     validFrom: { type: Date },
     validUntil: { type: Date },
@@ -140,22 +145,23 @@ const comboSchema = new mongoose.Schema(
 );
 
 // ========================= INDEXES =========================
-comboSchema.index({ merchant: 1, isActive: 1 });
-comboSchema.index({ merchant: 1, priority: -1 });
-comboSchema.index({ validUntil: 1 });
-comboSchema.index({ tags: 1 });
+comboSchema.index({ branches: 1, isActive: 1 });
+comboSchema.index({ branches: 1, priority: -1 });
+comboSchema.index({ merchant: 1, branches: 1 });
+comboSchema.index({ validUntil: 1 }, { expireAfterSeconds: 0 }); // auto-delete expired combos!
 
 // ========================= MIDDLEWARE =========================
-comboSchema.pre('save', function (next) {
-  // Auto generate slug
-  if (this.isModified('name') || !this.slug) {
-    this.slug = require('slugify')(this.name, { lower: true }) + '-' + Date.now().toString(36);
+comboSchema.pre('save', async function (next) {
+  if (this.isModified('items') || !this.originalPrice) {
+    await this.populate('items.menuItem');
+    const total = this.items.reduce((sum, item) => {
+      if (item.menuItem?.defaultVariant?.price) {
+        return sum + (item.menuItem.defaultVariant.price * item.quantity);
+      }
+      return sum + (item.menuItem?.variants?.[0]?.price || 0) * item.quantity;
+    }, 0);
+    this.originalPrice = total;
   }
-
-  // Update timestamp
-  this.updatedAt = Date.now();
-
-  // Auto-fill nameFallback when saving
   next();
 });
 

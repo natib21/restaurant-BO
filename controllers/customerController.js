@@ -14,28 +14,30 @@ const ensureHistoryArray = customer => {
   if (!Array.isArray(customer.history)) customer.history = [];
 };
 exports.loginOrCreate = catchAsync(async (req, res, next) => {
-  const merchantId = req.merchantId; // from protectMerchant middleware
-  const tableId = req.tableId; // ← this is ObjectId from QR/session
-  const sessionToken = req.tableSession?.token; // from protectTableSession
+  const merchantId = req.merchant?._id || req.merchantId;
+  const branchId = req.branch?._id || req.branchId;
+  const tableId = req.table?._id || req.tableId;
+  const sessionToken = req.headers['x-session-token'] || req.body.sessionToken;
 
   const { fullName, phone, source = 'guest', telegramUser, facebookToken, tiktokToken } = req.body;
 
-  if (!merchantId) {
-    return next(new AppError('merchantId is required', 400));
-  }
+  if (!merchantId) return next(new AppError('Merchant not identified', 400));
 
+  // Base customer data
   const baseData = {
     merchant: merchantId,
     fullName: (fullName || 'Guest').trim(),
-    currentTable: tableId ? String(tableId) : null, // keep as string or ObjectId as you prefer
+    currentBranch: branchId || null,
+    currentTable: tableId ? String(tableId) : null,
     lastSeen: new Date(),
+    lastSeenBranch: branchId || null,
   };
 
-  // Build filter + customer data based on auth source
+  // Filter to find existing customer
   let filter = { merchant: merchantId };
   let customerData = { ...baseData };
 
-  // TELEGRAM AUTH
+  // ====================== AUTH SOURCE HANDLING ======================
   if (source === 'telegram' && telegramUser) {
     const { id, username, first_name, last_name, photo_url } = telegramUser;
     filter['telegram.id'] = String(id);
@@ -49,27 +51,31 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
       profilePic: photo_url || null,
     };
   }
-  // FACEBOOK AUTH
   else if (source === 'facebook' && facebookToken) {
     try {
-      const { data: fb } = await axios.get('https://graph.facebook.com/v20.0/me', {
-        params: { fields: 'id,name,picture.type(large)', access_token: facebookToken },
+      const { data } = await axios.get('https://graph.facebook.com/v20.0/me', {
+        params: { fields: 'id,name,email,picture.type(large)', access_token: facebookToken },
+        timeout: 8000,
       });
 
-      filter['facebook.id'] = fb.id;
+      filter['facebook.id'] = data.id;
       customerData.source = 'facebook';
-      customerData.fullName = fb.name || 'Facebook User';
-      customerData.facebook = { id: fb.id, profilePic: fb.picture?.data?.url || null };
+      customerData.fullName = data.name || 'Facebook User';
+      customerData.facebook = {
+        id: data.id,
+        email: data.email || null,
+        profilePic: data.picture?.data?.url || null,
+      };
     } catch (err) {
       return next(new AppError('Invalid or expired Facebook token', 401));
     }
   }
-  // TIKTOK AUTH
   else if (source === 'tiktok' && tiktokToken) {
     try {
       const { data } = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
         headers: { Authorization: `Bearer ${tiktokToken}` },
         params: { fields: 'open_id,username,avatar_url,display_name' },
+        timeout: 8000,
       });
 
       const user = data.data.user;
@@ -85,61 +91,56 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
       return next(new AppError('Invalid or expired TikTok token', 401));
     }
   }
-  // GUEST OR PHONE
-  else {
-    customerData.source = 'guest';
-    if (phone) {
-      const cleanPhone = phone.replace(/\s+/g, '');
-      if (cleanPhone) {
-        customerData.phone = cleanPhone;
-        filter.phone = cleanPhone;
-      }
+  else if (phone) {
+    const cleanPhone = phone.replace(/\s+/g, '');
+    const normalized = cleanPhone.startsWith('0') ? '+251' + cleanPhone.slice(1) : cleanPhone;
+
+    if (!/^\+251[79]\d{8}$/.test(normalized)) {
+      return next(new AppError('Invalid Ethiopian phone number. Use +2519xxxxxxxx or 09xxxxxxxx', 400));
     }
+
+    filter.phone = normalized;
+    customerData.phone = normalized;
+    customerData.source = 'phone';
+  } else {
+    customerData.source = 'guest';
   }
 
-  // ————————————————————————
-  // CORRECT SESSION LOOKUP (THIS WAS THE BUG!)
-  // ————————————————————————
+  // ====================== LINK TABLE SESSION (QR Code Flow) ======================
   let session = null;
-
-  if (sessionToken && tableId) {
-    console.log('Looking for session →', { sessionToken, tableId, merchantId });
-
-    session = await CustomerSession.findOne({
-      token: sessionToken,
-      merchant: merchantId,
-      tableId: tableId, // ← THIS IS THE CORRECT FIELD (ObjectId)
-      customer: null, // not linked yet
-      isActive: true,
-      expiresAt: { $gt: new Date() },
-    });
-
-    console.log('Session found →', session ? 'YES' : 'NO');
+  if (sessionToken && tableId && branchId) {
+    session = await CustomerSession.findOneAndUpdate(
+      {
+        token: sessionToken,
+        merchant: merchantId,
+        branch: branchId,
+        table: tableId,
+        customer: null,
+        isActive: true,
+        expiresAt: { $gt: new Date() },
+      },
+      { lastAccessedAt: new Date() },
+      { new: true }
+    );
   }
 
-  // Try to find existing customer
+  // ====================== FIND EXISTING CUSTOMER ======================
   let customer = await Customer.findOne(filter);
 
-  // ————————————————————————
-  // EXISTING CUSTOMER
-  // ————————————————————————
   if (customer) {
-    customer.fullName = customerData.fullName || customer.fullName;
-    customer.currentTable = tableId ? String(tableId) : customer.currentTable;
+    // Update existing customer
+    Object.assign(customer, customerData);
     customer.lastSeen = new Date();
+    customer.lastSeenBranch = branchId || customer.lastSeenBranch;
 
     // Merge social data
-    if (customerData.telegram) Object.assign(customer.telegram || {}, customerData.telegram);
-    if (customerData.facebook) Object.assign(customer.facebook || {}, customerData.facebook);
-    if (customerData.tiktok) Object.assign(customer.tiktok || {}, customerData.tiktok);
+    ['telegram', 'facebook', 'tiktok'].forEach(platform => {
+      if (customerData[platform]) {
+        customer[platform] = { ...customer[platform], ...customerData[platform] };
+      }
+    });
 
-    // Upgrade source if better
-    const sourcePriority = { guest: 1, phone: 2, telegram: 3, facebook: 3, tiktok: 3 };
-    if (sourcePriority[customerData.source] > (sourcePriority[customer.source] || 0)) {
-      customer.source = customerData.source;
-    }
-
-    // Link the anonymous session to this customer
+    // Link session if found
     if (session) {
       session.customer = customer._id;
       await session.save();
@@ -148,7 +149,10 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     ensureHistoryArray(customer);
     customer.history.push({
       action: 'login',
-      details: `Logged in via ${customer.source}${session ? ' and linked table session' : ''}`,
+      source: customerData.source,
+      branch: branchId,
+      table: tableId,
+      details: session ? 'Seated via QR code' : 'Logged in',
       addedAt: new Date(),
     });
 
@@ -158,18 +162,13 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
       status: 'success',
       message: session ? 'Welcome back! You are now seated.' : 'Logged in successfully',
       existing: true,
-      linkedToTable: !!session,
+      seated: !!session,
       data: { customer },
     });
   }
 
-  // ————————————————————————
-  // NEW CUSTOMER
-  // ————————————————————————
-  customer = await Customer.create({
-    ...customerData,
-    source: customerData.source || 'guest',
-  });
+  // ====================== CREATE NEW CUSTOMER ======================
+  customer = await Customer.create(customerData);
 
   if (session) {
     session.customer = customer._id;
@@ -179,7 +178,10 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
   ensureHistoryArray(customer);
   customer.history.push({
     action: 'signup',
-    details: `Created via ${customer.source}${session ? ' and seated at table' : ''}`,
+    source: customerData.source,
+    branch: branchId,
+    table: tableId,
+    details: session ? 'First time via QR code' : 'New account created',
     addedAt: new Date(),
   });
 
@@ -187,11 +189,9 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
 
   res.status(201).json({
     status: 'success',
-    message: session
-      ? 'Account created! Welcome, you are now seated.'
-      : 'Account created successfully',
+    message: session ? 'Welcome! You are now seated.' : 'Account created successfully',
     existing: false,
-    linkedToTable: !!session,
+    seated: !!session,
     data: { customer },
   });
 });

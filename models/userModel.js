@@ -96,6 +96,11 @@ const userSchema = new mongoose.Schema({
     default: true,
     // select: false,
   },
+  branch: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Branch',
+},
+
   photo: String,
   passwordChangedAt: Date,
   passwordResetToken: String,

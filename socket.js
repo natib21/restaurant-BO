@@ -14,10 +14,6 @@ const createSocketServer = app => {
 
   io.on('connection', socket => { 
     logger.info(`Socket connected → ${socket.id}`);
-
-    // ==============================
-    // JOIN ROOMS
-    // ==============================
     socket.on('join-merchant', ({ merchantId }) => {
       socket.join(`merchant:${merchantId}`);
       logger.info(`Socket ${socket.id} joined merchant:${merchantId}`);

@@ -1,70 +1,73 @@
-// models/tableModel.js
+// models/Table.js
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const tableSchema = new mongoose.Schema(
   {
-    /* ====================== CORE TABLE INFO ====================== */
     merchant: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Merchant',
-      required: [true, 'Table must belong to a merchant'],
+      required: true,
+      index: true,
+    },
+
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      required: true,
       index: true,
     },
 
     tableNumber: {
       type: String,
-      required: [true, 'Table number is required'],
-      trim: true,
+      required: true,
       uppercase: true,
+      trim: true,
+      minlength: 1,
+      maxlength: 10,
     },
 
     capacity: {
       type: Number,
-      required: [true, 'Capacity is required'],
+      required: true,
       min: [1, 'Capacity must be at least 1'],
+      max: [50, 'Capacity too high'],
     },
 
     status: {
       type: String,
       enum: ['available', 'occupied', 'reserved', 'needs-cleaning', 'disabled'],
       default: 'available',
+      index: true,
     },
 
     location: {
       type: String,
-      enum: ['indoor', 'outdoor', 'rooftop', 'terrace', 'vip', 'bar', 'window', 'balcony'],
+      enum: ['indoor', 'outdoor', 'rooftop', 'terrace', 'vip', 'bar', 'window', 'balcony', 'garden'],
       default: 'indoor',
     },
 
     section: {
       type: String,
       trim: true,
-      default: null,
-      // Example: "Main Hall", "Terrace A", "VIP Lounge"
+      default: 'Main',
+      index: true,
     },
 
-    /* ====================== SECURE REUSABLE QR ====================== */
-    qrCode: {
+    // === SECURE REUSABLE QR SYSTEM ===
+    qrSecret: {
       type: String,
-      // data:image/png;base64,... → ready to display in admin panel
-    },
-    qrData: {
-      type: String,
-      // base64url encoded payload: { m: "...", t: "..." }
-    },
-    qrSignature: {
-      type: String,
-      // HMAC-SHA256 hex signature
-    },
-    qrGeneratedAt: {
-      type: Date,
-      // When the current QR was created (useful for audit)
+      default: () => crypto.randomBytes(32).toString('hex'),
+      select: false, // never expose
     },
 
-    /* ====================== SOFT DELETE ====================== */
+    qrCode: { type: String }, // base64 PNG
+    qrGeneratedAt: { type: Date },
+
     isActive: {
       type: Boolean,
       default: true,
+      index: true,
     },
   },
   {
@@ -74,73 +77,100 @@ const tableSchema = new mongoose.Schema(
   }
 );
 
-/* ====================== VIRTUALS ====================== */
+// ====================== INDEXES (Lightning Fast) ======================
+tableSchema.index({ merchant: 1, tableNumber: 1 }, { unique: true });
+tableSchema.index({ branch: 1, status: 1 });
+tableSchema.index({ branch: 1, section: 1 });
+tableSchema.index({ branch: 1, isActive: 1 });
+tableSchema.index({ merchant: 1, branch: 1, status: 1 });
 
-// Real-time current staff assigned to this table
-tableSchema.virtual('currentStaff', {
-  ref: 'StaffAssignment',
-  localField: '_id',
-  foreignField: 'tables.table',
-  justOne: false,
-  match: { isActive: true },
-});
-
-// All orders linked to this table (past + present)
-tableSchema.virtual('orders', {
+// ====================== VIRTUALS ======================
+tableSchema.virtual('currentOrder', {
   ref: 'Order',
   localField: '_id',
   foreignField: 'table',
-  justOne: false,
+  justOne: true,
+  match: { status: { $in: ['pending', 'accepted', 'preparing', 'ready'] } },
 });
 
-/* ====================== INDEXES (Performance + Constraints) ====================== */
+tableSchema.virtual('activeSession', {
+  ref: 'CustomerSession',
+  localField: '_id',
+  foreignField: 'table',
+  justOne: true,
+  match: { isActive: true, expiresAt: { $gt: new Date() } },
+});
 
-// Ensure one merchant can't have duplicate table numbers
-tableSchema.index({ merchant: 1, tableNumber: 1 }, { unique: true });
+// ====================== METHODS ======================
 
-// Fast queries by status, section, etc.
-tableSchema.index({ merchant: 1, status: 1 });
-tableSchema.index({ merchant: 1, section: 1 });
-tableSchema.index({ merchant: 1, isActive: 1 });
+// Generate signed QR payload: { t: tableId, b: branchId, exp: timestamp }
+tableSchema.methods.generateQRData = function () {
+  const payload = {
+    t: this._id.toString(),
+    b: this.branch.toString(),
+    m: this.merchant.toString(),
+    exp: Date.now() + 365 * 24 * 60 * 60 * 1000, // 1 year
+  };
 
-/* ====================== INSTANCE METHOD: CHANGE TABLE ====================== */
-// Used by staff to move customers + orders to a different table
-tableSchema.methods.changeTable = async function (newTableId) {
-  const Order = mongoose.model('Order');
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', this.qrSecret)
+    .update(data)
+    .digest('hex');
+
+  return { data, signature };
+};
+
+// Get full QR URL (for printing)
+tableSchema.methods.getQRUrl = function () {
+  const { data, signature } = this.generateQRData();
+  return `${process.env.APP_URL}/qr?t=${data}&s=${signature}`;
+};
+
+// Regenerate QR (call when secret compromised or design change)
+tableSchema.methods.regenerateQR = async function () {
+  this.qrSecret = crypto.randomBytes(32).toString('hex');
+  this.qrGeneratedAt = new Date();
+  await this.save();
+  return this.getQRUrl();
+};
+
+// Move table + transfer session & orders
+tableSchema.methods.moveTo = async function (newTableId) {
+  const session = await mongoose.model('CustomerSession').findOne({
+    table: this._id,
+    isActive: true,
+    expiresAt: { $gt: new Date() },
+  });
 
   const newTable = await this.constructor.findById(newTableId);
-  if (!newTable) throw new Error('New table not found');
-  if (newTable.status !== 'available') throw new Error('New table is not available');
+  if (!newTable) throw new Error('Target table not found');
   if (newTable.merchant.toString() !== this.merchant.toString())
-    throw new Error('Tables must belong to the same restaurant');
+    throw new Error('Tables must be in same restaurant');
+
+  // Transfer active session
+  if (session) {
+    session.table = newTableId;
+    await session.save();
+  }
 
   // Transfer active orders
-  const result = await Order.updateMany(
+  await mongoose.model('Order').updateMany(
     {
       table: this._id,
-      status: { $in: ['pending', 'preparing', 'confirmed'] },
+      status: { $nin: ['completed', 'canceled'] },
     },
-    { $set: { table: newTableId } }
+    { table: newTableId }
   );
 
-  // Update table statuses
-  this.status = 'needs-cleaning'; // or 'available' if no cleaning needed
-  newTable.status = 'occupied';
+  // Update statuses
+  this.status = 'needs-cleaning';
+  newTable.status = session ? 'occupied' : 'available';
 
   await this.save({ validateBeforeSave: false });
   await newTable.save({ validateBeforeSave: false });
 
-  console.log(
-    `Moved ${result.modifiedCount} orders from ${this.tableNumber} → ${newTable.tableNumber}`
-  );
-
-  return {
-    message: 'Table changed successfully',
-    transferredOrders: result.modifiedCount,
-    oldTable: this.tableNumber,
-    newTable: newTable.tableNumber,
-  };
+  return { success: true, newTable: newTable.tableNumber };
 };
 
-/* ====================== EXPORT ====================== */
 module.exports = mongoose.model('Table', tableSchema);

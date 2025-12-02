@@ -27,7 +27,7 @@ router.post(
 
 /* ==================== STAFF ONLY ROUTES ==================== */
 router.patch(
-  '/free-table/:tableId',
+  '/free-table/:id',
   authController.protect, // staff/admin JWT
   authController.restrictTo(),
   customerAuthController.freeTable
