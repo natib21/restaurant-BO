@@ -4,7 +4,8 @@
   "description": "Restaurant Mgmt System that Automate the old System",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon server.js",
+    "start": "node server.js",
+    "dev": "nodemon server.js",
     "start:prod": "cross-env NODE_ENV=production nodemon server.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

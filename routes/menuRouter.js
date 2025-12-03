@@ -8,11 +8,7 @@ const router = express.Router();
 // 1. PUBLIC ROUTES – Customer sees active menu (auto day/time switch)
 // =============================================================
 // Main public menu (auto detects lunch/dinner/happy hour etc.)
-router.get(
-  '/:MID/public',
-  customerAuthController.protectTableSession,
-  menuController.getPublicMenu
-);
+router.get('/public', customerAuthController.protectTableSession, menuController.getPublicMenu);
 
 // FILTERED VERSIONS – All these MUST use SAME :merchantId
 

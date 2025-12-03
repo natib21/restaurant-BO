@@ -27,22 +27,21 @@ const buildOrderItems = async (items, merchantId) => {
   const orderItems = [];
 
   for (const item of items) {
-       if (!item.menuItemId) {
-    throw new AppError('Each item must have "menuItem" field (ObjectId)', 400);
-  }
+    if (!item.menuItemId) {
+      throw new AppError('Each item must have "menuItem" field (ObjectId)', 400);
+    }
     const menuItem = await MenuItem.findOne({
-   
       _id: item.menuItemId,
       merchant: merchantId, // ⛑ multi-tenant protection
       available: true,
     });
-    console.log("Item :- ",item , " merhcant :- ",merchantId)
+    console.log('Item :- ', item, ' merhcant :- ', merchantId);
     if (!menuItem) {
       throw new AppError('Menu item not found or unavailable', 400);
     }
 
     const quantity = Number(item.quantity) || 1;
-  if (quantity < 1) throw new AppError('Quantity must be at least 1', 400);
+    if (quantity < 1) throw new AppError('Quantity must be at least 1', 400);
     const unitPrice = menuItem.price;
     const totalPrice = quantity * unitPrice;
 

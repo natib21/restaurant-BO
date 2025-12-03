@@ -12,7 +12,7 @@ const createSocketServer = app => {
     cors: { origin: '*', methods: ['GET', 'POST'] },
   });
 
-  io.on('connection', socket => { 
+  io.on('connection', socket => {
     logger.info(`Socket connected → ${socket.id}`);
 
     // ==============================

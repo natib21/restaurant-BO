@@ -5,14 +5,12 @@ const slugify = require('slugify');
 const variantSchema = new mongoose.Schema({
   size: {
     type: String,
-    required: [true, 'Variant must have a size'],
     trim: true,
     maxlength: 50,
   },
   volume: { type: String }, // e.g., "500g", "1 piece"
   price: {
     type: Number,
-    required: [true, 'Variant must have a price'],
     min: [0, 'Price cannot be negative'],
   },
   calories: { type: Number },
@@ -81,12 +79,7 @@ const menuSchema = new mongoose.Schema(
     // Variants (most items have multiple sizes/prices)
     variants: {
       type: [variantSchema],
-      validate: {
-        validator: function (v) {
-          return v.length > 0;
-        },
-        message: 'At least one variant is required',
-      },
+      default: undefined,
     },
 
     // Fallback price if no variants (rare, for simple items)

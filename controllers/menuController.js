@@ -41,9 +41,16 @@ exports.uploadMenuPhoto = upload.single('image');
    =================================================================== */
 
 exports.resizeMenuPhoto = catchAsync(async (req, res, next) => {
-  if (!req.file) return next();
 
-  const merchantId = req.user.id; // merchant login
+  console.log('req.file →', req.file);        // ← THIS LINE
+  console.log('req.body →', req.body);        // ← AND THIS LINE
+
+  if (!req.file) {
+    console.log('No file uploaded → skipping resize');
+    return next(); // continue without image
+  }
+
+  const merchantId = req.user.merchant._id; // merchant login
   const itemName = (req.body.name || 'item').replace(/\s+/g, '_').toLowerCase();
   const filename = `menu-${merchantId}-${itemName}-${Date.now()}.jpeg`;
 
@@ -51,9 +58,10 @@ exports.resizeMenuPhoto = catchAsync(async (req, res, next) => {
     .resize(800, 800, { fit: 'cover', position: 'center' })
     .toFormat('jpeg')
     .jpeg({ quality: 92 })
-    .toFile(`public/img/menu/${filename}`);
+    .toFile(`uploads/img/menu/${filename}`);
 
   req.body.image = filename;
+  console.log("image - ", req.body.image)
   next();
 });
 
@@ -292,7 +300,7 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
   const filter = { merchant: req.user.merchant._id };
 
   const menuItems = await Menu.find(filter).sort('-createdAt');
-
+if (!menuItems) return next(new AppError('Menu item not found.', 404));
   const menuWithImages = menuItems.map(item => ({
     ...item.toObject(),
     image: item.image ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}` : null,
@@ -313,60 +321,83 @@ exports.getMenu = catchAsync(async (req, res, next) => {
   });
 
   if (!menuItem) return next(new AppError('Menu item not found.', 404));
-
+   const menuWithImages = {
+    ...menuItem.toObject(),
+     image: menuItem.image ? `${req.protocol}://${req.get('host')}/img/menu/${menuItem.image}` : null,
+   }
   res.status(200).json({
     status: 'success',
-    data: { menu: menuItem },
+    data: { menu: menuWithImages },
   });
 });
 
 exports.createNewMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-  console.log(merchantId);
-  // Extract body
-  const { name, type, category, variants, isSpecial, comboOffer } = req.body;
+  console.log(req.body)
+  // ─────── SUPER SAFE variants parsing (this fixes your error forever) ───────
+  let variants = undefined;
 
-  // Required fields
-  const required = { name, type, category, variants };
-  const missing = Object.keys(required).find(k => !required[k]);
-  if (missing) {
-    return next(
-      new AppError(
-        `Missing required field: ${missing} (name, type, category, menuGroup, variants)`,
-        400
-      )
-    );
+  if (req.body.variants != null && req.body.variants !== '') {
+    try {
+      // Handle both string (form-data) and real array (raw JSON)
+      const parsed = typeof req.body.variants === 'string' 
+        ? JSON.parse(req.body.variants) 
+        : req.body.variants;
+
+      if (!Array.isArray(parsed)) {
+        return next(new AppError('"variants" must be a JSON array', 400));
+      }
+      variants = parsed;
+    } catch (err) {
+      return next(new AppError('Invalid JSON in "variants" field – check quotes and brackets', 400));
+    }
   }
 
-  // Additional checks
-  if (!variants.length) return next(new AppError('At least one variant is required.', 400));
-  if (isSpecial && (!comboOffer?.comboPrice || !comboOffer?.description)) {
-    return next(new AppError('Special items require combo price & description.', 400));
+  // ─────── Required fields ───────
+  if (!req.body.name?.trim()) return next(new AppError('Name is required', 400));
+  if (!['food', 'drink'].includes(req.body.type)) return next(new AppError('Type must be food or drink', 400));
+  if (!req.body.category?.trim()) return next(new AppError('Category is required', 400));
+
+  // ─────── Pricing: at least one of variants or price ───────
+  const hasVariants = Array.isArray(variants) && variants.length > 0;
+  const hasPrice = req.body.price !== undefined && req.body.price !== '' && req.body.price !== null;
+
+  if (!hasVariants && !hasPrice) {
+    return next(new AppError('Either "variants" array or "price" is required', 400));
   }
 
-  // Validate menuGroup belongs to this merchant
-  /* const group = await MenuGroup.findOne({ _id: menuGroup, merchant: merchantId });
-  if (!group) return next(new AppError('Invalid menu section.', 400)); */
+  // ─────── Create menu item ───────
+  const newMenuItem = await Menu.create({
+    ...req.body,
+    merchant: merchantId,
+    name: req.body.name.trim(),
+    category: req.body.category.trim(),
 
-  const newMenuItem = await Menu.create({ ...req.body, merchant: merchantId });
+    // Clean pricing
+    variants: hasVariants ? variants : undefined,
+    price: hasVariants ? undefined : Number(req.body.price),
 
-  // 2. AUTOMATICALLY ADD TO SYSTEM DEFAULT GROUP
-  // Finds the system-managed group and pushes the new item's reference.
+    // Boolean fixes
+    isVeg: req.body.isVeg === 'true' ? true : req.body.isVeg === 'false' ? false : null,
+    isSpicy: req.body.isSpicy === 'true',
+    isAlcoholic: req.body.isAlcoholic === 'true',
+    available: req.body.available !== 'false',
+    inStock: req.body.inStock !== 'false',
+
+    image: req.body.image, // from sharp middleware
+  });
+
+  // Auto-add to default group
   await MenuGroup.findOneAndUpdate(
     { merchant: merchantId, isSystemDefault: true },
-    {
-      $push: {
-        items: {
-          menu: newMenuItem._id,
-          sortOrder: Date.now(), // Initial sort order
-        },
-      },
-    }
-    // The rest of the request body might include a menuGroup ID for a *custom* group.
-    // If so, you should handle that separately, but for now, we focus on the system group.
+    { $push: { items: { menu: newMenuItem._id, sortOrder: Date.now() } } },
+    { upsert: true }
   );
 
-  res.status(201).json({ status: 'success', data: { menu: newMenuItem } });
+  res.status(201).json({
+    status: 'success',
+    data: { menu: newMenuItem },
+  });
 });
 
 exports.updateMenu = catchAsync(async (req, res, next) => {
@@ -414,7 +445,7 @@ exports.deleteMenu = catchAsync(async (req, res, next) => {
 
 // controllers/menuController.js
 exports.getActiveMenu = catchAsync(async (req, res, next) => {
-  const merchantId = req.params.merchantId || req.user.merchant;
+  const merchantId = req.params.merchantId || req.user.merchant._id;
   const now = new Date();
   const currentDay = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
   const currentTime = now.toTimeString().slice(0, 5); // "14:30"
