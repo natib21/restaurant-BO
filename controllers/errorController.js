@@ -5,7 +5,7 @@ const handleCastErrorDb = err => {
   return new AppError(message, 400);
 };
 
-const handleDuplicationErrorDb = err => {
+/* const handleDuplicationErrorDb = err => {
   const errmMsg = err.errorResponse.errmsg;
   const regex = /dup key: { name: "(.*?)" }/;
 
@@ -14,7 +14,38 @@ const handleDuplicationErrorDb = err => {
   const duplicateName = match[0];
   const message = `Duplicate field Values: ${duplicateName} `;
   return new AppError(message, 400);
+}; */
+const handleDuplicationErrorDb = err => {
+  let message = 'Duplicate field value. Please use another value.';
+
+  try {
+    // Case 1: Modern MongoDB driver (err.keyValue exists)
+    if (err.keyValue) {
+      const field = Object.keys(err.keyValue)[0];
+      const value = err.keyValue[field];
+      message = `${field.charAt(0).toUpperCase() + field.slice(1)} "${value}" already exists.`;
+    }
+    // Case 2: Old format or Atlas (use errmsg)
+    else if (err.errmsg) {
+      const match = err.errmsg.match(/dup key: {[^}]*"([^"]+)"[^}]*}/) ||
+                    err.errmsg.match(/"([^"]+)".*dup key/);
+      if (match && match[1]) {
+        message = `Duplicate value: "${match[1]}". Please use another value.`;
+      }
+    }
+    // Case 3: Fallback from err.message
+    else if (err.message && err.message.includes('dup key')) {
+      const match = err.message.match(/"([^"]+)"/);
+      if (match) message = `Duplicate value: "${match[1]}".`;
+    }
+  } catch (e) {
+    // If anything fails, fall back to generic message
+    console.warn('Failed to parse duplicate error:', e);
+  }
+
+  return new AppError(message, 400);
 };
+
 
 const handleValidationError = err => {
   const errors = Object.values(err.errors).map(el => el.message);
