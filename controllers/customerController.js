@@ -119,7 +119,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
 
   // Try to find existing customer
   let customer = await Customer.findOne(filter);
-
+   console.log("Customer Found :-",customer)
   // ————————————————————————
   // EXISTING CUSTOMER
   // ————————————————————————
