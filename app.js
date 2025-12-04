@@ -92,9 +92,6 @@ app.use(
   )
 );
 
-// ----------------------------------------------------------------
-// 6. Development-only pretty morgan (optional, you already had it)
-// ----------------------------------------------------------------
 if (process.env.NODE_ENV === 'development') {
   // This will print the classic `GET /api/users 200 1.234 ms` in the console
   // while the full line still goes to Winston (so you get both)

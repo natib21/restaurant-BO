@@ -67,3 +67,4 @@
 {"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.restaurant.k0gc3.mongodb.net","timestamp":"2025-12-03T17:18:30.577Z"}
 {"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-12-03T17:19:06.600Z"}
 {"level":"error","message":"UNHANDLED REJECTION: Error - queryTxt ETIMEOUT restaurant.k0gc3.mongodb.net","timestamp":"2025-12-03T17:19:54.191Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongoServerError - bad auth : authentication failed","timestamp":"2025-12-04T09:34:58.195Z"}
