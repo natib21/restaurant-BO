@@ -18,11 +18,7 @@ const createSocketServer = app => {
   });
 
   io.on('connection', socket => {
-<<<<<<< HEAD
-    logger.info(`Socket connected → ${socket.id}`);
-=======
     logger.info(`Connection established: ${socket.id}`);
->>>>>>> branch_mgmt
 
     socket.on('setup:session', ({ branchId, userId, permissions }) => {
       if (!branchId || !userId) return;
