@@ -106,6 +106,10 @@ router.patch(
   authController.restrictTo(),
   merchantController.activateMerchantUser
 );
+// GET /api/v1/merchants/branches/:branchId/users
+router
+  .route('/users/branch/:id')
+  .get(authController.restrictTo(), merchantController.getMerchantUsersByBranch);
 
 // ===================================================================
 // 4. MERCHANT CRUD (Back-office only)
@@ -126,7 +130,14 @@ router.get(
   authController.restrictTo(), // task: 'list-merchants'
   merchantController.getAllMerchants
 );
+router.get('/me', authController.restrictTo(), merchantController.getMe);
 
+router.patch(
+  '/me',
+  merchantController.uploadMerchantPhotos,
+  merchantController.processMerchantMedia,
+  merchantController.updateMe
+);
 // GET /api/v1/merchants/:id
 router.get(
   '/:id',

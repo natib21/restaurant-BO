@@ -3,18 +3,31 @@ const mongoose = require('mongoose');
 const slugify = require('slugify');
 
 const variantSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
+    maxlength: 60,
+    default: 'Regular', // fallback
+  },
+  // Keep size/volume for specific cases
   size: {
     type: String,
     trim: true,
     maxlength: 50,
+    // Remove 'required' or make it conditional
   },
-  volume: { type: String }, // e.g., "500g", "1 piece"
+  volume: {
+    type: String,
+    trim: true,
+    // e.g., "330ml", "Large", "500g"
+  },
   price: {
     type: Number,
     min: [0, 'Price cannot be negative'],
   },
   calories: { type: Number },
   available: { type: Boolean, default: true },
+  isDefault: { type: Boolean, default: false }, // useful for pre-selecting in UI
 });
 
 const menuSchema = new mongoose.Schema(
@@ -25,7 +38,6 @@ const menuSchema = new mongoose.Schema(
       required: [true, 'Menu item must belong to a merchant'],
       index: true,
     },
-
     name: {
       type: String,
       required: [true, 'Menu item must have a name'],
@@ -69,7 +81,6 @@ const menuSchema = new mongoose.Schema(
       ],
       default: null,
     },
-
     isAlcoholic: { type: Boolean, default: false },
     alcoholPercentage: { type: Number, min: 0, max: 100, default: 0 },
 
@@ -79,7 +90,7 @@ const menuSchema = new mongoose.Schema(
     // Variants (most items have multiple sizes/prices)
     variants: {
       type: [variantSchema],
-      default: undefined,
+      default: [], // ensures it's always an array
     },
 
     // Fallback price if no variants (rare, for simple items)
@@ -125,12 +136,10 @@ const menuSchema = new mongoose.Schema(
 );
 
 // ========================= INDEXES =========================
-menuSchema.index({ merchant: 1, name: 1 }, { unique: true }); // Prevent duplicate names per restaurant
+
 menuSchema.index({ merchant: 1, available: 1 });
-menuSchema.index({ merchant: 1, inStock: 1 });
-menuSchema.index({ slug: 1 });
-menuSchema.index({ tags: 1 });
-menuSchema.index({ category: 1 });
+menuSchema.index({ merchant: 1, branches: 1 }); // fastest query
+menuSchema.index({ branches: 1, available: 1 });
 
 // ========================= MIDDLEWARE =========================
 // Generate unique slug + update timestamp

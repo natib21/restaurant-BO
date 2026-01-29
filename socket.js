@@ -1,7 +1,7 @@
 // socket.js
 const http = require('http');
 const socketIo = require('socket.io');
-const logger = require('./utils/logger');
+const { logger } = require('./utils/logger');
 
 let io;
 
@@ -9,81 +9,95 @@ const createSocketServer = app => {
   const server = http.createServer(app);
 
   io = socketIo(server, {
-    cors: { origin: '*', methods: ['GET', 'POST'] },
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST'],
+    },
+    pingTimeout: 30000,
+    pingInterval: 15000,
   });
 
   io.on('connection', socket => {
+<<<<<<< HEAD
     logger.info(`Socket connected → ${socket.id}`);
+=======
+    logger.info(`Connection established: ${socket.id}`);
+>>>>>>> branch_mgmt
 
-    // ==============================
-    // JOIN ROOMS
-    // ==============================
-    socket.on('join-merchant', ({ merchantId }) => {
-      socket.join(`merchant:${merchantId}`);
-      logger.info(`Socket ${socket.id} joined merchant:${merchantId}`);
+    socket.on('setup:session', ({ branchId, userId, permissions }) => {
+      if (!branchId || !userId) return;
+
+      const branchRoom = `branch:${branchId}`;
+      socket.join(branchRoom);
+
+      if (Array.isArray(permissions)) {
+        permissions.forEach(perm => {
+          socket.join(`branch:${branchId}:perm:${perm}`);
+        });
+      }
+
+      socket.join(`user:${userId}`);
+
+      logger.info(
+        `User ${userId} synced with Branch ${branchId} (${permissions?.length || 0} permissions)`
+      );
     });
 
-    socket.on('join-role', ({ merchantId, role }) => {
-      socket.join(`merchant:${merchantId}:${role}`);
-      logger.info(`Socket ${socket.id} joined role room: ${role}`);
+    // ==========================================
+    // DYNAMIC ORDER EVENTS
+    // ==========================================
+
+    socket.on('order:create', order => {
+      const { branchId } = order;
+      if (!branchId) return;
+      console.log('orders ', order);
+      // Broadcast only to users with "ORDER_MANAGEMENT" or "KITCHEN_VIEW" permissions
+      // No matter what the Merchant named the role.
+      io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:new', order);
+      io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:new', order);
+
+      logger.info(`[Socket] New Order ${order.orderNumber} broadcasted via permissions.`);
     });
 
-    socket.on('join-table', ({ tableId }) => {
-      socket.join(`table:${tableId}`);
-      logger.info(`Socket ${socket.id} joined table:${tableId}`);
+    socket.on('table:sync', ({ branchId, tableId, status }) => {
+      if (!branchId) return;
+      io.to(`branch:${branchId}`).emit('table:updated', { tableId, status });
     });
 
-    // ==============================
-    // ORDER FLOW EVENTS
-    // ==============================
+    // ==========================================
+    // DYNAMIC NOTIFICATIONS
+    // ==========================================
 
-    // 1️⃣ NEW ORDER (customer)
-    socket.on('order:new', order => {
-      logger.info('SOCKET → New order: ' + JSON.stringify(order));
+    /**
+     * Send alerts to specific permission groups
+     * Example: "Alert all staff who have 'BILLING_ACCESS'"
+     */
+    socket.on('notification:broadcast', ({ branchId, targetPermission, data }) => {
+      const targetRoom = targetPermission
+        ? `branch:${branchId}:perm:${targetPermission}`
+        : `branch:${branchId}`;
 
-      io.to(`merchant:${order.merchant}`)
-        .to(`merchant:${order.merchant}:waiter`)
-        .to(`merchant:${order.merchant}:kitchen`)
-        .emit('order:new', order);
+      io.to(targetRoom).emit('notification', data);
     });
 
-    // 2️⃣ ACCEPT ORDER (waiter)
-    socket.on('order:accept', data => {
-      logger.info('SOCKET → Order accepted: ' + JSON.stringify(data));
+    // ==========================================
+    // ERROR & DISCONNECT
+    // ==========================================
 
-      io.to(`merchant:${data.merchantId}`).to(`table:${data.tableId}`).emit('order:accepted', data);
+    socket.on('disconnect', reason => {
+      logger.info(`Connection closed: ${socket.id} (${reason})`);
     });
 
-    // 3️⃣ PREPARING (kitchen)
-    socket.on('order:preparing', data => {
-      io.to(`merchant:${data.merchantId}`).emit('order:preparing', data);
+    socket.on('error', err => {
+      logger.error(`Socket error for ${socket.id}: ${err.message}`);
     });
-
-    // 4️⃣ READY (kitchen)
-    socket.on('order:ready', data => {
-      io.to(`merchant:${data.merchantId}:waiter`)
-        .to(`table:${data.tableId}`)
-        .emit('order:ready', data);
-    });
-
-    // 5️⃣ SERVED (waiter)
-    socket.on('order:served', data => {
-      io.to(`table:${data.tableId}`).emit('order:served', data);
-    });
-
-    // 6️⃣ COMPLETED (merchant or auto)
-    socket.on('order:completed', data => {
-      io.to(`merchant:${data.merchantId}`).emit('order:completed', data);
-    });
-
-    socket.on('disconnect', () => logger.info(`Socket disconnected → ${socket.id}`));
   });
 
   return server;
 };
 
 const getIo = () => {
-  if (!io) throw new Error('Socket.IO not initialized');
+  if (!io) throw new Error('Socket.io not initialized');
   return io;
 };
 

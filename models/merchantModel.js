@@ -1,32 +1,25 @@
-// models/merchantModel.js
 const mongoose = require('mongoose');
-const validator = require('validator');
-const crypto = require('crypto');
 
 const officialRepresentativeSchema = new mongoose.Schema({
-  fullName: {
+  fullName: { type: String, required: true, trim: true },
+  gender: { type: String, enum: ['Male', 'Female'], required: true },
+  email: {
     type: String,
-    required: [true, 'Representative full name is required'],
+    required: [true, 'Owner email is required'],
+    unique: true,
+    lowercase: true,
     trim: true,
-  },
-  gender: {
-    type: String,
-    enum: ['Male', 'Female', 'Other'],
-    required: [true, 'Representative gender is required'],
+    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address'],
   },
   phone: {
     type: String,
-    required: [true, 'Representative phone number is required'],
-    trim: true,
+    required: true,
     validate: {
-      validator: function (v) {
-        return /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, ''));
-      },
-      message: 'Please provide a valid Ethiopian representative phone number',
+      validator: v => /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, '')),
+      message: 'Invalid Ethiopian phone number',
     },
   },
 });
-
 const merchantSchema = new mongoose.Schema(
   {
     businessName: {
@@ -34,137 +27,120 @@ const merchantSchema = new mongoose.Schema(
       required: [true, 'Business name is required'],
       trim: true,
       unique: true,
-      maxlength: [100, 'Business name cannot exceed 100 characters'],
+      maxlength: 100,
     },
+    slug: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      match: [/^[a-z0-9-]+$/i, 'Slug can only contain letters, numbers, and hyphens'],
+    },
+    customDomain: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      sparse: true,
+      unique: true,
+      validate: {
+        validator: v =>
+          !v || /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/.test(v),
+        message: 'Invalid domain format',
+      },
+    },
+    customDomainVerified: { type: Boolean, default: false },
 
-    ownerName: {
-      type: officialRepresentativeSchema,
-      required: false,
-    },
+    owner: officialRepresentativeSchema,
 
     sector: {
       type: String,
-      enum: ['Food & Beverage', 'Retail', 'Service', 'Technology', 'Other'],
-      trim: true,
+      enum: ['Cafe', 'Restaurant', 'Hotel', 'Food Truck', 'Ghost Kitchen', 'Bakery', 'Other'],
+      default: 'Restaurant',
     },
-
     phone: {
       type: String,
       unique: true,
       sparse: true,
-      trim: true,
       validate: {
-        validator: function (v) {
-          return v ? /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, '')) : true;
-        },
-        message: 'Please provide a valid Ethiopian phone number',
+        validator: v => !v || /^\+?251[79]\d{8}$/.test(v.replace(/\s+/g, '')),
+        message: 'Invalid phone number',
       },
     },
-
-    tinId: {
-      type: String,
-      trim: true,
-      uppercase: true,
-    },
-
-    location: {
-      type: { type: String, enum: ['Point'], default: 'Point' },
-      coordinates: {
-        type: [Number], // [longitude, latitude]
-        default: [0, 0],
-      },
-      wereda: String,
-      city: String,
-      subCity: String,
-      building: String,
-    },
-
+    tinId: { type: String, trim: true, uppercase: true },
     status: {
       type: String,
       enum: ['pending', 'approved', 'suspended', 'inactive'],
       default: 'pending',
     },
+    cuisineType: { type: [String], default: [] },
 
-    cuisineType: {
-      type: [String],
-      default: [],
-    },
-
-    // ──────────────────────── BRANDING ────────────────────────
+    // BRANDING
     brandColor: {
       type: String,
       default: '#1A1A2E',
       match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
       uppercase: true,
+    },
+    logo: { url: String, public_id: String },
+    coverImage: { url: String, public_id: String },
+
+    // DEFAULT MENU (used by branches if not overridden)
+    masterMenu: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Menu',
+      default: null,
+    },
+
+    // COUNTER FOR BRANCH CODES
+    branchCounter: { type: Number, default: 0 },
+    location: {
+      address: { type: String, trim: true }, // Physical address string
+      city: { type: String, default: 'Addis Ababa' },
+      subcity: String,
+      woreda: String,
+      // GeoJSON for Map integration
+
+      coordinates: {
+        type: [Number],
+        default: [38.7578, 9.0192],
+      },
+    },
+    // LEGAL & KYC
+    tinId: {
+      type: String,
       trim: true,
+      uppercase: true,
+      validate: {
+        validator: v => !v || /^\d{10}$/.test(v), // Ethiopian TINs are usually 10 digits
+        message: 'TIN number must be exactly 10 digits',
+      },
     },
-
-    logo: {
-      url: { type: String, validate: [validator.isURL, 'Invalid logo URL'] },
-      public_id: String,
+    tradeLicense: {
+      licenseNumber: { type: String, trim: true },
+      url: { type: String },
+      public_id: { type: String },
+      verified: { type: Boolean, default: false }, // Useful for admin approval
     },
-
-    coverImage: {
-      url: { type: String, validate: [validator.isURL, 'Invalid cover image URL'] },
-      public_id: String,
-    },
-
-    // ──────────────────────── SETTINGS (THE ONE YOU WANTED) ────────────────────────
+    // SETTINGS (merchant-wide defaults)
     settings: {
-      // QR & Table Experience
       showTableNumberOnQR: { type: Boolean, default: true },
-      qrStyle: {
-        type: String,
-        enum: ['classic', 'modern', 'rounded', 'dots'],
-        default: 'modern',
-      },
+      qrStyle: { type: String, enum: ['classic', 'modern', 'rounded', 'dots'], default: 'modern' },
       qrLogoEnabled: { type: Boolean, default: true },
-      qrForegroundColor: {
-        type: String,
-        default: '#000000',
-        match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
-      },
-      qrBackgroundColor: {
-        type: String,
-        default: '#FFFFFF',
-        match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
-      },
+      qrForegroundColor: { type: String, default: '#000000', match: [/^#[0-9A-Fa-f]{6}$/i] },
+      qrBackgroundColor: { type: String, default: '#FFFFFF', match: [/^#[0-9A-Fa-f]{6}$/i] },
 
-      // Ordering Workflow
-      autoAcceptOrders: { type: Boolean, default: false },
-      requireWaiterConfirmation: { type: Boolean, default: false },
-      prepTimeMinutes: {
-        type: Number,
-        default: 15,
-        min: [5, 'Prep time must be at least 5 minutes'],
-        max: [180, 'Prep time cannot exceed 3 hours'],
-      },
-
-      // Tips & Payments
       tipsEnabled: { type: Boolean, default: true },
       tipOptions: {
         type: [Number],
         default: [10, 15, 20],
-        validate: {
-          validator: arr => arr.every(n => n > 0 && n <= 100),
-          message: 'Tip percentages must be between 1 and 100',
-        },
+        validate: [arr => arr.every(n => n > 0 && n <= 100), 'Tips must be 1–100%'],
       },
       allowCustomTip: { type: Boolean, default: true },
 
-      // Language
-      language: {
-        type: String,
-        enum: ['en', 'am', 'both'],
-        default: 'both',
-      },
-      defaultLanguage: {
-        type: String,
-        enum: ['en', 'am'],
-        default: 'am',
-      },
+      language: { type: String, enum: ['en', 'am', 'both'], default: 'both' },
+      defaultLanguage: { type: String, enum: ['en', 'am'], default: 'am' },
 
-      // Notifications
       notifications: {
         orderSoundEnabled: { type: Boolean, default: true },
         newOrderSound: { type: String, default: 'default' },
@@ -172,67 +148,91 @@ const merchantSchema = new mongoose.Schema(
         emailNotifications: { type: Boolean, default: true },
       },
 
-      // Currency & Tax
-      currency: {
-        type: String,
-        enum: ['ETB', 'USD'],
-        default: 'ETB',
-      },
+      currency: { type: String, enum: ['ETB', 'USD'], default: 'ETB' },
       taxRate: { type: Number, default: 15, min: 0, max: 100 },
       serviceCharge: { type: Number, default: 0, min: 0, max: 100 },
 
-      // Online Features
       onlineOrderingEnabled: { type: Boolean, default: true },
       deliveryEnabled: { type: Boolean, default: false },
       pickupEnabled: { type: Boolean, default: true },
+      autoAcceptOrders: { type: Boolean, default: false },
+      requireWaiterConfirmation: { type: Boolean, default: false },
+      prepTimeMinutes: { type: Number, default: 15, min: 5, max: 180 },
     },
 
+    trialStartedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    trialExpiresAt: {
+      type: Date,
+      default: function () {
+        // Automatically set to 14 days from the moment of creation
+        return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      },
+    },
+    isSubscriptionActive: {
+      type: Boolean,
+      default: false,
+    },
+    // Add this inside merchantSchema
+    currentSubscription: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subscription',
+    },
     subscriptionPlan: {
       type: String,
       enum: ['free', 'basic', 'pro', 'enterprise'],
       default: 'free',
     },
-
     isActive: { type: Boolean, default: true },
     mode: { type: String, default: 'Test' },
 
     apiKey: { type: String, select: false },
-    qr_secret_key: {
-      type: String,
-      select: false,
-      default: () => crypto.randomBytes(64).toString('hex'),
-    },
-
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    menu: { type: mongoose.Schema.Types.ObjectId, ref: 'Menu' },
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
-    // Social
     facebookPageId: String,
     facebookPageToken: String,
     telegramBotToken: String,
     telegramChannel: String,
   },
   {
-    timestamps: true, // ← This gives you createdAt & updatedAt automatically
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 );
 
-// Indexes
-merchantSchema.index({ location: '2dsphere' });
-merchantSchema.index({ status: 1, isActive: 1 });
-merchantSchema.index({ subscriptionPlan: 1 });
-merchantSchema.index({ 'location.city': 1, 'location.subCity': 1 });
+merchantSchema.virtual('trialDaysLeft').get(function () {
+  if (!this.trialExpiresAt) return 0;
+  const now = new Date();
+  const diff = this.trialExpiresAt - now;
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+});
+merchantSchema.virtual('hasActiveAccess').get(function () {
+  const now = new Date();
+  const isTrialValid = now <= this.trialExpiresAt;
+  return this.status === 'approved' && this.isActive && (isTrialValid || this.isSubscriptionActive);
+});
+merchantSchema.virtual('publicWebsite').get(function () {
+  if (this.customDomain && this.customDomainVerified) {
+    return `https://${this.customDomain}`;
+  }
+  return `https://${this.slug}.menuroom.et`;
+});
 
-// Virtuals
-merchantSchema.virtual('users', {
-  ref: 'User',
+merchantSchema.virtual('subscriptionHistory', {
+  ref: 'Subscription',
+  localField: '_id',
+  foreignField: 'merchant',
+});
+merchantSchema.virtual('branches', {
+  ref: 'Branch',
   localField: '_id',
   foreignField: 'merchant',
 });
 
+merchantSchema.virtual('users', { ref: 'User', localField: '_id', foreignField: 'merchant' });
 merchantSchema.virtual('orderCount', {
   ref: 'Order',
   localField: '_id',
@@ -242,20 +242,16 @@ merchantSchema.virtual('orderCount', {
 
 // Methods
 merchantSchema.methods.canAcceptOrders = function () {
-  return this.status === 'approved' && this.isActive === true;
+  return this.hasActiveAccess;
 };
 
 merchantSchema.methods.getDisplayName = function () {
   return this.businessName || 'Unnamed Merchant';
 };
 
-// Ensure qr_secret_key is always set
-merchantSchema.pre('save', function (next) {
-  if (!this.qr_secret_key) {
-    this.qr_secret_key = crypto.randomBytes(64).toString('hex');
-  }
-  next();
-});
+merchantSchema.methods.getMainBranch = async function () {
+  return await mongoose.model('Branch').findOne({ merchant: this._id, isMain: true });
+};
 
 const Merchant = mongoose.model('Merchant', merchantSchema);
 module.exports = Merchant;

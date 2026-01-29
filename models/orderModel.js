@@ -1,14 +1,13 @@
 // models/Order.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-
+const Counter = require('./CounterModel.js');
 /* -----------------------------------------------------
    Order Item Sub-schema (snapshot of menu at order time)
 ------------------------------------------------------ */
 const orderItemSchema = new Schema(
   {
-    menuItem: { type: Schema.Types.ObjectId, ref: 'MenuItem', required: true },
-    name: { type: String, required: true },
+    menuItem: { type: Schema.Types.ObjectId, ref: 'Menu', required: true },
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
     totalPrice: { type: Number, required: true, min: 0 },
@@ -32,11 +31,12 @@ const orderSchema = new Schema(
     customer: {
       type: Schema.Types.ObjectId,
       ref: 'Customer',
-      required: true,
+      required: false,
+      sparse: true,
       index: true,
     },
 
-    customerName: { type: String, required: true },
+    customerName: { type: String, required: true, trim: true },
     customerPhone: { type: String },
 
     // For dine-in orders
@@ -55,7 +55,6 @@ const orderSchema = new Schema(
     // Example: #T5-467, #DEL-893, #TAKE-105
     orderNumber: {
       type: String,
-      unique: true,
       required: true,
       index: true,
     },
@@ -84,8 +83,75 @@ const orderSchema = new Schema(
       enum: ['unpaid', 'paid', 'refunded'],
       default: 'unpaid',
     },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      required: true,
+    },
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        required: function () {
+          return this.orderType === 'delivery';
+        },
+        validate: {
+          validator: function (arr) {
+            // Skip check if not delivery (extra safety layer)
+            if (this.orderType !== 'delivery') return true;
+            return Array.isArray(arr) && arr.length === 2;
+          },
+          message: 'Delivery orders require coordinates as [longitude, latitude]',
+        },
+      },
 
+      city: {
+        type: String,
+        required: function () {
+          return this.orderType === 'delivery';
+        },
+        trim: true, // ← add this (auto-trim input)
+        validate: {
+          validator: function (val) {
+            if (this.orderType !== 'delivery') return true;
+            return typeof val === 'string' && val.trim().length > 0;
+          },
+          message: 'Delivery orders require a non-empty city name',
+        },
+      },
+      wereda: { type: String, trim: true },
+      subCity: { type: String, trim: true },
+      specificArea: { type: String, trim: true },
+      building: { type: String, trim: true },
+      formattedAddress: { type: String, trim: true },
+    },
+    paymentDetails: {
+      method: {
+        type: String,
+        enum: ['cash', 'mobile_banking', 'card', 'unspecified'],
+        default: 'unspecified',
+      },
+      bankName: {
+        type: String,
+        trim: true,
+      },
+      receiptImage: {
+        type: String,
+      },
+      transactionId: {
+        type: String,
+        trim: true,
+      },
+      paidAt: {
+        type: Date,
+      },
+    },
     placedAt: { type: Date, default: Date.now, immutable: true },
+    placedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     acceptedAt: Date,
     readyAt: Date,
     servedAt: Date,
@@ -109,47 +175,33 @@ const orderSchema = new Schema(
    - #TAKE-120    (takeaway)
    - #DEL-980     (delivery)
 ------------------------------------------------------ */
-orderSchema.pre('save', async function (next) {
+/* -----------------------------------------------------
+   Auto-generate Professional Order Number
+------------------------------------------------------ */
+// CHANGE 'save' TO 'validate'
+orderSchema.pre('validate', async function (next) {
   if (!this.isNew || this.orderNumber) return next();
+  if (!this.merchant || !this.branch) return next();
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Determine prefix
+    const today = new Date().toISOString().split('T')[0];
     let prefix = 'POS';
 
     if (this.orderType === 'dine_in' && this.tableNumber) {
-      prefix = this.tableNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    } else if (this.orderType === 'delivery') {
-      prefix = 'DEL';
-    } else if (this.orderType === 'takeaway') {
-      prefix = 'TAKE';
-    }
+      prefix = this.tableNumber.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'POS';
+    } else if (this.orderType === 'delivery') prefix = 'DEL';
+    else if (this.orderType === 'takeaway') prefix = 'TAKE';
 
-    // Get last order today matching prefix
-    const lastOrder = await this.constructor
-      .findOne(
-        {
-          merchant: this.merchant,
-          orderNumber: { $regex: `^#${prefix}-\\d+$` },
-          placedAt: { $gte: today },
-        },
-        { orderNumber: 1 }
-      )
-      .sort({ orderNumber: -1 })
-      .lean();
+    const counter = await Counter.findOneAndUpdate(
+      { merchantId: this.merchant, branchId: this.branch, date: today, prefix },
+      { $inc: { seq: 1 }, $setOnInsert: { prefix } },
 
-    let nextSeq = 1;
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
-    if (lastOrder?.orderNumber) {
-      const match = lastOrder.orderNumber.match(/-(\d+)$/);
-      if (match) nextSeq = parseInt(match[1]) + 1;
-    }
-
-    // Generate final order number
-    this.orderNumber = `#${prefix}-${nextSeq}`;
-
+    // Append milliseconds to ensure uniqueness if race conditions occur
+    const millis = Date.now() % 1000;
+    this.orderNumber = `#${prefix}-${counter.seq}-${millis}`;
     next();
   } catch (err) {
     next(err);
@@ -162,7 +214,6 @@ orderSchema.pre('save', async function (next) {
 orderSchema.index({ merchant: 1, status: 1, placedAt: -1 });
 orderSchema.index({ merchant: 1, status: 1, readyAt: -1 });
 orderSchema.index({ merchant: 1, table: 1 });
-orderSchema.index({ merchant: 1, orderNumber: 1 });
 orderSchema.index({ customer: 1, placedAt: -1 });
 orderSchema.index({ assignedWaiter: 1 });
 orderSchema.index({ placedAt: -1 });

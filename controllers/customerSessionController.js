@@ -5,7 +5,7 @@ const AppError = require('../utils/appError');
 const Table = require('../models/tabelModel');
 const Merchant = require('../models/merchantModel');
 const CustomerSession = require('../models/customerSessionModule');
-
+const Branch = require('../models/branchModel');
 /* ====================== 1. QR SCAN → START TABLE SESSION (Anonymous) ====================== */
 exports.startTableSession = catchAsync(async (req, res, next) => {
   const { data, s: signature } = req.query;
@@ -14,41 +14,53 @@ exports.startTableSession = catchAsync(async (req, res, next) => {
   let payload;
   try {
     payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+    console.log('DECODED PAYLOAD:', payload);
   } catch {
     return next(new AppError('Corrupted QR code', 400));
   }
 
-  const { m: merchantId, t: tableId } = payload;
-  console.log('Merchant Id :', merchantId + 'table Id ', tableId);
-  if (!merchantId || !tableId) return next(new AppError('QR missing data', 400));
+  const { m: merchantId, b: branchId, t: tableId } = payload;
 
-  const merchant = await Merchant.findById(merchantId).select('+qr_secret_key');
-  if (!merchant || !merchant.qr_secret_key) return next(new AppError('Invalid merchant', 404));
+  console.log('Merchant Id : ', merchantId + ' table Id ', tableId, 'Branch Id : ' + branchId);
+  if (!merchantId || !tableId || !branchId) return next(new AppError('QR missing data', 400));
+
+  const branch = await Branch.findById(branchId).select('+qrSecretKey');
+
+  if (!branch || !branch.qrSecretKey)
+    return next(new AppError('Branch QR secret key missing. Contact support.', 404));
 
   // Re-create the exact same payload string that was signed
-  const payloadString = JSON.stringify({ m: merchantId.toString(), t: tableId.toString() });
+  const payloadString = JSON.stringify({
+    m: merchantId.toString(),
+    b: branchId.toString(),
+    t: tableId.toString(),
+  });
+
+  console.log('branch Secret Me :', branch.qrSecretKey);
 
   // Re-compute signature (hex)
   const expectedSignature = crypto
-    .createHmac('sha256', merchant.qr_secret_key)
+    .createHmac('sha256', branch.qrSecretKey)
     .update(payloadString)
     .digest('hex');
 
+  console.log('Signature :' + signature, 'ExpectedSign : ' + expectedSignature);
   // Compare hex strings – safe & simple
   if (expectedSignature !== signature) {
     return next(new AppError('Fake QR code', 403));
   }
 
-  const table = await Table.findOne({ _id: tableId, merchant: merchantId });
+  const table = await Table.findOne({ _id: tableId, branch: branchId, merchant: merchantId });
   if (!table) return next(new AppError('Table not found', 404));
 
   // Block if table already in use
   const active = await CustomerSession.findOne({
-    tableId: table._id,
+    table: table._id,
+    branch: branchId,
     isActive: true,
     expiresAt: { $gt: new Date() },
   });
-  if (active) {
+  if (table.status !== 'available') {
     return next(new AppError('Table is in use. Please wait or ask staff.', 409));
   }
 
@@ -56,7 +68,8 @@ exports.startTableSession = catchAsync(async (req, res, next) => {
   await CustomerSession.create({
     customer: null,
     merchant: merchantId,
-    tableId: table._id,
+    table: table._id,
+    branch: branchId,
     token: sessionToken,
     expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours
     isActive: true,
@@ -69,8 +82,10 @@ exports.startTableSession = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       sessionToken,
-      tableId: table._id,
+      table: table._id,
       tableNumber: table.tableNumber,
+      branchId: branch._id,
+      merchantId: merchantId,
       message: 'Welcome!',
     },
   });
@@ -105,7 +120,7 @@ exports.protectTableSession = catchAsync(async (req, res, next) => {
   // 4. Attach everything to req — this is the key!
   req.tableSession = session;
   req.merchantId = session.merchant; // This is what you asked for
-  req.tableId = session.tableId;
+  req.tableId = session.table;
   req.customerId = session.customer; // null if anonymous, ObjectId if logged in
   req.isAnonymous = !session.customer; // useful flag
 
@@ -116,12 +131,12 @@ exports.protectTableSession = catchAsync(async (req, res, next) => {
 exports.freeTable = catchAsync(async (req, res, next) => {
   const { tableId } = req.params;
   const merchantId = req.user.merchant._id;
-
-  const table = await Table.findOne({ _id: tableId, merchant: merchantId });
+  const branchId = req.user.branch._id;
+  const table = await Table.findOne({ _id: tableId, branch: branchId, merchant: merchantId });
   if (!table) return next(new AppError('Table not found', 404));
 
   await CustomerSession.updateOne(
-    { tableId: table._id, isActive: true },
+    { table: table._id, branch: branchId, isActive: true },
     { isActive: false, expiresAt: new Date() }
   );
 
@@ -162,13 +177,16 @@ exports.linkAccount = catchAsync(async (req, res, next) => {
 // ===================== GET ALL ACTIVE TABLE SESSIONS (Admin) =====================
 exports.getAllSessions = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
+  const branchId = req.user.branch._id; // add branch filter
 
   const sessions = await CustomerSession.find({
     merchant: merchantId,
+    branch: branchId, // filter by branch
     isActive: true,
     expiresAt: { $gt: new Date() },
   })
-    .populate('tableId', 'tableNumber status')
+    .populate('table', 'tableNumber status')
+    .populate('branch', 'name location')
     .populate('customer', 'fullName phone');
 
   res.status(200).json({
@@ -181,20 +199,21 @@ exports.getAllSessions = catchAsync(async (req, res, next) => {
 // ===================== GET SESSION BY TABLE =====================
 exports.getSessionByTable = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
+  const branchId = req.user.branch._id; // add branch filter
   const { tableId } = req.params;
 
   const session = await CustomerSession.findOne({
-    tableId,
+    table: tableId,
+    branch: branchId, // filter by branch
     merchant: merchantId,
     isActive: true,
     expiresAt: { $gt: new Date() },
   })
     .populate('customer', 'fullName phone')
-    .populate('tableId', 'tableNumber status');
+    .populate('table', 'tableNumber status')
+    .populate('branch', 'name location');
 
-  if (!session) {
-    return next(new AppError('No active session for this table.', 404));
-  }
+  if (!session) return next(new AppError('No active session for this table.', 404));
 
   res.status(200).json({
     status: 'success',

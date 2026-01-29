@@ -7,6 +7,8 @@ const router = express.Router();
 // Restrict all routes to merchant admins
 router.use(authController.protect);
 
+router.get('/merchant-tasks', taskController.getMerchantTasks);
+
 router.use((req, res, next) => {
   console.log(req.user);
   if (req.user.role.name !== 'SUPER-ADMIN') {

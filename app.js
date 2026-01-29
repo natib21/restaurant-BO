@@ -7,7 +7,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-
+const cookieParser = require('cookie-parser');
 const AppError = require('./utils/appError');
 const GlobalErrorHandler = require('./controllers/errorController');
 
@@ -16,8 +16,9 @@ const { logger, morganStream } = require('./utils/logger'); // <-- NEW
 // ──────────────────────────────────────────────────────────────
 // Routers
 // ──────────────────────────────────────────────────────────────
-const menuGroupRouter = require('./routes/menuGroupRoute');
+const branchGroupRouter = require('./routes/branchMenuGroupRouter');
 const menuRouter = require('./routes/menuRouter');
+const menuGroupRouter = require('./routes/menuGroupRoute');
 const orderRouter = require('./routes/orderRouter');
 const userRouter = require('./routes/userRouter');
 const tableRouter = require('./routes/tableRouter');
@@ -28,12 +29,40 @@ const comboRouter = require('./routes/comboRouter');
 const assignTableRouter = require('./routes/staffAssignTabelRouter');
 const customerRouter = require('./routes/customerRouter');
 const customerSessionRouter = require('./routes/customerSessionRouter');
+const branchRouter = require('./routes/branchRouter');
+const subscriptionRouter = require('./routes/subscriptionRoutes');
 // ──────────────────────────────────────────────────────────────
 // App
 // ──────────────────────────────────────────────────────────────
 const app = express();
 
-app.use(cors());
+// app.use(cors());
+
+const allowedOrigins = [
+  'http://localhost:5173', // Vite dev server
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+  // Add your production frontend URL later, e.g.:
+  // 'https://yourapp.com',
+  // 'https://www.yourapp.com',
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true, // ← THIS IS REQUIRED for cookies
+  })
+);
 
 // ----------------------------------------------------------------
 // 1. Security middlewares (uncomment when you need them)
@@ -51,14 +80,16 @@ app.use('/api', limiter); */
 // 2. Static files
 // ----------------------------------------------------------------
 app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
-
+app.use('/img/combo', express.static(path.join(__dirname, 'uploads/img/combo')));
+app.use('/img/orderPayment', express.static(path.join(__dirname, 'uploads/img/orderPayment')));
+app.use('/img/merchants', express.static(path.join(__dirname, 'uploads/img/merchants')));
 // ----------------------------------------------------------------
 // 3. Body parsers & sanitizers
 // ----------------------------------------------------------------
 app.use(express.json({ limit: '100mb' }));
 app.use(mongoSanitize());
 app.use(hpp());
-
+app.use(cookieParser());
 // ----------------------------------------------------------------
 // 4. Request-ID + optional user/merchant IDs
 // ----------------------------------------------------------------
@@ -92,9 +123,6 @@ app.use(
   )
 );
 
-// ----------------------------------------------------------------
-// 6. Development-only pretty morgan (optional, you already had it)
-// ----------------------------------------------------------------
 if (process.env.NODE_ENV === 'development') {
   // This will print the classic `GET /api/users 200 1.234 ms` in the console
   // while the full line still goes to Winston (so you get both)
@@ -109,6 +137,8 @@ app.use('/api/v1/tasks', taskRouter);
 app.use('/api/v1/roles', roleRouter);
 app.use('/api/v1/merchants', merchantRouter);
 app.use('/api/v1/menu', menuRouter);
+app.use('/api/v1/branch', branchRouter);
+app.use('/api/v1/branchGroup', branchGroupRouter);
 app.use('/api/v1/menuGroup', menuGroupRouter);
 app.use('/api/v1/menuCombo', comboRouter);
 app.use('/api/v1/table', tableRouter);
@@ -116,7 +146,7 @@ app.use('/api/v1/staff-assignments', assignTableRouter);
 app.use('/api/v1/customer', customerRouter);
 app.use('/api/v1/customerSession', customerSessionRouter);
 app.use('/api/v1/order', orderRouter);
-
+app.use('/api/v1/subscriptions', subscriptionRouter);
 // ----------------------------------------------------------------
 // 8. 404 & Global error handler
 // ----------------------------------------------------------------

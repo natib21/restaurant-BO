@@ -2,34 +2,51 @@ const express = require('express');
 const comboController = require('../controllers/comboController');
 const authController = require('../controllers/authController');
 
-const router = express.Router({ mergeParams: true }); // Important if nested
+const router = express.Router({ mergeParams: true });
 
-// ====================== PUBLIC / CUSTOMER ROUTES ======================
-// Anyone can view active combos (no auth needed for customer view)
-router
-  .route('/active') // :id = merchantId (for public menu)
-  .get(comboController.getActiveCombos);
+// ====================== PUBLIC ======================
+router.get('/active', comboController.getActiveCombos);
 
-// If you want public access without merchantId in params (optional)
-// router.route('/active').get(comboController.getActiveCombos);
+// ====================== PROTECTED ======================
+router.use(authController.protect, authController.restrictTo());
 
-// ====================== PROTECT ALL BELOW ======================
-router.use(authController.protect, authController.restrictTo()); // ← Login required from here
-
-// ====================== MERCHANT ADMIN ROUTES ======================
+// ====================== COMBO CRUD ======================
 router
   .route('/')
-  .get(comboController.getAllCombos) // Admin: See all combos (active + inactive)
-  .post(comboController.createCombo); // Create new combo
+  .get(comboController.getAllCombos)
+  .post(
+    comboController.uploadComboPhoto,
+    comboController.resizeComboPhoto,
+    comboController.createCombo
+  );
 
 router
   .route('/:id')
-  .get(comboController.getCombo) // Get single combo (for editing)
-  .patch(comboController.updateCombo) // Update combo
-  .delete(comboController.deleteCombo); // Delete combo
+  .get(authController.restrictTo(), comboController.getCombo)
+  .patch(
+    comboController.uploadComboPhoto,
+    comboController.resizeComboPhoto,
+    comboController.updateCombo
+  )
+  .delete(authController.restrictTo(), comboController.deleteCombo);
 
-// ====================== ORDER WEBHOOK (Protected but accessible by order service) ======================
-// Only authenticated services/users can increment sold count
-router.route('/increment-sold').post(comboController.incrementComboSold);
+// ====================== STATE TOGGLES ======================
+router.patch('/:id/toggle-active', authController.restrictTo(), comboController.toggleComboActive);
+
+router.patch(
+  '/:comboId/branch-toggle',
+  authController.restrictTo(),
+  comboController.toggleBranchActive
+);
+
+// ====================== BRANCH OVERRIDES ======================
+router.patch(
+  '/:comboId/branch-override',
+  authController.restrictTo(),
+  comboController.updateBranchOverride
+);
+
+// ====================== INTERNAL ======================
+router.post('/increment-sold', authController.restrictTo(), comboController.incrementComboSold);
 
 module.exports = router;

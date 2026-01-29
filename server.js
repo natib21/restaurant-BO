@@ -17,7 +17,7 @@ const app = require('./app');
 
 const server = createSocketServer(app);
 
-const DB = process.env.DATABASE.replace('<PASSWORD>', process.env.DATABASE_PASSWORD);
+const DB = process.env.DATABASE_SECOND.replace('<PASSWORD>', process.env.DATABASE_PASSWORD_SECOND);
 const Local_Db = process.env.DATABASE_LOCAL;
 
 mongoose.connect(DB).then(() => {

@@ -17,11 +17,11 @@ const SUPER_ADMIN_CONFIG = {
 
 const createSuperAdmin = async () => {
   try {
-    const DB = `mongodb+srv://nathnaelzelalem:UZ8NzyORmOcIPUK9@restaurant.k0gc3.mongodb.net/?retryWrites=true&w=majority&appName=Restaurant`;
+    const DB = `mongodb+srv://nathnaelzelalem_db_user:L6iyvT71WT4adq37@cluster0.zuwarje.mongodb.net/?appName=Cluster0`;
     const Local_DB = process.env.LOCAL_DATABASE;
     console.log(Local_DB);
 
-    await mongoose.connect(Local_DB).then(() => {
+    await mongoose.connect(DB).then(() => {
       logger.info('MongoDB connected successfully!');
     });
 

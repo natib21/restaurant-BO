@@ -1,14 +1,16 @@
+const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 const catchAsync = require('./../utils/catchAsync'); // Wraps async functions to catch errors automatically
 const AppError = require('../utils/appError'); // Custom error class for operational errors
 const { promisify } = require('util');
-const mongoose = require('mongoose');
 const Merchant = require('../models/merchantModel');
+const Branch = require('../models/branchModel');
 const Task = require('../models/taskModel');
 const Role = require('../models/roleModel');
 const sendEmail = require('./../utils/email');
 const crypto = require('crypto');
+// const MenuGroup = require('../models/menuGroupModel');
 const MenuGroup = require('../models/menuGroupModel');
 
 /**
@@ -17,21 +19,29 @@ const MenuGroup = require('../models/menuGroupModel');
  */
 
 const signToken = user => {
-  console.log('user : -', user);
   if (!user || !user._id) {
     throw new AppError('Invalid user for token generation', 500);
   }
 
-  const payload = { id: user._id };
-  if (user.merchant && user.merchant._id) {
-    payload.merchant = user.merchant._id.toString(); // Attach merchant context to token
+  const payload = {
+    id: user._id.toString(),
+  };
+  // Add merchant if exists
+  if (user.merchant?._id) {
+    payload.merchant = user.merchant._id.toString();
+  }
+  // CRITICAL: Add current branch to token
+  if (user.branch?._id) {
+    payload.branch = user.branch._id.toString();
+  }
+  // Optional: Add role name for quick checks
+  if (user.role?.name) {
+    payload.role = user.role.name;
   }
 
-  return jwt.sign(
-    payload,
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE_IN } // e.g., '90d'
-  );
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE_IN || '90d',
+  });
 };
 
 /**
@@ -45,6 +55,7 @@ const createSendToken = (user, statusCode, res) => {
     expires: new Date(Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000),
     httpOnly: true, // Prevents XSS attacks (JS can't access cookie)
     sameSite: 'strict', // Protects against CSRF
+    path: '/',
   };
 
   if (process.env.NODE_ENV === 'production') cookieOptions.secure = true; // Only send over HTTPS in prod
@@ -54,11 +65,9 @@ const createSendToken = (user, statusCode, res) => {
   // Clean user object before sending
   user.password = undefined;
   user.passwordConfirm = undefined;
-  user.merchant = undefined;
 
   res.status(statusCode).json({
     status: 'success',
-    token,
     data: { user },
   });
 };
@@ -68,79 +77,152 @@ const createSendToken = (user, statusCode, res) => {
  * Creates a new merchant + first super admin user for that business
  */
 exports.signup = catchAsync(async (req, res, next) => {
-  const { firstName, lastName, phone, email, business, password, passwordConfirm } = req.body;
+  // Validate BEFORE starting session
+  const {
+    firstName,
+    lastName,
+    phone,
+    email,
+    business: businessName,
+    password,
+    passwordConfirm,
+  } = req.body;
 
-  // Validate all required fields
-  if (!firstName || !lastName || !phone || !email || !business || !password || !passwordConfirm) {
-    return next(new AppError('Please provide all required fields', 400));
+  if (
+    !firstName ||
+    !lastName ||
+    !phone ||
+    !email ||
+    !businessName ||
+    !password ||
+    !passwordConfirm
+  ) {
+    return next(new AppError('All fields are required', 400));
   }
   if (password !== passwordConfirm) {
     return next(new AppError('Passwords do not match', 400));
   }
 
-  // Check for duplicates
-  const [existingUser, existingMerchant] = await Promise.all([
-    User.findOne({ phone }),
-    Merchant.findOne({ businessName: business }),
-  ]);
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (existingUser) return next(new AppError('Phone number already registered', 400));
-  if (existingMerchant) return next(new AppError('A business with that name already exists.', 400));
+  try {
+    // Duplicate checks...
+    const [existingUser, existingMerchant] = await Promise.all([
+      User.findOne({ $or: [{ phone }, { email }] }).session(session),
+      Merchant.findOne({ $or: [{ businessName }, { phone }] }).session(session),
+    ]);
 
-  // Create new merchant account (starts in 'pending' and 'Test' mode)
-  const newMerchant = await Merchant.create({
-    businessName: business,
-    status: 'pending',
-    phone,
-    mode: 'Test',
-  });
+    if (existingUser) throw new AppError('Phone or email already in use', 400);
+    if (existingMerchant) throw new AppError('Business name or phone already exists', 400);
 
-  // Find the master SUPER-MERCHANT-ADMIN role template
-  const existingSuperAdminRole = await Role.findOne({ name: 'SUPER-MERCHANT-ADMIN' });
-  if (!existingSuperAdminRole) {
-    return next(
-      new AppError('Master "Super Merchant Admin" role template not found. Setup error.', 500)
+    // Merchant create
+    const merchant = await Merchant.create(
+      [
+        {
+          businessName,
+          slug: businessName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, ''),
+          phone,
+          status: 'pending',
+          mode: 'Test',
+          branchCounter: 1,
+        },
+      ],
+      { session }
     );
+
+    const newMerchant = merchant[0];
+
+    // Branch create
+    const branch = await Branch.create(
+      [
+        {
+          merchant: newMerchant._id,
+          name: `${businessName} - Main Branch`,
+          phone,
+          isMain: true,
+          isActive: true,
+          branchCode: 'BR-001',
+          location: {
+            type: 'Point',
+            coordinates: [38.7578, 9.025],
+            city: 'Addis Ababa',
+            formattedAddress: `${businessName} - Main Branch, Addis Ababa, Ethiopia`,
+          },
+        },
+      ],
+      { session }
+    );
+    const mainBranch = branch[0];
+
+    // Role
+    const superRole = await Role.findOne({ name: 'SUPER-MERCHANT-ADMIN' }).session(session);
+    if (!superRole) throw new AppError('System role not found.', 500);
+
+    // User create
+    const user = await User.create(
+      [
+        {
+          firstName,
+          lastName,
+          phone,
+          email: email.toLowerCase(),
+          password,
+          passwordConfirm,
+          merchant: newMerchant._id,
+          branch: [mainBranch._id],
+          role: superRole._id,
+          emailConfirmed: false,
+        },
+      ],
+      { session }
+    );
+
+    const newUser = user[0];
+
+    // MenuGroup create
+    await MenuGroup.create(
+      [
+        {
+          merchant: newMerchant._id,
+          branches: [mainBranch._id], // Important: assign to the main branch
+          name: 'All Items (System Default)',
+          description: 'Hidden system group for all menu items. Used for public fallback.',
+          visibility: 'always',
+          priority: -100,
+          isSystemDefault: true,
+          isAlcoholMenu: false,
+          items: [], // Start empty — items will be added when creating menu items
+        },
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+    // session.endSession();
+
+    // Populate
+    const populatedUser = await User.findById(newUser._id)
+      .select('-password -__v')
+      .populate({
+        path: 'role',
+        select: 'name description',
+        populate: { path: 'tasks', select: 'name endpoint method description' },
+      })
+      .populate('merchant', 'businessName slug status mode branchCounter')
+      .populate('branch', 'name branchCode shortCode isMain publicUrl');
+
+    createSendToken(populatedUser, 201, res);
+  } catch (err) {
+    await session.abortTransaction();
+    if (err instanceof AppError) return next(err);
+    return next(new AppError('Signup failed. Please try again later.', 500));
+  } finally {
+    session.endSession();
   }
-
-  // Create the first admin user linked to this merchant
-  const newUser = await User.create({
-    firstName,
-    lastName,
-    phone,
-    email,
-    password,
-    passwordConfirm,
-    merchant: newMerchant._id,
-    role: existingSuperAdminRole._id,
-  });
-
-  await MenuGroup.create({
-    merchant: newMerchant._id,
-    name: 'All Items (System Default)',
-    description: 'Hidden system group for all menu items. Used for public fallback.',
-    priority: -100, // Lowest priority
-    visibility: 'always',
-    isSystemDefault: true, // Marker for system management
-    items: [], // Starts empty
-  });
-  // Fetch full user with populated role + tasks
-  let finalUser = await User.findById(newUser._id).populate({
-    path: 'role',
-    select: 'name endpoint description tasks',
-    populate: { path: 'tasks', select: 'name description target method' },
-  });
-
-  // Bug Fix Note: This block has a typo (`populatedUser` not defined)
-  // Should be `finalUser` instead
-  if (newUser.role?.name !== 'SUPER-ADMIN') {
-    finalUser = await finalUser.populate({
-      path: 'merchant',
-      select: 'businessName status mode',
-    });
-  }
-
-  createSendToken(finalUser, 201, res);
 });
 
 /**
@@ -156,24 +238,47 @@ exports.login = catchAsync(async (req, res, next) => {
   // Get user with password (it's excluded by default)
   const user = await User.findOne({ email }).select('+password');
   const users = await User.find();
-  console.log(user);
+
   // Check user exists + password correct
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError('Incorrect email or password', 401));
   }
 
-  // Populate role and permissions
-  const populatedUser = await User.findById(user._id).populate({
-    path: 'role',
-    select: 'name endpoint description tasks',
-    populate: {
-      path: 'tasks',
-      select: 'name endpoint method description',
-    },
-  });
+  const populatedUser = await User.findById(user._id)
+    .populate({
+      path: 'role',
+      select: 'name endpoint description tasks',
+      populate: {
+        path: 'tasks',
+        select: 'name endpoint method description',
+      },
+    })
+    .populate({
+      path: 'merchant',
+      select: 'businessName slug status mode branchCounter brandColor logo',
+    })
+    .populate({
+      path: 'branch',
+      select: 'name location isMain merchant isActive',
+    });
 
   createSendToken(populatedUser, 200, res);
 });
+
+exports.logout = (req, res) => {
+  res.cookie('jwt', '', {
+    expires: new Date(0),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+  });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Logged out successfully',
+  });
+};
 
 /**
  * PROTECT - Middleware to verify JWT and load current user
@@ -182,54 +287,79 @@ exports.login = catchAsync(async (req, res, next) => {
 exports.protect = catchAsync(async (req, res, next) => {
   let token;
 
-  // 1. Extract token from Authorization header
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  // 1. Get token
+  if (req.headers.authorization?.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.jwt) {
+    token = req.cookies.jwt;
   }
-
   if (!token) {
-    return next(new AppError('You are not logged in! Please log in.', 401));
+    return next(new AppError('You are not logged in!', 401));
   }
 
   // 2. Verify token
-  const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+  let decoded;
+  try {
+    decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return next(new AppError('Your session has expired. Please log in again.', 401));
+    }
+    return next(new AppError('Invalid token. Please log in again.', 401));
+  }
 
-  // 3. Find user and populate role + merchant
-  const currentUser = await User.findById(decoded.id)
-    .populate({
-      path: 'role',
-      select: 'name context description tasks',
-      populate: { path: 'tasks', select: 'name endpoint method description' },
-    })
-    .populate({
-      path: 'merchant',
-      select: 'businessName status mode',
-    });
-
+  // 3. Check user exists
+  const currentUser = await User.findById(decoded.id);
   if (!currentUser) {
-    return next(new AppError('User belonging to this token no longer exists.', 401));
+    return next(new AppError('This user no longer exists.', 401));
   }
 
-  // 4. Prevent token reuse after merchant change
-  if (
-    currentUser.merchant &&
-    decoded.merchant &&
-    currentUser.merchant._id.toString() !== decoded.merchant
-  ) {
-    return next(new AppError('Token merchant mismatch. Please re-login.', 401));
+  // 4. Check if account is active
+  if (!currentUser.isActive) {
+    return next(new AppError('Your account has been deactivated.', 403));
   }
 
-  // 5. Check if password was changed after token issued
+  // 5. Password changed after token issued?
   if (currentUser.changedPasswordAfter(decoded.iat)) {
-    return next(new AppError('User recently changed password! Please log in again.', 401));
+    return next(new AppError('Password changed. Please log in again.', 401));
   }
 
-  // 6. Block inactive accounts
-  if (currentUser.isActive === false) {
-    return next(new AppError('Your account is inactive. Contact support.', 403));
+  // 6. CRITICAL: Merchant context validation
+  if (decoded.merchant) {
+    if (!currentUser.merchant) {
+      return next(new AppError('You no longer belong to any business.', 403));
+    }
+    if (currentUser.merchant.toString() !== decoded.merchant) {
+      return next(
+        new AppError('You have been moved to a different business. Please log in again.', 401)
+      );
+    }
   }
 
-  // Attach user to request
+  // 7. CRITICAL: Branch context validation (for BRANCH-MANAGER)
+  if (decoded.branch) {
+    if (!currentUser.branch) {
+      return next(new AppError('You are not assigned to any branch.', 403));
+    }
+    if (currentUser.branch.toString() !== decoded.branch) {
+      return next(
+        new AppError('You have been reassigned to a different branch. Please log in again.', 401)
+      );
+    }
+  }
+
+  // 8. Populate only what you need (performance + security)
+  await currentUser.populate([
+    {
+      path: 'role',
+      select: 'name tasks',
+      populate: { path: 'tasks', select: 'name endpoint method description isMerchant' },
+    },
+    { path: 'merchant', select: 'businessName status mode' },
+    { path: 'branch', select: 'name branchCode shortCode isMain isActive' },
+  ]);
+
+  // 9. Attach to request
   req.user = currentUser;
   next();
 });
@@ -293,7 +423,7 @@ exports.restrictTo = () => {
 
     // THIS IS THE ONLY THING WE MODIFY: the incoming URL
     const requestPattern = convertUrlToPattern(fullUrl);
-    console.log(requestPattern);
+
     const hasAccess = role.tasks.some(task => {
       const taskEndpoint = (task.endpoint || '').trim();
       if (!taskEndpoint) return false;
@@ -304,7 +434,7 @@ exports.restrictTo = () => {
       if (!methodMatch) return false;
 
       const cleanTaskEndpoint = taskEndpoint.replace(/\/$/, '');
-      console.log(cleanTaskEndpoint);
+
       // OPTION 1: Exact match (after converting real IDs to :id)
       if (requestPattern === cleanTaskEndpoint) {
         return true;
@@ -420,4 +550,51 @@ exports.changePassword = catchAsync(async (req, res, next) => {
   await user.save();
 
   createSendToken(user, 200, res); // Issue new token
+});
+
+exports.acceptInvitation = catchAsync(async (req, res, next) => {
+  const { token, name, password, passwordConfirm } = req.body;
+
+  const invitation = await Invitation.findOne({
+    token,
+    used: false,
+    expiresAt: { $gt: Date.now() },
+  }).populate('branch role');
+
+  if (!invitation) {
+    return next(new AppError('Invalid or expired invitation', 400));
+  }
+
+  // Check if user already exists with this email
+  let user = await User.findOne({ email: invitation.email });
+
+  if (user) {
+    // Existing user → just assign branch + role
+    if (user.merchant.toString() !== invitation.branch.merchant.toString()) {
+      return next(new AppError('You already belong to another business', 400));
+    }
+  } else {
+    // New user → create
+    user = await User.create({
+      name,
+      email: invitation.email,
+      password,
+      passwordConfirm,
+      merchant: invitation.branch.merchant,
+      role: invitation.role._id,
+      branch: invitation.branch._id,
+      emailConfirmed: true,
+    });
+  }
+
+  // Assign role + branch
+  user.role = invitation.role._id;
+  user.branch = invitation.branch._id;
+  await user.save({ validateBeforeSave: false });
+
+  // Mark invitation as used
+  await invitation.markAsUsed(user._id);
+
+  // Login user
+  createSendToken(user, 200, res);
 });

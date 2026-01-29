@@ -80,7 +80,12 @@ const menuGroupSchema = new mongoose.Schema(
         end: { type: String }, // e.g., "23:00"
       },
     ],
-
+    branches: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Branch',
+      required: true,
+      validate: [v => v.length > 0, 'At least one branch required'],
+    },
     specialDates: [
       {
         date: { type: Date, required: true },
@@ -112,14 +117,15 @@ const menuGroupSchema = new mongoose.Schema(
 );
 
 // ========================= INDEXES =========================
-menuGroupSchema.index({ merchant: 1, visibility: 1 });
-menuGroupSchema.index({ merchant: 1, priority: -1 });
-menuGroupSchema.index({ merchant: 1, isAlcoholMenu: 1 });
-
+menuGroupSchema.index({ branches: 1, visibility: 1 });
+menuGroupSchema.index({ branches: 1, priority: -1 });
+menuGroupSchema.index({ branches: 1, isAlcoholMenu: 1 });
+menuGroupSchema.index({ merchant: 1, branches: 1 });
 // ========================= SLUG =========================
 menuGroupSchema.pre('save', function (next) {
   if (this.isModified('name') || !this.slug) {
-    this.slug = slugify(`${this.merchant}-${this.name}`, { lower: true, strict: true });
+    const base = slugify(this.name, { lower: true, strict: true });
+    this.slug = `${base}-${this._id.toString().slice(-6)}`;
   }
   next();
 });

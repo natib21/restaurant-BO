@@ -9,7 +9,8 @@ const AppError = require('../utils/appError');
 // =============================================================
 exports.createMenuGroup = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-  console.log(merchantId);
+  const branchId = req.user.branch._id;
+  console.log(req.user);
   const {
     name,
     description,
@@ -25,6 +26,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
 
   const menuGroup = await MenuGroup.create({
     merchant: merchantId,
+    branches: branchId,
     name,
     description,
     bannerImage,
@@ -48,7 +50,7 @@ exports.createMenuGroup = catchAsync(async (req, res, next) => {
 // =============================================================
 exports.getAllMenuGroups = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-
+  console.log(merchantId);
   const menuGroups = await MenuGroup.find({ merchant: merchantId })
     .sort({ priority: -1, createdAt: -1 })
     .select('-__v')
@@ -98,8 +100,7 @@ exports.getAllMenuGroupsLight = catchAsync(async (req, res, next) => {
 // GET SINGLE MENU GROUP (for editing in admin)
 // =============================================================
 exports.getMenuGroup = catchAsync(async (req, res, next) => {
-  console.log(req.user);
-  const merchantId = req.user.merchant.id;
+  const merchantId = req.user.merchant._id; // Use ._id (ObjectId), not .id
 
   const menuGroup = await MenuGroup.findOne({
     _id: req.params.id,
@@ -107,15 +108,36 @@ exports.getMenuGroup = catchAsync(async (req, res, next) => {
   })
     .populate({
       path: 'items.menu',
-      select: 'name image type variants available inStock',
+      select: 'name image type variants available inStock prepTime isVeg isSpicy isAlcoholic',
     })
-    .lean();
+    .lean(); // Good choice for performance + easier mutation
 
-  if (!menuGroup) return next(new AppError('Menu group not found', 404));
+  if (!menuGroup) {
+    return next(new AppError('Menu group not found', 404));
+  }
+
+  // Add full image URLs
+  const menuGroupWithImages = {
+    ...menuGroup,
+    bannerImage: menuGroup.bannerImage
+      ? `${req.protocol}://${req.get('host')}/img/menu-groups/${menuGroup.bannerImage}`
+      : null,
+    items: menuGroup.items.map(item => ({
+      ...item,
+      menu: item.menu
+        ? {
+            ...item.menu,
+            image: item.menu.image
+              ? `${req.protocol}://${req.get('host')}/img/menu/${item.menu.image}`
+              : null,
+          }
+        : null,
+    })),
+  };
 
   res.status(200).json({
     status: 'success',
-    data: { menuGroup },
+    data: { menuGroup: menuGroupWithImages },
   });
 });
 
