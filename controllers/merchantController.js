@@ -14,7 +14,7 @@ const User = require('../models/userModel');
 const Role = require('../models/roleModel');
 const Merchant = require('../models/merchantModel');
 const Task = require('../models/taskModel');
-
+const Branch = require('../models/branchModel');
 const mongoose = require('mongoose');
 const fs = require('fs');
 
@@ -73,7 +73,7 @@ exports.processMerchantMedia = catchAsync(async (req, res, next) => {
       .resize(300, 300, { fit: 'cover' })
       .toFormat('jpeg')
       .jpeg({ quality: 90 })
-      .toFile(`public/img/merchants/${logoFilename}`);
+      .toFile(`uploads/img/merchants/${logoFilename}`);
 
     req.body.logo = logoFilename;
   }
@@ -87,7 +87,7 @@ exports.processMerchantMedia = catchAsync(async (req, res, next) => {
       .resize(1200, 400, { fit: 'cover' })
       .toFormat('jpeg')
       .jpeg({ quality: 90 })
-      .toFile(`public/img/merchants/${coverFilename}`);
+      .toFile(`uploads/img/merchants/${coverFilename}`);
 
     req.body.coverImage = coverFilename;
   }
@@ -439,7 +439,7 @@ exports.createMerchantUser = catchAsync(async (req, res, next) => {
   const merchantId = merchant._id; // <-- use this
 
   // 2. Extract body
-  const { firstName, lastName, phone, email, password, role } = req.body;
+  const { firstName, lastName, phone, email, password, role, branch } = req.body;
 
   // 3. Required fields
   const required = { firstName, phone, password, role };
@@ -474,7 +474,16 @@ exports.createMerchantUser = catchAsync(async (req, res, next) => {
   if (duplicate) {
     return next(new AppError('Phone or email already in use', 400));
   }
+  if (branch && Array.isArray(branch) && branch.length > 0) {
+    const validBranchCount = await Branch.countDocuments({
+      _id: { $in: branch },
+      merchant: merchantId,
+    });
 
+    if (validBranchCount !== branch.length) {
+      return next(new AppError('One or more selected branches are invalid or unauthorized.', 400));
+    }
+  }
   // 6. Create the user
   const newUser = await User.create({
     firstName: firstName.trim(),
@@ -485,6 +494,7 @@ exports.createMerchantUser = catchAsync(async (req, res, next) => {
     passwordConfirm: password, // you hash in pre-save hook
     business: merchant.businessName,
     merchant: merchantId,
+    branch: branch || [],
     role: roleDoc._id,
     isActive: true,
   });
@@ -620,7 +630,6 @@ exports.getMerchantUsers = catchAsync(async (req, res, next) => {
     .select('businessName')
     .populate({
       path: 'users',
-      match: { isActive: true },
       select: 'firstName lastName email phone role isActive',
       populate: { path: 'role', select: 'name description' },
     })
@@ -664,7 +673,66 @@ exports.getMerchantUserById = catchAsync(async (req, res, next) => {
     },
   });
 });
+/**
+ * GET /api/v1/merchants/me/branches/:branchId/users
+ * Fetch all users assigned to a specific branch — for the authenticated merchant
+ *
+ * Query params (optional):
+ *   ?isActive=true|false
+ *   ?role=roleId
+ */
+exports.getMerchantUsersByBranch = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant?._id;
+  if (!merchantId) {
+    return next(
+      new AppError('Merchant context not found — are you logged in as a merchant user?', 403)
+    );
+  }
 
+  const { id } = req.params;
+
+  const branch = await Branch.findOne({
+    _id: id,
+    merchant: merchantId,
+  })
+    .select('name address isActive')
+    .lean();
+
+  if (!branch) {
+    return next(new AppError('Branch not found or does not belong to your merchant', 404));
+  }
+
+  if (!branch.isActive) {
+    return next(new AppError('This branch is currently inactive', 400));
+  }
+
+  const query = {
+    merchant: merchantId,
+    branch: id,
+    isActive: true,
+  };
+
+  const users = await User.find(query)
+    .select('firstName lastName phone email role isActive createdAt')
+    .populate({
+      path: 'role',
+      select: 'name description',
+    })
+    .sort({ firstName: 1, lastName: 1 }) // nice default ordering
+    .lean();
+
+  res.status(200).json({
+    status: 'success',
+    results: users.length,
+    data: {
+      branch: {
+        _id: id,
+        name: branch.name || 'Unnamed Branch',
+      },
+      users,
+    },
+  });
+});
 exports.createMerchantRole = catchAsync(async (req, res, next) => {
   let { name, description, tasks } = req.body;
   const merchantId = req.user.merchant._id;
@@ -756,7 +824,103 @@ exports.getMerchantRoleById = catchAsync(async (req, res, next) => {
     data: { role },
   });
 });
+/**
+ * GET /api/v1/merchants/me
+ * Returns the full profile of the currently logged-in merchant
+ */
+exports.getMe = catchAsync(async (req, res, next) => {
+  // 1. Get ID from the authenticated user
+  const merchantId = req.user.merchant?._id || req.user.merchant;
 
+  if (!merchantId) {
+    return next(new AppError('No merchant associated with this user.', 404));
+  }
+
+  // 2. Find merchant and populate relevant data
+  const merchant = await Merchant.findById(merchantId)
+    .populate('approvedBy', 'firstName lastName email')
+    .populate('masterMenu', 'name status'); // Populate menu if needed
+
+  if (!merchant) {
+    return next(new AppError('Merchant record not found.', 404));
+  }
+
+  // 3. Format URLs for logo and cover image
+  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
+  const merchantObj = merchant.toObject();
+
+  const formattedMerchant = {
+    ...merchantObj,
+    logo: merchantObj.logo ? `${baseUrl}/${merchantObj.logo}` : null,
+    coverImage: merchantObj.coverImage ? `${baseUrl}/${merchantObj.coverImage}` : null,
+  };
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      merchant: formattedMerchant,
+    },
+  });
+});
+
+/**
+ * PATCH /api/v1/merchants/me
+ * Allows the currently logged-in merchant to update their own profile data.
+ * Protects sensitive fields from being modified via self-service.
+ */
+exports.updateMe = catchAsync(async (req, res, next) => {
+  // 1. Get ID from the authenticated user
+  const merchantId = req.user.merchant?._id || req.user.merchant;
+
+  if (!merchantId) {
+    return next(new AppError('No merchant associated with this user.', 404));
+  }
+
+  // 2. Filter out sensitive fields that merchants shouldn't change themselves
+  // These fields should only be modified by System Admins via the /:id route
+  const restrictedFields = [
+    'status',
+    'isActive',
+    'taxId',
+    'approvedBy',
+    'subscriptionPlan',
+    'suspendedReason',
+    'suspendedAt',
+    'createdAt',
+  ];
+
+  restrictedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      delete req.body[field];
+    }
+  });
+
+  const updatedMerchant = await Merchant.findByIdAndUpdate(merchantId, req.body, {
+    new: true,
+    runValidators: true,
+  }).populate('approvedBy', 'firstName lastName email');
+
+  if (!updatedMerchant) {
+    return next(new AppError('Merchant record not found.', 404));
+  }
+
+  // 4. Format URLs for images
+  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
+  const merchantObj = updatedMerchant.toObject();
+
+  const formattedMerchant = {
+    ...merchantObj,
+    logo: merchantObj.logo ? `${baseUrl}/${merchantObj.logo}` : null,
+    coverImage: merchantObj.coverImage ? `${baseUrl}/${merchantObj.coverImage}` : null,
+  };
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      merchant: formattedMerchant,
+    },
+  });
+});
 // ===================================================================
 // UPDATE ROLE
 // ===================================================================

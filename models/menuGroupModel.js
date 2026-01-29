@@ -80,12 +80,12 @@ const menuGroupSchema = new mongoose.Schema(
         end: { type: String }, // e.g., "23:00"
       },
     ],
-branches: {
-  type: [mongoose.Schema.Types.ObjectId],
-  ref: 'Branch',
-  required: true,
-  validate: [v => v.length > 0, 'At least one branch required']
-},
+    branches: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Branch',
+      required: true,
+      validate: [v => v.length > 0, 'At least one branch required'],
+    },
     specialDates: [
       {
         date: { type: Date, required: true },

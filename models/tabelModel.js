@@ -43,7 +43,17 @@ const tableSchema = new mongoose.Schema(
 
     location: {
       type: String,
-      enum: ['indoor', 'outdoor', 'rooftop', 'terrace', 'vip', 'bar', 'window', 'balcony', 'garden'],
+      enum: [
+        'indoor',
+        'outdoor',
+        'rooftop',
+        'terrace',
+        'vip',
+        'bar',
+        'window',
+        'balcony',
+        'garden',
+      ],
       default: 'indoor',
     },
 
@@ -60,7 +70,7 @@ const tableSchema = new mongoose.Schema(
       default: () => crypto.randomBytes(32).toString('hex'),
       select: false, // never expose
     },
-
+    qrUrl: { type: String },
     qrCode: { type: String }, // base64 PNG
     qrGeneratedAt: { type: Date },
 
@@ -113,10 +123,7 @@ tableSchema.methods.generateQRData = function () {
   };
 
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = crypto
-    .createHmac('sha256', this.qrSecret)
-    .update(data)
-    .digest('hex');
+  const signature = crypto.createHmac('sha256', this.qrSecret).update(data).digest('hex');
 
   return { data, signature };
 };

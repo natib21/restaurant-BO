@@ -3,13 +3,24 @@ const mongoose = require('mongoose');
 const slugify = require('slugify');
 
 const variantSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
+    maxlength: 60,
+    default: 'Regular', // fallback
+  },
+  // Keep size/volume for specific cases
   size: {
     type: String,
-    required: [true, 'Variant must have a size'],
     trim: true,
     maxlength: 50,
+    // Remove 'required' or make it conditional
   },
-  volume: { type: String }, // e.g., "500g", "1 piece"
+  volume: {
+    type: String,
+    trim: true,
+    // e.g., "330ml", "Large", "500g"
+  },
   price: {
     type: Number,
     required: [true, 'Variant must have a price'],
@@ -17,6 +28,7 @@ const variantSchema = new mongoose.Schema({
   },
   calories: { type: Number },
   available: { type: Boolean, default: true },
+  isDefault: { type: Boolean, default: false }, // useful for pre-selecting in UI
 });
 
 const menuSchema = new mongoose.Schema(
@@ -27,7 +39,6 @@ const menuSchema = new mongoose.Schema(
       required: [true, 'Menu item must belong to a merchant'],
       index: true,
     },
-
     name: {
       type: String,
       required: [true, 'Menu item must have a name'],
@@ -71,15 +82,6 @@ const menuSchema = new mongoose.Schema(
       ],
       default: null,
     },
-    branches: {
-  type: [mongoose.Schema.Types.ObjectId],
-  ref: 'Branch',
-  required: true,
-  validate: {
-    validator: v => v.length > 0,
-    message: 'At least one branch is required'
-  }
-},
     isAlcoholic: { type: Boolean, default: false },
     alcoholPercentage: { type: Number, min: 0, max: 100, default: 0 },
 
@@ -89,12 +91,7 @@ const menuSchema = new mongoose.Schema(
     // Variants (most items have multiple sizes/prices)
     variants: {
       type: [variantSchema],
-      validate: {
-        validator: function (v) {
-          return v.length > 0;
-        },
-        message: 'At least one variant is required',
-      },
+      default: [], // ensures it's always an array
     },
 
     // Fallback price if no variants (rare, for simple items)

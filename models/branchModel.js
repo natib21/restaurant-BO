@@ -4,29 +4,15 @@ const crypto = require('crypto');
 
 const branchSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: [true, 'Branch name is required'],
-      trim: true,
-    },
-
+    name: { type: String, required: true, trim: true },
     merchant: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Merchant',
       required: true,
       index: true,
     },
-
-    isMain: {
-      type: Boolean,
-      default: false,
-    },
-
-    isActive: {
-      type: Boolean,
-      default: true,
-      index: true,
-    },
+    isMain: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true, index: true },
 
     phone: {
       type: String,
@@ -36,10 +22,9 @@ const branchSchema = new mongoose.Schema(
         message: 'Invalid Ethiopian phone number',
       },
     },
-
     location: {
       type: { type: String, enum: ['Point'], default: 'Point' },
-      coordinates: { type: [Number], required: true }, // [longitude, latitude]
+      coordinates: { type: [Number], required: true }, // [lng, lat]
       wereda: String,
       city: { type: String, required: true },
       subCity: String,
@@ -48,51 +33,19 @@ const branchSchema = new mongoose.Schema(
       formattedAddress: String,
     },
 
-    // ─────── BRANCH IDENTIFIERS & SECRETS ───────
+    // IDENTIFIERS & SECRETS
     qrSecretKey: {
       type: String,
       required: true,
       select: false,
       default: () => crypto.randomBytes(64).toString('hex'),
     },
+    qrVersion: { type: Number, default: 1 }, // bump to invalidate all QRs
 
-    branchCode: {
-      type: String,
-      trim: true,
-      uppercase: true,
-    },
-
-    shortCode: {
-      type: String,
-      length: 6,
-      uppercase: true,
-      unique: true,
-      sparse: true,
-      default: () => crypto.randomBytes(3).toString('hex').toUpperCase(),
-    },
-
-    // ─────── SETTINGS (overrides merchant defaults) ───────
-    settings: {
-      onlineOrderingEnabled: { type: Boolean, default: true },
-      deliveryEnabled:       { type: Boolean, default: false },
-      pickupEnabled:         { type: Boolean, default: true },
-      isActive:              { type: Boolean, default: true }, // duplicate but kept for override clarity
-      autoAcceptOrders:      { type: Boolean, default: false },
-      requireWaiterConfirmation: { type: Boolean, default: false },
-      prepTimeMinutes: {
-        type: Number,
-        default: 15,
-        min: [5, 'Prep time must be at least 5 minutes'],
-        max: [180, 'Prep time cannot exceed 3 hours'],
-      },
-    },
-
-    // ─────── REFERENCES ───────
-    menu: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Menu',
-      default: null,
-    },
+    branchCode: { type: String, uppercase: true, trim: true }, // e.g. BR-001
+    shortCode: { type: String, length: 6, uppercase: true, unique: true, sparse: true },
+    // Partial override of merchant settings
+    settings: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   {
     timestamps: true,
@@ -101,70 +54,78 @@ const branchSchema = new mongoose.Schema(
   }
 );
 
-// ─────── INDEXES ───────
+// Indexes
 branchSchema.index({ location: '2dsphere' });
 branchSchema.index({ merchant: 1, isMain: 1 });
 branchSchema.index({ merchant: 1, branchCode: 1 }, { unique: true });
 branchSchema.index({ shortCode: 1 }, { unique: true, sparse: true });
 branchSchema.index({ isActive: 1 });
-branchSchema.index({ 'settings.isActive': 1 });
 
-// ─────── VIRTUALS ───────
-
-// Best customer-facing URL: short, clean, fast
+// Virtual: Clean public URL
 branchSchema.virtual('publicUrl').get(function () {
-  if (this.shortCode) {
-    return `https://menuroom.et/b/${this.shortCode}`;
-  }
-  // Fallback (should rarely happen)
-  return `https://menuroom.et/branch/${this._id}`;
+  return this.shortCode
+    ? `https://menuroom.et/b/${this.shortCode}`
+    : `https://menuroom.et/branch/${this._id}`;
 });
 
-// Get the menu to use (branch-specific → merchant default)
-branchSchema.virtual('effectiveMenu').get(function () {
-  return this.menu || (this.populated('merchant') ? this.merchant.menu : null);
-});
-
-// Optional: async version if you need full population
-branchSchema.methods.getEffectiveMenu = async function () {
-  await this.populate('merchant menu');
-  return this.menu || this.merchant?.menu || null;
+// Effective settings (deep merge: merchant defaults ← branch overrides)
+branchSchema.methods.getEffectiveSettings = async function () {
+  const merchant = this.merchant || (await this.populate('merchant').execPopulate());
+  return {
+    ...(merchant?.settings || {}),
+    ...(this.settings || {}),
+    isActive: this.isActive,
+  };
 };
 
-// ─────── MIDDLEWARE ───────
-
+// Pre-save: Enforce one main branch
 branchSchema.pre('save', async function (next) {
-  // 1. Ensure only one main branch per merchant
-  if (this.isMain && this.isModified('isMain')) {
+  if (this.isMain) {
     await this.constructor.updateMany(
       { merchant: this.merchant, _id: { $ne: this._id } },
       { $set: { isMain: false } }
     );
   }
-
-  // 2. Auto-generate branchCode safely (BR-001, BR-002, ...)
-  if (!this.branchCode) {
-    const lastBranch = await this.constructor
-      .findOne({ merchant: this.merchant })
-      .sort({ createdAt: -1 })
-      .select('branchCode');
-
-    let nextNum = 1;
-    if (lastBranch?.branchCode) {
-      const match = lastBranch.branchCode.match(/^BR-(\d+)$/);
-      if (match) {
-        nextNum = parseInt(match[1]) + 1;
-      }
-    }
-    this.branchCode = `BR-${String(nextNum).padStart(3, '0')}`;
-  }
-
   next();
 });
 
-// Optional: Ensure shortCode is always uppercase
-branchSchema.pre('save', function (next) {
-  if (this.shortCode) {
+// Pre-save: Generate branchCode using atomic counter
+branchSchema.pre('save', async function (next) {
+  if (!this.branchCode && this.merchant) {
+    const merchant = await mongoose
+      .model('Merchant')
+      .findByIdAndUpdate(
+        this.merchant,
+        { $inc: { branchCounter: 1 } },
+        { new: true, select: 'branchCounter' }
+      );
+
+    if (!merchant) return next(new Error('Merchant not found'));
+    this.branchCode = `BR-${String(merchant.branchCounter).padStart(3, '0')}`;
+  }
+  next();
+});
+
+// Pre-save: Generate unique shortCode safely
+branchSchema.pre('save', async function (next) {
+  if (!this.shortCode) {
+    let attempts = 0;
+    while (attempts < 10) {
+      const candidate = crypto.randomBytes(3).toString('hex').toUpperCase();
+      const exists = await this.constructor.exists({
+        shortCode: candidate,
+        _id: { $ne: this._id },
+      });
+      if (!exists) {
+        this.shortCode = candidate;
+        break;
+      }
+      attempts++;
+    }
+    if (!this.shortCode) {
+      return next(new Error('Unable to generate unique shortCode after 10 attempts'));
+    }
+  } else {
     this.shortCode = this.shortCode.toUpperCase();
   }
   next();

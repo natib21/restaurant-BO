@@ -27,8 +27,9 @@ const handleDuplicationErrorDb = err => {
     }
     // Case 2: Old format or Atlas (use errmsg)
     else if (err.errmsg) {
-      const match = err.errmsg.match(/dup key: {[^}]*"([^"]+)"[^}]*}/) ||
-                    err.errmsg.match(/"([^"]+)".*dup key/);
+      const match =
+        err.errmsg.match(/dup key: {[^}]*"([^"]+)"[^}]*}/) ||
+        err.errmsg.match(/"([^"]+)".*dup key/);
       if (match && match[1]) {
         message = `Duplicate value: "${match[1]}". Please use another value.`;
       }

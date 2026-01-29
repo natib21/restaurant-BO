@@ -37,12 +37,7 @@ const userSchema = new mongoose.Schema({
   },
   passwordConfirm: {
     type: String,
-    required: function () {
-      // Only require passwordConfirm when:
-      // 1. It's a new document AND
-      // 2. The password is NOT already hashed (i.e., we're hashing it now)
-      return this.isNew && !this.password?.startsWith('$2');
-    },
+    required: [true, 'Please confirm your password'],
     validate: {
       validator: function (el) {
         return el === this.password;
@@ -59,22 +54,19 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     trim: true,
-    required: function () {
-      // Only require email if the role is 'admin'
-      console.log('User role:', this.role);
-      return this.role === 'admin';
-    },
+    lowercase: true,
     validate: {
       validator: function (value) {
-        if (this.role === 'admin') {
-          // Only validate email for admins
-          return validator.isEmail(value);
-        }
-        return true; // Skip validation for non-admin roles
+        // Only validate email format if email is provided
+        return !value || validator.isEmail(value);
       },
       message: 'Please provide a valid email',
     },
-    // validate: [validator.isEmail, 'Please provide a valid email'],
+    sparse: true, // allows multiple nulls
+  },
+  emailConfirmed: {
+    type: Boolean,
+    default: false,
   },
   phone: {
     type: String,
@@ -97,10 +89,9 @@ const userSchema = new mongoose.Schema({
     // select: false,
   },
   branch: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'Branch',
-},
-
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'Branch',
+  },
   photo: String,
   passwordChangedAt: Date,
   passwordResetToken: String,

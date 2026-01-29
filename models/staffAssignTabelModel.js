@@ -41,29 +41,17 @@ const staffAssignmentSchema = new mongoose.Schema(
       index: true,
     },
 
-    role: {
-      type: String,
-      enum: ['waiter', 'barista', 'host', 'manager', 'cleaner', 'kitchen'],
-      required: true,
-    },
-
     tables: {
       type: [tableAssignmentSchema],
       default: [],
-      validate: [
-        {
-          validator: v => v.length > 0 || this.section,
-          message: 'Must assign either tables or a section',
-        },
-      ],
     },
 
     section: {
       type: String,
       trim: true,
+      uppercase: true,
       default: null,
       index: true,
-      // e.g. "Terrace", "VIP Lounge", "Bar Area"
     },
 
     shift: {
@@ -87,7 +75,7 @@ const staffAssignmentSchema = new mongoose.Schema(
       immutable: true,
     },
 
-    endedAt: { type: Date, default: null },
+    endedAt: { type: Date },
 
     isActive: {
       type: Boolean,
@@ -95,7 +83,11 @@ const staffAssignmentSchema = new mongoose.Schema(
       index: true,
     },
 
-    notes: { type: String, trim: true, maxlength: 300 },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: 500, // Increased slightly for real notes
+    },
   },
   {
     timestamps: true,
@@ -104,23 +96,40 @@ const staffAssignmentSchema = new mongoose.Schema(
   }
 );
 
-// ====================== INDEXES (Blazing Fast) ======================
-staffAssignmentSchema.index({ merchant: true });
-staffAssignmentSchema.index({ branch: 1, isActive: 1 });
+// ====================== COMPOUND INDEXES ======================
+staffAssignmentSchema.index({ merchant: 1, branch: 1, isActive: 1 });
+staffAssignmentSchema.index({ branch: 1, isActive: 1, shiftStart: 1 });
 staffAssignmentSchema.index({ staff: 1, isActive: 1 });
 staffAssignmentSchema.index({ 'tables.table': 1, isActive: 1 });
 staffAssignmentSchema.index({ section: 1, isActive: 1 });
-staffAssignmentSchema.index({ shiftStart: 1, shiftEnd: 1 });
 
-// Prevent overlapping active assignments for same staff
+// Prevent overlapping shifts (one active assignment per staff at a time)
 staffAssignmentSchema.index(
   { staff: 1, isActive: 1 },
   {
     partialFilterExpression: { isActive: true },
     unique: true,
-    name: 'one_active_assignment_per_staff',
+    name: 'unique_active_assignment_per_staff',
   }
 );
+
+// ====================== VALIDATIONS ======================
+// Either tables or section must be provided
+staffAssignmentSchema.pre('validate', function (next) {
+  if (this.tables.length === 0 && !this.section) {
+    this.invalidate('tables', 'Must assign either tables or a section');
+    this.invalidate('section', 'Must assign either tables or a section');
+  }
+  next();
+});
+
+// Ensure shift times make sense
+staffAssignmentSchema.pre('save', function (next) {
+  if (this.shiftStart && this.shiftEnd && this.shiftStart >= this.shiftEnd) {
+    return next(new Error('shiftEnd must be after shiftStart'));
+  }
+  next();
+});
 
 // ====================== VIRTUALS ======================
 staffAssignmentSchema.virtual('staffDetails', {
@@ -139,35 +148,54 @@ staffAssignmentSchema.virtual('assignedByDetails', {
 
 // ====================== METHODS ======================
 
-// End current assignment (e.g. shift over)
+// End current assignment
 staffAssignmentSchema.methods.endAssignment = async function () {
+  if (!this.isActive) return { success: false, message: 'Already ended' };
+
   this.isActive = false;
   this.endedAt = new Date();
   await this.save();
+
+  return { success: true };
 };
 
-// Reassign tables to another staff
+// Transfer tables to another active staff member
 staffAssignmentSchema.methods.transferTablesTo = async function (newStaffId) {
+  if (!this.isActive) throw new Error('Cannot transfer from inactive assignment');
+
   const newAssignment = await this.constructor.findOne({
     staff: newStaffId,
     branch: this.branch,
     isActive: true,
   });
 
-  if (!newAssignment) throw new Error('Target staff not active');
+  if (!newAssignment) throw new Error('Target staff has no active assignment');
 
-  // Transfer all tables
-  await this.constructor.updateOne(
-    { _id: this._id },
-    {
-      $set: { isActive: false, endedAt: new Date() },
-    }
-  );
+  // Transfer tables
+  const transferredTables = [...this.tables];
+  newAssignment.tables.push(...transferredTables);
 
-  newAssignment.tables.push(...this.tables);
-  await newAssignment.save();
+  // End current assignment
+  this.isActive = false;
+  this.endedAt = new Date();
 
-  return { success: true, transferred: this.tables.length };
+  await Promise.all([this.save(), newAssignment.save()]);
+
+  return {
+    success: true,
+    transferred: transferredTables.length,
+    toStaff: newStaffId,
+  };
+};
+
+// ====================== STATIC METHODS ======================
+
+// Get current active assignments for a branch
+staffAssignmentSchema.statics.getActiveForBranch = async function (branchId) {
+  return this.find({ branch: branchId, isActive: true })
+    .populate('staffDetails', 'name email phone')
+    .populate('assignedByDetails', 'name')
+    .lean();
 };
 
 module.exports = mongoose.model('StaffAssignment', staffAssignmentSchema);

@@ -3,38 +3,66 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 
 const orderController = require('../controllers/orderController');
-const authController = require('../controllers/authController'); // your staff auth
-const protectTableSession = require('../controllers/customerSessionController'); // QR session
-const CustomerController = require('../controllers/customerController')
-// ====================================================
-//  CUSTOMER ROUTES (Protected by Table Session)
-// ====================================================
-router.use(protectTableSession.protectTableSession,CustomerController.protectCustomer); // All below require active table session
-
-// Place new order
-router.route('/').post(orderController.placeOrder);
-
-// Customer: Get my current active order
-router.route('/my-active').get(orderController.getMyActiveOrder);
-
-// Customer: Get my order history
-router.route('/my-history').get(orderController.getMyOrderHistory);
-
-// Customer OR Staff: Get order by number (e.g. #T5-467)
-router
-  .route('/number/:id') // Changed :id to :orderNumber for clarity
-  .get(orderController.getOrderByNumber);
+const authController = require('../controllers/authController');
+const protectTableSession = require('../controllers/customerSessionController');
+const CustomerController = require('../controllers/customerController');
 
 // ====================================================
-//  STAFF / ADMIN ONLY ROUTES (Protected)
+//  CUSTOMER ROUTES (TABLE SESSION)
+// ====================================================
+// router.use(
+//   protectTableSession.protectTableSession,
+//   CustomerController.protectCustomer
+// );
+
+// Place order (customer)
+router.post(
+  '/',
+  protectTableSession.protectTableSession,
+  CustomerController.protectCustomer,
+  orderController.placeOrder
+);
+
+// Get my active order
+router.get(
+  '/my-active',
+  protectTableSession.protectTableSession,
+  CustomerController.protectCustomer,
+  orderController.getMyActiveOrder
+);
+
+// My order history
+router.get(
+  '/my-history',
+  protectTableSession.protectTableSession,
+  CustomerController.protectCustomer,
+  orderController.getMyOrderHistory
+);
+
+// Lookup by order number
+router.get(
+  '/number/:orderNumber',
+  protectTableSession.protectTableSession,
+  CustomerController.protectCustomer,
+  orderController.getOrderByNumber
+);
+
+// ====================================================
+//  STAFF ROUTES
 // ====================================================
 router.use(authController.protect);
-router.use(authController.restrictTo());
 
-// ⭐️ NEW ROUTE: Merge multiple orders into one
-router.route('/merge').post(orderController.mergeOrders);
+// Staff place order
+router.post(
+  '/staff',
+  // authController.restrictTo(), // add roles if needed
+  orderController.staffPlaceOrder
+);
 
-// Kitchen & Waiter Live Screens
+// Active orders (staff dashboard)
+router.get('/active', orderController.getActiveOrders);
+
+// Status-based views
 router.get('/pending', orderController.getPendingOrders);
 router.get('/accepted', orderController.getAcceptedOrders);
 router.get('/preparing', orderController.getPreparingOrders);
@@ -43,13 +71,38 @@ router.get('/served', orderController.getServedOrders);
 router.get('/completed', orderController.getCompletedOrders);
 router.get('/canceled', orderController.getCanceledOrders);
 
-// Full analytics dashboard (with filters, pagination)
+// Add items to order
+router.patch('/:id/add-items', orderController.addItemToOrder);
+
+// Update order status
+router.patch('/:id/status', orderController.updateOrderStatus);
+
+// Mark order as paid
+router.post(
+  '/:id/pay',
+  orderController.uploadOrderPaymentPhoto,
+  orderController.resizeOrderPaymentPhoto,
+  orderController.markAsPaid
+);
+
+// Cancel order
+router.patch('/:id/cancel', orderController.cancelOrder);
+
+// Merge orders
+router.post('/merge', orderController.mergeOrders);
+
+// All orders (branch scoped)
 router.get('/', orderController.getAllOrders);
+router.get('/:id', orderController.getOrderById);
+router.get('/:id/orders', orderController.getBranchOrders);
 
-// Update order status (e.g. accept → preparing → ready)
-router.route('/:id/status').patch(orderController.updateOrderStatus);
-
-// Mark order as paid (Cashier)
-router.route('/:id/pay').post(orderController.markAsPaid);
+// ====================================================
+//  MERCHANT OWNER (ALL BRANCHES)
+// ====================================================
+router.get(
+  '/merchant/all',
+  authController.restrictTo(), // owner/admin
+  orderController.getMerchantAllOrders
+);
 
 module.exports = router;

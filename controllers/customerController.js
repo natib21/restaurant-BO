@@ -50,8 +50,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
       lastName: last_name || null,
       profilePic: photo_url || null,
     };
-  }
-  else if (source === 'facebook' && facebookToken) {
+  } else if (source === 'facebook' && facebookToken) {
     try {
       const { data } = await axios.get('https://graph.facebook.com/v20.0/me', {
         params: { fields: 'id,name,email,picture.type(large)', access_token: facebookToken },
@@ -69,8 +68,7 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     } catch (err) {
       return next(new AppError('Invalid or expired Facebook token', 401));
     }
-  }
-  else if (source === 'tiktok' && tiktokToken) {
+  } else if (source === 'tiktok' && tiktokToken) {
     try {
       const { data } = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
         headers: { Authorization: `Bearer ${tiktokToken}` },
@@ -90,13 +88,14 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     } catch (err) {
       return next(new AppError('Invalid or expired TikTok token', 401));
     }
-  }
-  else if (phone) {
+  } else if (phone) {
     const cleanPhone = phone.replace(/\s+/g, '');
     const normalized = cleanPhone.startsWith('0') ? '+251' + cleanPhone.slice(1) : cleanPhone;
 
     if (!/^\+251[79]\d{8}$/.test(normalized)) {
-      return next(new AppError('Invalid Ethiopian phone number. Use +2519xxxxxxxx or 09xxxxxxxx', 400));
+      return next(
+        new AppError('Invalid Ethiopian phone number. Use +2519xxxxxxxx or 09xxxxxxxx', 400)
+      );
     }
 
     filter.phone = normalized;
@@ -145,7 +144,6 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
       session.customer = customer._id;
       await session.save();
     }
-
     ensureHistoryArray(customer);
     customer.history.push({
       action: 'login',

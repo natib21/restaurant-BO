@@ -18,6 +18,37 @@ const Table = require('../models/tabelModel');
    1. MULTER CONFIG: Handle image upload (single 'image' field)
    =================================================================== */
 
+/* 
+
+// controllers/menuController.js
+const { uploadImage } = require('../utils/multer');
+const { processImage } = require('../utils/imageProcessor');
+const { buildImageName } = require('../utils/imagePaths');
+const catchAsync = require('../utils/catchAsync');
+
+exports.uploadMenuPhoto = uploadImage.single('image');
+
+exports.resizeMenuPhoto = catchAsync(async (req, res, next) => {
+  if (!req.file) return next();
+
+  const filename = buildImageName({
+    prefix: 'menu',
+    ownerId: req.user.id,
+    name: req.body.name,
+  });
+
+  await processImage({
+    buffer: req.file.buffer,
+    folder: 'menu',
+    filename,
+  });
+
+  req.body.image = filename;
+  next();
+});
+
+*/
+
 const multerStorage = multer.memoryStorage();
 
 const multerFilter = (req, file, cb) => {
@@ -51,7 +82,7 @@ exports.resizeMenuPhoto = catchAsync(async (req, res, next) => {
     .resize(800, 800, { fit: 'cover', position: 'center' })
     .toFormat('jpeg')
     .jpeg({ quality: 92 })
-    .toFile(`public/img/menu/${filename}`);
+    .toFile(`uploads/img/menu/${filename}`);
 
   req.body.image = filename;
   next();
@@ -307,77 +338,167 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
 
 exports.getMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
+
   const menuItem = await Menu.findOne({
     _id: req.params.id,
     merchant: merchantId,
   });
 
-  if (!menuItem) return next(new AppError('Menu item not found.', 404));
+  if (!menuItem) {
+    return next(new AppError('Menu item not found.', 404));
+  }
+
+  const menuWithImage = {
+    ...menuItem.toObject(),
+    image: menuItem.image
+      ? `${req.protocol}://${req.get('host')}/img/menu/${menuItem.image}`
+      : null,
+  };
 
   res.status(200).json({
     status: 'success',
-    data: { menu: menuItem },
+    data: {
+      menu: menuWithImage,
+    },
   });
 });
+const parseJSON = (value, fallback) => {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch (err) {
+    return fallback;
+  }
+};
 
 exports.createNewMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-  console.log(merchantId);
-  // Extract body
-  const { name, type, category, variants, isSpecial, comboOffer } = req.body;
 
-  // Required fields
-  const required = { name, type, category, variants };
-  const missing = Object.keys(required).find(k => !required[k]);
-  if (missing) {
-    return next(
-      new AppError(
-        `Missing required field: ${missing} (name, type, category, menuGroup, variants)`,
-        400
-      )
-    );
+  // ==================== PARSE JSON FIELDS ====================
+  const variants = parseJSON(req.body.variants, []);
+  const ingredients = parseJSON(req.body.ingredients, []);
+  const allergens = parseJSON(req.body.allergens, []);
+  const tags = parseJSON(req.body.tags, []);
+
+  const {
+    name,
+    type,
+    category,
+    description,
+    prepTime,
+    drinkType,
+    isAlcoholic,
+    alcoholPercentage,
+    isVeg,
+    isSpicy,
+    available,
+    price,
+    image,
+  } = req.body;
+
+  // ==================== 1. REQUIRED FIELDS ====================
+  if (!name || !type || !category) {
+    return next(new AppError('name, type and category are required', 400));
   }
 
-  // Additional checks
-  if (!variants.length) return next(new AppError('At least one variant is required.', 400));
-  if (isSpecial && (!comboOffer?.comboPrice || !comboOffer?.description)) {
-    return next(new AppError('Special items require combo price & description.', 400));
+  // ==================== 2. HANDLE VARIANTS ====================
+  let finalVariants = [];
+
+  if (variants.length > 0) {
+    finalVariants = variants.map((v, index) => {
+      if (v.price == null || v.price < 0) {
+        throw new AppError(`Variant ${index + 1} must have a valid price`, 400);
+      }
+
+      return {
+        name: v.name?.trim() || 'Regular',
+        size: v.size || undefined,
+        volume: v.volume || undefined,
+        price: Number(v.price),
+        calories: v.calories,
+        available: v.available !== false,
+        isDefault: Boolean(v.isDefault),
+      };
+    });
+
+    // Ensure one default variant
+    if (!finalVariants.some(v => v.isDefault)) {
+      finalVariants[0].isDefault = true;
+    }
   }
 
-  // Validate menuGroup belongs to this merchant
-  /* const group = await MenuGroup.findOne({ _id: menuGroup, merchant: merchantId });
-  if (!group) return next(new AppError('Invalid menu section.', 400)); */
+  // ==================== 3. FALLBACK DEFAULT VARIANT ====================
+  if (finalVariants.length === 0) {
+    finalVariants.push({
+      name: 'Regular',
+      price: Number(price) || 0,
+      isDefault: true,
+    });
+  }
 
-  const newMenuItem = await Menu.create({ ...req.body, merchant: merchantId });
+  // ==================== 4. CREATE MENU ITEM ====================
+  const menu = await Menu.create({
+    merchant: merchantId,
+    name: name.trim(),
+    type,
+    category: category.trim(),
+    description,
+    prepTime,
+    drinkType: drinkType || null,
+    isAlcoholic: isAlcoholic === 'true',
+    alcoholPercentage: Number(alcoholPercentage) || 0,
+    isVeg: isVeg === 'true' ? true : isVeg === 'false' ? false : null,
+    isSpicy: isSpicy === 'true',
+    available: available !== 'false',
+    price,
+    variants: finalVariants,
+    ingredients,
+    allergens,
+    tags,
+    image,
+  });
 
-  // 2. AUTOMATICALLY ADD TO SYSTEM DEFAULT GROUP
-  // Finds the system-managed group and pushes the new item's reference.
+  // ==================== 5. ADD TO DEFAULT MENU GROUP ====================
   await MenuGroup.findOneAndUpdate(
     { merchant: merchantId, isSystemDefault: true },
     {
       $push: {
         items: {
-          menu: newMenuItem._id,
-          sortOrder: Date.now(), // Initial sort order
+          menu: menu._id,
+          sortOrder: Date.now(),
         },
       },
     }
-    // The rest of the request body might include a menuGroup ID for a *custom* group.
-    // If so, you should handle that separately, but for now, we focus on the system group.
   );
 
-  res.status(201).json({ status: 'success', data: { menu: newMenuItem } });
+  // ==================== 6. RESPONSE ====================
+  res.status(201).json({
+    status: 'success',
+    data: { menu },
+  });
 });
 
 exports.updateMenu = catchAsync(async (req, res, next) => {
   const merchantId = req.user.merchant._id;
-
-  // Optional: validate comboOffer only if isSpecial is true
-  if (req.body.isSpecial && req.body.comboOffer) {
-    if (!req.body.comboOffer.comboPrice || !req.body.comboOffer.description) {
-      return next(new AppError('Special items require combo price & description.', 400));
+  console.log(req.user);
+  // 1. Convert JSON strings back to Objects/Arrays
+  const jsonFields = ['variants', 'ingredients', 'allergens', 'tags'];
+  jsonFields.forEach(field => {
+    if (typeof req.body[field] === 'string') {
+      req.body[field] = parseJSON(req.body[field], []);
     }
+  });
+
+  // 2. Convert Boolean strings (from FormData) to actual Booleans
+  if (req.body.available) req.body.available = req.body.available === 'true';
+  if (req.body.isSpicy) req.body.isSpicy = req.body.isSpicy === 'true';
+  if (req.body.isAlcoholic) req.body.isAlcoholic = req.body.isAlcoholic === 'true';
+
+  if (req.body.isVeg !== undefined) {
+    req.body.isVeg = req.body.isVeg === 'true' ? true : req.body.isVeg === 'false' ? false : null;
   }
+
+  // 3. Update the document
+  // Note: if a new image was uploaded, req.body.image was already set by resizeMenuPhoto
   const updatedMenu = await Menu.findOneAndUpdate(
     { _id: req.params.id, merchant: merchantId },
     req.body,
@@ -471,6 +592,193 @@ exports.getActiveMenu = catchAsync(async (req, res, next) => {
       menu: cleanedGroups,
       combos,
       generatedAt: new Date(),
+    },
+  });
+});
+
+/* ===================================================================
+   6. TOGGLE AVAILABILITY (PATCH /api/menu/:id/toggle-availability)
+   =================================================================== */
+
+exports.toggleMenuItemAvailability = catchAsync(async (req, res, next) => {
+  const merchantId = req.user.merchant._id;
+  const itemId = req.params.id;
+
+  // Find the menu item
+  const menuItem = await Menu.findOne({
+    _id: itemId,
+    merchant: merchantId,
+  });
+
+  if (!menuItem) {
+    return next(new AppError('Menu item not found or access denied.', 404));
+  }
+
+  // Toggle the `available` field
+  const newAvailability = !menuItem.available;
+  menuItem.available = newAvailability;
+
+  // Optional: Also toggle all variants' availability for consistency
+  if (menuItem.variants && menuItem.variants.length > 0) {
+    menuItem.variants = menuItem.variants.map(variant => ({
+      ...variant,
+      available: newAvailability,
+    }));
+  }
+
+  await menuItem.save({ validateModifiedOnly: true });
+
+  res.status(200).json({
+    status: 'success',
+    message: `Menu item is now ${newAvailability ? 'available' : 'unavailable'}`,
+    data: {
+      menu: {
+        id: menuItem._id,
+        name: menuItem.name,
+        available: menuItem.available,
+      },
+    },
+  });
+});
+
+exports.getStaffMenu = catchAsync(async (req, res, next) => {
+  console.log(req.user);
+  const userMerchant = req.user.merchant;
+  const merchantId = userMerchant._id ? userMerchant._id : userMerchant;
+
+  if (!merchantId) {
+    return next(new AppError('You are not associated with any restaurant.', 403));
+  }
+
+  // 2. BASIC SETUP
+  const protocol = req.protocol;
+  const host = req.get('host');
+
+  const merchant = await Merchant.findById(merchantId).select('businessName isActive');
+  if (!merchant || !merchant.isActive) {
+    return next(new AppError('Restaurant not found or closed.', 404));
+  }
+
+  // 3. TIME AND DATE CALCULATION (For Scheduling)
+  const now = new Date();
+  const dayName = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
+  const currentTimeStr = now.toTimeString().slice(0, 5);
+
+  const timeToMinutes = time => {
+    const timeArray = time.split(':');
+    const hours = Number(timeArray[0]);
+    const minutes = Number(timeArray[1]);
+    return hours * 60 + minutes;
+  };
+  const currentMinutes = timeToMinutes(currentTimeStr);
+
+  // 4. FIND ACTIVE MENU GROUPS
+  // We sort by priority (-1) so the most important menus appear first
+  const allGroups = await MenuGroup.find({ merchant: merchantId }).sort({ priority: -1 });
+  const activeGroupIds = [];
+
+  for (let i = 0; i < allGroups.length; i++) {
+    const group = allGroups[i];
+    if (group.visibility === 'hidden') continue;
+
+    let isActive = group.visibility === 'always';
+
+    // Check scheduling if the group is not "always" visible
+    if (!isActive && group.visibility === 'scheduled') {
+      const onActiveDay =
+        !group.activeDays ||
+        group.activeDays.length === 0 ||
+        group.activeDays.map(d => d.toLowerCase()).includes(dayName);
+
+      const notBlocked =
+        !group.blockedDays ||
+        group.blockedDays.length === 0 ||
+        !group.blockedDays.map(d => d.toLowerCase()).includes(dayName);
+
+      const inTimeSlot =
+        !group.timeSlots ||
+        group.timeSlots.length === 0 ||
+        group.timeSlots.some(slot => {
+          const startMin = timeToMinutes(slot.start);
+          const endMin = timeToMinutes(slot.end);
+          if (endMin < startMin) {
+            return currentMinutes >= startMin || currentMinutes <= endMin;
+          }
+          return currentMinutes >= startMin && currentMinutes <= endMin;
+        });
+
+      isActive = onActiveDay && notBlocked && inTimeSlot;
+    }
+
+    if (isActive) {
+      activeGroupIds.push(group._id);
+    }
+  }
+
+  // 5. FETCH ITEMS FOR ACTIVE GROUPS
+  const activeGroups = await MenuGroup.find({
+    _id: { $in: activeGroupIds },
+    merchant: merchantId,
+  })
+    .sort({ priority: -1 })
+    .populate({
+      path: 'items.menu',
+      match: { available: true, inStock: true }, // Only items staff can actually sell
+    });
+
+  // 6. CONSOLIDATE DATA & REMOVE DUPLICATES
+  const baseUrl = protocol + '://' + host + '/img/menu/';
+  const seenItemIds = new Set();
+  const finalItems = [];
+
+  for (let j = 0; j < activeGroups.length; j++) {
+    const groupObj = activeGroups[j];
+
+    for (let k = 0; k < groupObj.items.length; k++) {
+      const itemEntry = groupObj.items[k];
+
+      if (!itemEntry.menu || itemEntry.isHidden) continue;
+
+      const itemIdString = itemEntry.menu._id.toString();
+
+      // If the item exists in a higher priority group already, skip it
+      if (seenItemIds.has(itemIdString)) continue;
+      seenItemIds.add(itemIdString);
+
+      const menu = itemEntry.menu;
+
+      // Determine price (Override > Variant > Default)
+      const itemPrice =
+        itemEntry.overridePrice ||
+        (menu.variants && menu.variants[0] ? menu.variants[0].price : menu.price) ||
+        0;
+
+      finalItems.push({
+        id: menu._id,
+        name: itemEntry.customName || menu.name,
+        description: itemEntry.customDescription || menu.description || '',
+        image: menu.image ? baseUrl + menu.image : null,
+        price: itemPrice,
+        variants: menu.variants || [],
+        type: menu.type,
+        isVeg: menu.isVeg,
+        isSpicy: menu.isSpicy,
+        isAlcoholic: !!menu.isAlcoholic || groupObj.isAlcoholMenu,
+        prepTime: menu.prepTime || '15-25 min',
+        rating: menu.ratingAverage || 4.5,
+        category: groupObj.name, // Staff sees which group/category the item belongs to
+      });
+    }
+  }
+
+  // 7. FINAL RESPONSE
+  res.status(200).json({
+    status: 'success',
+    role: req.user.role,
+    data: {
+      restaurant: merchant.businessName,
+      totalItems: finalItems.length,
+      menu: finalItems,
     },
   });
 });

@@ -20,7 +20,7 @@ exports.getAllRoles = catchAsync(async (req, res, next) => {
   const features = new ApiFeatures(
     Role.find()
       .populate('merchant', 'businessName')
-      .populate('tasks', 'name target method description'),
+      .populate('tasks', 'name endpoint method description isMerchant'),
     req.query
   )
     .filter()
@@ -60,7 +60,14 @@ exports.getRole = catchAsync(async (req, res, next) => {
 // ===================================================================
 exports.createNewRole = catchAsync(async (req, res, next) => {
   const { name, description, tasks, merchant, isSystemRole = false } = req.body;
-
+  let finalMerchant = null;
+  if (merchant) {
+    const merchantDoc = await Merchant.findById(merchant);
+    if (!merchantDoc) {
+      return next(new AppError('Merchant not found', 404));
+    }
+    finalMerchant = merchant;
+  }
   // === 1. Required fields ===
   if (!name || !description) {
     return next(new AppError('Name and description are required', 400));
@@ -75,16 +82,6 @@ exports.createNewRole = catchAsync(async (req, res, next) => {
     if (validTasks.length !== tasks.length) {
       return next(new AppError('One or more task IDs are invalid', 400));
     }
-  }
-
-  // === 3. Validate merchant (if provided) ===
-  let finalMerchant = null;
-  if (merchant) {
-    const merchantDoc = await Merchant.findById(merchant);
-    if (!merchantDoc) {
-      return next(new AppError('Merchant not found', 404));
-    }
-    finalMerchant = merchant;
   }
 
   // === 4. Prevent duplicate name ===
@@ -116,7 +113,7 @@ exports.createNewRole = catchAsync(async (req, res, next) => {
 
   const populated = await Role.findById(newRole._id)
     .populate('merchant', 'businessName')
-    .populate('tasks', 'name target method description');
+    .populate('tasks', 'name endpoint method description');
 
   res.status(201).json({
     status: 'success',

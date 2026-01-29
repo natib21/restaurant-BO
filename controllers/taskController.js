@@ -184,3 +184,19 @@ exports.deleteAllTasks = catchAsync(async (req, res, next) => {
     deletedCount: result.deletedCount,
   });
 });
+
+// -------------------------------------------------------------------
+// GET ALL MERCHANT TASKS (isMerchant: true)
+// -------------------------------------------------------------------
+exports.getMerchantTasks = catchAsync(async (req, res, next) => {
+  // Filter by isMerchant: true
+  const tasks = await Task.find({ isMerchant: true }).select(
+    'name endpoint method description isMerchant'
+  );
+
+  res.status(200).json({
+    status: 'success',
+    results: tasks.length,
+    data: { tasks },
+  });
+});

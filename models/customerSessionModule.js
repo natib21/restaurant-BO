@@ -14,7 +14,7 @@ const customerSessionSchema = new Schema(
       unique: true, // Must be unique for quick and secure lookup
       index: true,
     },
-   table: { type: Schema.Types.ObjectId, ref: 'Table', required: true, index: true },
+    table: { type: Schema.Types.ObjectId, ref: 'Table', required: true, index: true },
     // *** CONTEXT & EXPIRY ***
     merchant: {
       type: Schema.Types.ObjectId,
@@ -54,14 +54,10 @@ const customerSessionSchema = new Schema(
 );
 
 // Compound index for fast lookup by merchant and location
-customerSessionSchema.index(
-  { table: 1, merchant: 1, isActive: 1, expiresAt: 1 },
-  { unique: true }
-);
-customerSessionSchema.index({ table: 1, isActive: true }, { unique: true, sparse: true });
+customerSessionSchema.index({ table: 1, merchant: 1, isActive: 1, expiresAt: 1 }, { unique: true });
+// customerSessionSchema.index({ table: 1, isActive: true }, { unique: true, sparse: true });
 
 customerSessionSchema.index({ tableId: 1, isActive: true }, { unique: true, sparse: true });
-
 
 customerSessionSchema.virtual('tableDetails', {
   ref: 'Table',
@@ -102,6 +98,5 @@ customerSessionSchema.pre('save', async function (next) {
 
   next();
 });
-
 
 module.exports = mongoose.model('CustomerSession', customerSessionSchema);
