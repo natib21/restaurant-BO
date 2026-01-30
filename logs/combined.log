@@ -11164,3 +11164,27 @@
 {"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-01-29T12:45:58.009Z"}
 {"level":"info","message":"Shutting down gracefully...","timestamp":"2026-01-29T13:30:36.671Z"}
 >>>>>>> branch_mgmt
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2026-01-30T13:09:18.512Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-01-30T13:09:21.369Z"}
+{"level":"info","message":"Connection established: HCy8QTfPXpY0fpXvAAAB","timestamp":"2026-01-30T13:37:41.315Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 694cf725f08787fe0bb6e105 (3 permissions)","timestamp":"2026-01-30T13:37:41.320Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:37:46.455Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:37:46.576Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:37:46.577Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:37:46.577Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 694cf725f08787fe0bb6e105 (3 permissions)","timestamp":"2026-01-30T13:37:57.076Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 694cf725f08787fe0bb6e105 (3 permissions)","timestamp":"2026-01-30T13:37:57.123Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 694cf725f08787fe0bb6e105 (3 permissions)","timestamp":"2026-01-30T13:37:57.124Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 694cf725f08787fe0bb6e105 (3 permissions)","timestamp":"2026-01-30T13:37:57.124Z"}
+{"level":"info","message":"Connection closed: HCy8QTfPXpY0fpXvAAAB (client namespace disconnect)","timestamp":"2026-01-30T13:37:59.718Z"}
+{"level":"info","message":"Connection established: ylDXQujmRy7AhToFAAAD","timestamp":"2026-01-30T13:39:11.733Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 694cf725f08787fe0bb6e105 (3 permissions)","timestamp":"2026-01-30T13:39:11.736Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:39:17.500Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:39:17.602Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:39:17.603Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:39:17.603Z"}
+{"level":"info","message":"Connection closed: ylDXQujmRy7AhToFAAAD (client namespace disconnect)","timestamp":"2026-01-30T13:39:53.954Z"}
+{"level":"info","message":"Connection established: RhMwMJ-oUheN9d5pAAAF","timestamp":"2026-01-30T13:40:01.737Z"}
+{"level":"info","message":"User 694cf725f08787fe0bb6e10a synced with Branch 695652359bb19700a1b737ea (3 permissions)","timestamp":"2026-01-30T13:40:01.739Z"}
+{"level":"info","message":"Connection closed: RhMwMJ-oUheN9d5pAAAF (client namespace disconnect)","timestamp":"2026-01-30T13:41:19.332Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-01-30T13:54:14.012Z"}
