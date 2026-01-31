@@ -60,7 +60,7 @@ exports.initiateSubscription = catchAsync(async (req, res, next) => {
     return next(new AppError('Phone number is required for payment initialization.', 400));
   }
 
-  const pricing = { basic: 1500, pro: 2500, enterprise: 5000 };
+  const pricing = { basic: 1, pro: 1, enterprise: 1 };
 
   if (!pricing[plan]) {
     return next(new AppError('Invalid subscription plan selected.', 400));

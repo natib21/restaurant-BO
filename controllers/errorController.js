@@ -77,8 +77,8 @@ const sendErrorProd = (err, res) => {
   } else {
     console.error('ERROR 🔥', err);
     res.status(500).json({
-      status:err.status /* 'Error', */,
-      message:err.message /* 'Something went Very Wrong !' */,
+      status: 'Error',
+      message: 'Something went Very Wrong !',
     });
   }
 };
