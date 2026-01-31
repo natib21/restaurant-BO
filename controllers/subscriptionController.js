@@ -195,14 +195,14 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
     const eventIdHeader = req.headers['x-kispay-event-id']; // Lowercase, for payment webhooks
     const timestamp = req.headers['x-kispay-timestamp']; // Optional
     const apiVersionHeader = req.headers['x-kispay-api-version'];
-
+   const receivedAt = new Date().toISOString();
   console.log(`[${receivedAt}] 🔍 Headers: signature=${signature2?.substring(0, 16)}..., eventId=${eventIdHeader}, apiVersion=${apiVersionHeader}, timestamp=${timestamp}`);
   if (!signature) {
         console.log(`[${receivedAt}] ❌ Missing x-kispay-signature`);
         return res.status(400).json({ error: 'Missing x-kispay-signature header' });
     }
   const isValid = verifySignature(req.body, signature);
-  console.log()
+
    
 
   if (!isValid) {
@@ -221,7 +221,7 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
     console.error('[Kispay Webhook] Invalid JSON', err.message);
     return res.status(400).json({ error: 'Invalid JSON' });
   }
-
+ console.log(payload)
   const eventType = (payload.event || payload.eventType || 'unknown').toLowerCase();
   const tx_ref = payload.tx_ref || payload.reference || payload.orderNo || payload.txRef;
 
