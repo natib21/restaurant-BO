@@ -85,7 +85,10 @@ app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 app.use('/img/combo', express.static(path.join(__dirname, 'uploads/img/combo')));
 app.use('/img/orderPayment', express.static(path.join(__dirname, 'uploads/img/orderPayment')));
 app.use('/img/merchants', express.static(path.join(__dirname, 'uploads/img/merchants')));
-
+app.use((req, res, next) => {
+  console.log('Incoming Request:', req.method, req.url);
+  next();
+});
 
 app.post(
   '/api/v1/subscriptions/webhooks/kispay',

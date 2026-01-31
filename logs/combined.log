@@ -11262,3 +11262,9 @@
 {"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2026-01-31T12:10:51.155Z"}
 {"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-01-31T12:10:52.729Z"}
 {"level":"info","message":"Shutting down gracefully...","timestamp":"2026-01-31T12:15:50.775Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 7000\u001b[49m","timestamp":"2026-01-31T12:29:16.068Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-01-31T12:29:18.676Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-01-31T12:38:50.417Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-01-31T12:38:54.047Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-01-31T12:39:05.140Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-01-31T13:56:11.968Z"}

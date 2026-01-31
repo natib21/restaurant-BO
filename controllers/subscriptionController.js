@@ -190,12 +190,20 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
   const signature = req.headers['x-kispay-signature'];
   const eventId = req.headers['x-kispay-event-id'] || null;
 
-  const isValid = verifySignature(req.body, signature);
-  console.log(signature)
-   if (!signature) {
+
+    const signature2 = req.headers['x-kispay-signature']; // Lowercase, hex
+    const eventIdHeader = req.headers['x-kispay-event-id']; // Lowercase, for payment webhooks
+    const timestamp = req.headers['x-kispay-timestamp']; // Optional
+    const apiVersionHeader = req.headers['x-kispay-api-version'];
+
+  console.log(`[${receivedAt}] 🔍 Headers: signature=${signature2?.substring(0, 16)}..., eventId=${eventIdHeader}, apiVersion=${apiVersionHeader}, timestamp=${timestamp}`);
+  if (!signature) {
         console.log(`[${receivedAt}] ❌ Missing x-kispay-signature`);
         return res.status(400).json({ error: 'Missing x-kispay-signature header' });
     }
+  const isValid = verifySignature(req.body, signature);
+  console.log()
+   
 
   if (!isValid) {
     console.error('[Kispay Webhook] Invalid signature', {
