@@ -334,7 +334,7 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
 if (!menuItems) return next(new AppError('Menu item not found.', 404));
   const menuWithImages = menuItems.map(item => ({
     ...item.toObject(),
-    image: item.image ? `${req.protocol}://${req.get('host')}/img/menu/${item.image}` : null,
+    image: item.image ? `${req.protocol}s://${req.get('host')}/img/menu/${item.image}` : null,
   }));
 
   res.status(200).json({

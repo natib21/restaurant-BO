@@ -8,13 +8,13 @@ const KISPAY_CONFIG = {
     apiKey: 'KPG_PROD-24af96ce47e74859a938aee194d82983',
     clientId: '931e3cac-ebfc-45bb-bebc-e5f92b6afbd8',
     apiBaseUrl: 'https://api.kispay.et',
-    webhookSecret: 'itO1Syykzv97GWOaBEXnUi4qBGA6nrWdhZTZYMvo+js=',
-    webhookUrl: 'https://kptestmerchant.kispay.et/api/webhooks',
+    webhookSecret: '8ydzbk7oV2owAGAhpGJnN3pLUtOO14MUNTAIo8HI+Mo=',
+    webhookUrl: 'https://restaurant-bo.onrender.com/api/v1/subscriptions/webhooks/kispay',
     supportedEvents: ['PAYMENT_CREATED', 'PAYMENT_COMPLETED', 'PAYMENT_FAILED', 'PAYMENT_CANCELED']
 };
 
 const KISPAY_WEBHOOK_SECRET = process.env.KISPAY_WEBHOOK_SECRET ||
-  'itO1Syykzv97GWOaBEXnUi4qBGA6nrWdhZTZYMvo+js='; 
+  '8ydzbk7oV2owAGAhpGJnN3pLUtOO14MUNTAIo8HI+Mo='; 
 
 const calculateEndDate = (months = 1) => {
   const date = new Date();
@@ -191,6 +191,11 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
   const eventId = req.headers['x-kispay-event-id'] || null;
 
   const isValid = verifySignature(req.body, signature);
+  console.log(signature)
+   if (!signature) {
+        console.log(`[${receivedAt}] ❌ Missing x-kispay-signature`);
+        return res.status(400).json({ error: 'Missing x-kispay-signature header' });
+    }
 
   if (!isValid) {
     console.error('[Kispay Webhook] Invalid signature', {
@@ -204,7 +209,7 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
   let payload;
   try {
     payload = JSON.parse(req.body.toString('utf-8'));
-  } catch (err) {
+   } catch (err) {
     console.error('[Kispay Webhook] Invalid JSON', err.message);
     return res.status(400).json({ error: 'Invalid JSON' });
   }
@@ -249,17 +254,17 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
 
     case 'payment.failed':
     case 'charge.failed':
-      newStatus = 'failed';
+      newStatus = 'canceled';
       break;
 
     case 'payment.cancelled':
     case 'payment_canceled':
     case 'charge.cancelled':
-      newStatus = 'cancelled';
+      newStatus = 'canceled';
       break;
 
     case 'payment.created':
-      newStatus = 'processing';
+      newStatus = 'pending';
       break;
 
     default:
