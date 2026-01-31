@@ -31,6 +31,7 @@ const customerRouter = require('./routes/customerRouter');
 const customerSessionRouter = require('./routes/customerSessionRouter');
 const branchRouter = require('./routes/branchRouter');
 const subscriptionRouter = require('./routes/subscriptionRoutes');
+const subscriptionController = require('./controllers/subscriptionController')
 // ──────────────────────────────────────────────────────────────
 // App
 // ──────────────────────────────────────────────────────────────
@@ -84,6 +85,14 @@ app.use('/img/menu', express.static(path.join(__dirname, 'uploads/img/menu')));
 app.use('/img/combo', express.static(path.join(__dirname, 'uploads/img/combo')));
 app.use('/img/orderPayment', express.static(path.join(__dirname, 'uploads/img/orderPayment')));
 app.use('/img/merchants', express.static(path.join(__dirname, 'uploads/img/merchants')));
+
+
+app.post(
+  '/api/v1/subscriptions/webhooks/kispay',
+  express.raw({ type: 'application/json' }),
+  subscriptionController.kispayWebhook 
+);
+
 // ----------------------------------------------------------------
 // 3. Body parsers & sanitizers
 // ----------------------------------------------------------------

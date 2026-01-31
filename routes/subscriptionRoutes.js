@@ -11,12 +11,12 @@ router.post('/subscribe', authController.protect, subscriptionController.initiat
 // POST /api/v1/subscriptions/webhooks/kispay
 // Note: No auth middleware! Kispay doesn't send auth tokens.
 // Alternative in subscriptionRoutes.js
-router.post(
+/* router.post(
   '/webhooks/kispay',
   express.raw({ type: 'application/json' }),
   subscriptionController.kispayWebhook
 );
-
+ */
 // 3. MANUAL VERIFICATION / FALLBACK (Protected - frontend calls after redirect)
 // POST /api/v1/subscriptions/verify
 // Note: This is the polling/redirect fallback — keep protected
