@@ -79,9 +79,6 @@ class BranchControlService {
       .lean();
   }
 
-  /**
-   * Enforce staff user may only operate on assigned branch(es).
-   */
   static assertBranchAccess(user, branchId) {
     if (!user || !branchId) return;
     if (user.role?.name === 'SUPER-ADMIN' || user.role?.isSystemRole) return;

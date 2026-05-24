@@ -8,7 +8,7 @@ const {
   buildOrderUpdatedEvents,
   buildInventoryStockUpdatedEvent,
   buildInventoryLowStockEvent,
-} = require('../orders/order-realtime-events');
+} = require('./events/order-realtime-events');
 const logger = require('../../../utils/logger');
 
 /**

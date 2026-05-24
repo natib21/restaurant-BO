@@ -4,10 +4,10 @@ const Table = require('../../../models/tabelModel');
 const Counter = require('../../../models/CounterModel.js');
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
-const { OrderService } = require('./order.service');
-const InventoryService = require('../../../services/InventoryService');
+const { OrderService } = require('./service/OrderService');
+const { InventoryService } = require('../inventory');
 const { IdempotencyService } = require('./idempotency.service');
-const { NotificationService } = require('../notifications/notification.service');
+const { NotificationService } = require('../notifications');
 
 /**
  * @typedef {Object} PlaceOrderCommand

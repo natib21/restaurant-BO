@@ -1,9 +1,7 @@
 /**
- * Re-exports legacy InventoryService during migration.
- * Future: move implementation here from services/InventoryService.js
+ * @deprecated Use `src/modules/inventory` (index.js) as the public API.
  */
-const LegacyInventoryService = require('../../../services/InventoryService');
+const { InventoryService } = require('./index');
 
-export class InventoryService extends LegacyInventoryService {}
-
-module.exports = { InventoryService: LegacyInventoryService };
+export { InventoryService };
+module.exports = { InventoryService };

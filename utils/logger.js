@@ -77,4 +77,5 @@ const morganStream = {
   },
 };
 
-module.exports = { logger, morganStream };
+// Support both `const { logger }` and `const logger` import styles
+module.exports = Object.assign(logger, { logger, morganStream });

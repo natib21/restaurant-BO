@@ -47,7 +47,7 @@ const branchMenu = new mongoose.Schema(
   }
 );
 
-branchMenuItemSchema.index({ branch: 1, masterItem: 1 }, { unique: true, sparse: true });
-branchMenuItemSchema.index({ branch: 1 });
+branchMenu.index({ branch: 1, menuItem: 1 }, { unique: true, sparse: true });
+branchMenu.index({ branch: 1 });
 
 module.exports = mongoose.model('BranchMenu', branchMenu);

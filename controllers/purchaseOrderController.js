@@ -1,6 +1,6 @@
 // controllers/purchaseOrderController.js
 const PurchaseOrder = require('../models/PurchaseOrder');
-const InventoryService = require('../services/InventoryService');
+const { InventoryService } = require('../src/modules/inventory');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 

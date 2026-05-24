@@ -1,4 +1,4 @@
-const { BranchControlService } = require('../../modules/branch/branch-control.service');
+const { BranchService } = require('../../modules/branch');
 
 /**
  * Enriches req.ctx.branchId from body/query when staff operates on a branch.
@@ -17,7 +17,7 @@ function enrichBranchContext(req, res, next) {
 
   if (req.user && branchId && process.env.BRANCH_ACCESS_ENFORCEMENT === 'true') {
     try {
-      BranchControlService.assertBranchAccess(req.user, branchId);
+      BranchService.assertBranchAccess(req.user, branchId);
     } catch (error) {
       return next(error);
     }

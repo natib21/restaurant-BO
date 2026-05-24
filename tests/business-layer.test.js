@@ -1,7 +1,7 @@
 const { CAPABILITIES, userHasCapability } = require('../src/common/capabilities/capabilities');
 const { isOrderablePublishStatus } = require('../src/modules/menu/menu-management.service');
-const { TableSystemService } = require('../src/modules/tables/table-system.service');
-const { QrTokenService } = require('../src/modules/tables/qr-token.service');
+const { BranchService } = require('../src/modules/branch');
+const { QrTokenService } = require('../src/modules/branch/qr-token.service');
 
 describe('Capabilities (additive RBAC)', () => {
   it('grants super-admin all capabilities', () => {
@@ -25,13 +25,13 @@ describe('MenuManagementService publish status', () => {
   });
 });
 
-describe('TableSystemService transitions', () => {
+describe('BranchService table transitions', () => {
   it('allows available to occupied', () => {
-    expect(() => TableSystemService.validateTransition('available', 'occupied')).not.toThrow();
+    expect(() => BranchService.validateTableTransition('available', 'occupied')).not.toThrow();
   });
 
   it('rejects occupied to reserved', () => {
-    expect(() => TableSystemService.validateTransition('occupied', 'reserved')).toThrow();
+    expect(() => BranchService.validateTableTransition('occupied', 'reserved')).toThrow();
   });
 });
 

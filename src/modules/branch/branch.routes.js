@@ -1,6 +1,6 @@
 const express = require('express');
 const authController = require('../../../controllers/authController');
-const branchController = require('./branch.controller');
+const branchController = require('./controller/branch.controller');
 const { requireCapability } = require('../../common/guards/capability.guard');
 const { CAPABILITIES } = require('../../common/capabilities/capabilities');
 

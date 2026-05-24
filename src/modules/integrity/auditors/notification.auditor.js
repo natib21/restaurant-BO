@@ -74,7 +74,14 @@ function auditNotifications({ merchantId } = {}) {
     }
   }
 
-  const realtimeEventsPath = path.join(PROJECT_ROOT, 'src/modules/orders/order-realtime-events.js');
+  const canonicalEventsPath = path.join(
+    PROJECT_ROOT,
+    'src/modules/notifications/events/order-realtime-events.js'
+  );
+  const legacyShimPath = path.join(PROJECT_ROOT, 'src/modules/orders/order-realtime-events.js');
+  const realtimeEventsPath = fs.existsSync(canonicalEventsPath)
+    ? canonicalEventsPath
+    : legacyShimPath;
   if (fs.existsSync(realtimeEventsPath)) {
     const content = fs.readFileSync(realtimeEventsPath, 'utf8');
     for (const eventName of CANONICAL_SOCKET_EVENTS) {

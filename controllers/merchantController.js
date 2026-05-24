@@ -681,56 +681,14 @@ exports.getMerchantUserById = catchAsync(async (req, res, next) => {
  *   ?isActive=true|false
  *   ?role=roleId
  */
-exports.getMerchantUsersByBranch = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant?._id;
-  if (!merchantId) {
-    return next(
-      new AppError('Merchant context not found — are you logged in as a merchant user?', 403)
-    );
-  }
-
-  const { id } = req.params;
-
-  const branch = await Branch.findOne({
-    _id: id,
-    merchant: merchantId,
-  })
-    .select('name address isActive')
-    .lean();
-
-  if (!branch) {
-    return next(new AppError('Branch not found or does not belong to your merchant', 404));
-  }
-
-  if (!branch.isActive) {
-    return next(new AppError('This branch is currently inactive', 400));
-  }
-
-  const query = {
-    merchant: merchantId,
-    branch: id,
-    isActive: true,
-  };
-
-  const users = await User.find(query)
-    .select('firstName lastName phone email role isActive createdAt')
-    .populate({
-      path: 'role',
-      select: 'name description',
-    })
-    .sort({ firstName: 1, lastName: 1 }) // nice default ordering
-    .lean();
+exports.getMerchantUsersByBranch = catchAsync(async (req, res) => {
+  const { BranchService } = require('../src/modules/branch');
+  const { branch, users } = await BranchService.getMerchantUsersByBranch(req);
 
   res.status(200).json({
     status: 'success',
     results: users.length,
-    data: {
-      branch: {
-        _id: id,
-        name: branch.name || 'Unnamed Branch',
-      },
-      users,
-    },
+    data: { branch, users },
   });
 });
 exports.createMerchantRole = catchAsync(async (req, res, next) => {

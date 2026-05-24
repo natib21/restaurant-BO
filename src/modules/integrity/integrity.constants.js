@@ -6,7 +6,10 @@ const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 const REQUIRED_MODULE_PATHS = [
   'src/modules/orders/order-transaction.service.js',
   'src/modules/orders/order-state-machine.service.js',
-  'src/modules/orders/order-realtime-events.js',
+  'src/modules/notifications/events/order-realtime-events.js',
+  'src/modules/notifications/index.js',
+  'src/modules/inventory/index.js',
+  'src/modules/inventory/service/InventoryService.js',
   'src/infrastructure/outbox/outbox.service.js',
   'src/infrastructure/outbox/outbox-worker.js',
   'src/infrastructure/outbox/outbox-publisher.js',
@@ -17,6 +20,14 @@ const REQUIRED_MODULE_PATHS = [
 ];
 
 const DEPRECATED_OR_DUPLICATE_PATHS = [
+  {
+    rel: 'src/modules/orders/order-realtime-events.js',
+    reason: 'Shim — canonical builders live under src/modules/notifications/events/',
+  },
+  {
+    rel: 'services/InventoryService.js',
+    reason: 'Shim — canonical service lives under src/modules/inventory/',
+  },
   {
     rel: 'src/modules/orders/post-commit-emitter.js',
     reason: 'Superseded by transactional outbox; should not be used for new emits',
