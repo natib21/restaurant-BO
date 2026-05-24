@@ -11268,3 +11268,60 @@
 {"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-01-31T12:38:54.047Z"}
 {"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-01-31T12:39:05.140Z"}
 {"level":"info","message":"Shutting down gracefully...","timestamp":"2026-01-31T13:56:11.968Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-03-22T12:59:05.320Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-03-22T12:59:11.270Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:00:36.254Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:01:06.465Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:01:21.020Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:01:51.269Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:03:38.789Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:04:08.972Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:06:41.445Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:07:11.659Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:09:27.289Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:09:57.502Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:10:19.600Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-04-10T10:10:19.643Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-04-10T10:24:50.227Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:24:53.757Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-04-10T10:24:53.775Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-04-10T10:29:52.060Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:29:57.508Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:30:27.760Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:30:53.216Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:31:23.417Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:45:29.606Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:45:39.855Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:46:30.811Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:46:41.063Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:48:04.617Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T10:48:14.800Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T10:51:15.117Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-04-10T10:51:15.140Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-04-10T18:55:49.070Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T18:58:39.757Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-04-10T18:58:39.812Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-04-10T18:58:56.192Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T18:59:02.806Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T18:59:13.099Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T18:59:18.484Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T18:59:28.905Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T19:03:47.456Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T19:04:12.466Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-10T19:05:14.530Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-10T19:05:24.748Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-11T11:14:49.518Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-11T11:14:59.782Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-04-11T12:47:32.991Z"}
+{"level":"error","message":"UNHANDLED REJECTION: MongooseServerSelectionError - Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","timestamp":"2026-04-11T12:47:43.248Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-05-02T09:25:38.321Z"}
+{"level":"error","message":"UNHANDLED REJECTION: Error - querySrv ECONNREFUSED _mongodb._tcp.cluster0.zuwarje.mongodb.net","timestamp":"2026-05-02T09:25:38.382Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-05-02T09:28:12.392Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-05-02T09:28:12.533Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-05-02T09:36:39.425Z"}
+{"level":"info","message":"\u001b[46mServer is running on port 8000\u001b[49m","timestamp":"2026-05-02T09:37:44.995Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-05-02T09:37:45.033Z"}
+{"level":"info","message":"Shutting down gracefully...","timestamp":"2026-05-02T13:18:13.215Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-05-20T21:54:25.142Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-05-20T21:54:27.620Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-05-20T21:54:27.634Z"}

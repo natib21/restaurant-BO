@@ -6,18 +6,22 @@ const Table = require('../models/tabelModel');
 const CustomerSession = require('../models/customerSessionModule');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
-const { getIo } = require('../socket');
 const mongoose = require('mongoose');
+const { NotificationService } = require('../src/modules/notifications/notification.service');
 const multer = require('multer');
 const sharp = require('sharp');
 const ApiFeatures = require('../utils/apiFeatures');
-// ====================================================
-//  HELPER: Multi-tenant scoped query
-// ====================================================
-const merchantScopedQuery = (query = {}, req) => ({
-  ...query,
-  merchant: req.user.merchant._id,
-});
+const { OrderService } = require('../src/modules/orders/order.service');
+const { OrderTransactionService } = require('../src/modules/orders/order-transaction.service');
+const { OrderStateMachineService } = require('../src/modules/orders/order-state-machine.service');
+const { IdempotencyService } = require('../src/modules/orders/idempotency.service');
+const {
+  getMerchantId,
+  getBranchId,
+  merchantScopedQuery: tenantMerchantScopedQuery,
+} = require('../src/common/utils/tenant-scope.js');
+
+const merchantScopedQuery = (query = {}, req) => tenantMerchantScopedQuery(query, req);
 
 const attachPaymentImage = (order, req) => {
   if (!order?.paymentDetails?.receiptImage) return order;
@@ -55,7 +59,7 @@ exports.uploadOrderPaymentPhoto = upload.single('image');
 exports.resizeOrderPaymentPhoto = catchAsync(async (req, res, next) => {
   if (!req.file) return next();
 
-  const merchantId = req.user.id; // merchant login
+  const merchantId = OrderService.getMerchantId(req);
   const itemName = (req.body.name || 'item').replace(/\s+/g, '_').toLowerCase();
   const filename = `orderPayment-${merchantId}-${itemName}-${Date.now()}.jpeg`;
 
@@ -69,171 +73,47 @@ exports.resizeOrderPaymentPhoto = catchAsync(async (req, res, next) => {
   next();
 });
 
+const buildOrderItems = (items, merchantId) => OrderService.buildOrderItems(items, merchantId);
+
+const VALID_TRANSITIONS = OrderService.VALID_TRANSITIONS;
+const getOrdersByStatus = (req, statusArray, extraFilter) =>
+  OrderService.getOrdersByStatus(req, statusArray, extraFilter);
+const formatElapsed = OrderService.formatElapsed;
+const getUrgency = OrderService.getUrgency;
+const calculateSummary = OrderService.calculateSummary;
 // ====================================================
-//  HELPER: Build Order Items (fully multi-tenant safe)
-// ====================================================
-const buildOrderItems = async (items, merchantId) => {
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    throw new AppError('Order must contain at least one item', 400);
-  }
-
-  let subtotal = 0;
-  const orderItems = [];
-
-  for (const item of items) {
-    if (!item.menuItemId) {
-      throw new AppError('Each item must have "menuItem" field (ObjectId)', 400);
-    }
-    const menuItem = await MenuItem.findOne({
-      _id: item.menuItemId,
-      merchant: merchantId, // ⛑ multi-tenant protection
-      available: true,
-    });
-    console.log('Item :- ', item, ' merhcant :- ', merchantId);
-    if (!menuItem) {
-      throw new AppError('Menu item not found or unavailable', 400);
-    }
-
-    const quantity = Number(item.quantity) || 1;
-    if (quantity < 1) throw new AppError('Quantity must be at least 1', 400);
-    const unitPrice = menuItem.price;
-    const totalPrice = quantity * unitPrice;
-
-    orderItems.push({
-      menuItem: menuItem._id,
-      name: menuItem.name,
-      quantity,
-      unitPrice,
-      totalPrice,
-      notes: item.notes || '',
-    });
-
-    subtotal += totalPrice;
-  }
-
-  return { orderItems, subtotal };
-};
-
-// order status transitions
-const VALID_TRANSITIONS = {
-  pending: ['accepted', 'canceled'],
-  accepted: ['preparing'],
-  preparing: ['ready'],
-  ready: ['served'],
-  served: ['completed'],
-};
-// ====================================================
-//  REUSABLE: Get orders by status + optional filters
-// ====================================================
-const getOrdersByStatus = async (req, statusArray, extraFilter = {}) => {
-  const merchantId = req.merchant._id;
-
-  return await Order.find({
-    merchant: merchantId,
-    status: { $in: statusArray },
-    ...extraFilter,
-  })
-    .populate('table', 'tableNumber')
-    .populate('assignedWaiter', 'fullName')
-    .populate('assignedKitchenStaff', 'fullName')
-    .select(
-      'orderNumber status tableNumber totalAmount placedAt readyAt items assignedWaiter assignedKitchenStaff'
-    )
-    .sort({ placedAt: 1 })
-    .lean()
-    .then(orders =>
-      orders.map(order => ({
-        ...order,
-        itemCount: order.items.reduce((s, i) => s + i.quantity, 0),
-        elapsed: formatElapsed(order.placedAt),
-        urgency: getUrgency(order.placedAt),
-      }))
-    );
-};
-
-// Helper: "12 min ago"
-const formatElapsed = date => {
-  const mins = Math.floor((Date.now() - new Date(date)) / 60000);
-  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h${mins % 60}m`;
-};
-
-// Helper: red/orange/green
-const getUrgency = date => {
-  const mins = Math.floor((Date.now() - new Date(date)) / 60000);
-  if (mins > 25) return 'high';
-  if (mins > 15) return 'medium';
-  return 'low';
-};
-
-// Summary for completed
-const calculateSummary = orders => ({
-  totalOrders: orders.length,
-  totalRevenue: orders.reduce((s, o) => s + o.totalAmount, 0),
-  avgOrderValue: orders.length
-    ? Math.round(orders.reduce((s, o) => s + o.totalAmount, 0) / orders.length)
-    : 0,
-});
-// ====================================================
-//  1. PLACE ORDER (Customer)
+//  1. PLACE ORDER (Customer) - FULLY ATOMIC
 // ====================================================
 exports.placeOrder = catchAsync(async (req, res, next) => {
   const { items } = req.body;
   const { tableId, customerId } = req;
 
-  // Verify table belongs to this merchant
-  const table = await Table.findOne(merchantScopedQuery({ _id: tableId }, req));
-  if (!table) return next(new AppError('Table not found', 404));
+  const merchantId = getMerchantId(req);
+  const branchId = getBranchId(req) ?? req.tableSession?.branch;
 
-  // Build safe items
-  const { orderItems, subtotal } = await buildOrderItems(
-    items,
-    req.merchantId // pass merchantId FIXED 🔥
-  );
+  if (!branchId) {
+    return next(new AppError('Branch context is required', 400));
+  }
 
-  const totalAmount = subtotal;
+  const idempotencyKey = IdempotencyService.normalizeKey(req.get('Idempotency-Key'));
 
-  const order = await Order.create({
-    merchant: req.merchantId,
-    branch: req.branchId,
-    customer: customerId,
+  const { order, replayed } = await OrderTransactionService.executePlaceOrder({
+    merchantId,
+    branchId,
+    tableId,
+    customerId,
+    customer: req.customer,
     customerName: req.customer?.fullName || 'Guest',
     customerPhone: req.customer?.phone || null,
-    table: tableId,
-    tableNumber: table.tableNumber,
-    orderType: 'dine_in',
-    items: orderItems,
-    subtotal,
-    totalAmount,
-    paymentStatus: 'unpaid',
-    placedAt: new Date(),
+    items,
+    performedBy: req.user?._id || null,
+    idempotencyKey,
   });
 
-  // update customer stats
-  if (req.customer) {
-    req.customer.stats.totalOrders += 1;
-    req.customer.stats.totalSpent += totalAmount;
-    req.customer.stats.lastOrderAt = new Date();
-
-    req.customer.history.push({
-      action: 'place_order',
-      details: `Placed order ${order.orderNumber}`,
-      order: order._id,
-      addedAt: new Date(),
-    });
-
-    await req.customer.save({ validateBeforeSave: false });
+  if (replayed) {
+    res.set('Idempotent-Replayed', 'true');
   }
-  const io = getIo();
 
-  io.emit('new-order', {
-    orderId: order._id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    tableNumber: table.tableNumber,
-    totalAmount: order.totalAmount,
-    placedAt: order.placedAt,
-    items: orderItems,
-  });
   res.status(201).json({
     status: 'success',
     message: `Order ${order.orderNumber} sent to kitchen!`,
@@ -286,7 +166,7 @@ exports.staffPlaceOrder = catchAsync(async (req, res, next) => {
   const totalAmount = subtotal;
 
   const order = new Order({
-    merchant: req.user.merchant._id,
+    merchant: OrderService.getMerchantId(req),
     branch: branchId,
     customerName: customerName || 'Walk-in Customer',
     customerPhone: customerPhone || null,
@@ -307,43 +187,16 @@ exports.staffPlaceOrder = catchAsync(async (req, res, next) => {
   if (orderType === 'dine_in') {
     await Table.findByIdAndUpdate(tableId, { status: 'occupied' });
   }
-  const io = getIo();
 
-  // 1. Broadcast new order to users with ORDER_VIEW or ORDER_MANAGE permissions
-  io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:create', {
-    orderId: order._id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    tableNumber: order.tableNumber,
-    location: order.location,
-    totalAmount: order.totalAmount,
-    branch: branchId,
-    placedAt: order.placedAt,
-    items: order.items,
-    orderType: order.orderType,
-    customerName: order.customerName,
-    placedBy: req.user.firstName || 'Staff',
-  });
-
-  /*   io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:new', {
-    ... // same data
-  }); */
-
-  // 2. Optional: Send a notification to kitchen staff
-  io.to(`branch:${branchId}:perm:KITCHEN_VIEW`).emit('notification', {
-    title: 'New Order!',
-    message: `Order ${order.orderNumber} placed${tableNumber ? ` - Table ${tableNumber}` : ''}`,
-    type: 'info',
-    sound: true,
-    orderId: order._id,
-  });
-
-  // 3. Also send to general branch room (for table sync, etc.)
-  io.to(`branch:${branchId}`).emit('order:create', {
-    orderNumber: order.orderNumber,
-    tableNumber,
-    status: 'pending',
-  });
+  await OutboxService.insertEvents(
+    buildStaffPlaceOrderEvents({
+      order,
+      branchId,
+      merchantId: order.merchant,
+      tableNumber,
+      placedByName: req.user.firstName || 'Staff',
+    })
+  );
 
   // Respond to client
   res.status(201).json({
@@ -416,88 +269,31 @@ exports.getActiveOrders = catchAsync(async (req, res) => {
 // ====================================================
 exports.updateOrderStatus = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  const { status, assignedWaiter, assignedKitchenStaff } = req.body;
-  console.log(req.params);
-  const order = await Order.findOne(merchantScopedQuery({ _id: id }, req));
+  const { status, assignedWaiter, assignedKitchenStaff, reason } = req.body;
 
-  if (!order) return next(new AppError('Order not found', 404));
-
-  if (!VALID_TRANSITIONS[order.status]?.includes(status)) {
-    return next(new AppError(`Cannot change from ${order.status} → ${status}`, 400));
+  if (!status) {
+    return next(new AppError('Status is required', 400));
   }
 
-  const previousStatus = order.status;
-
-  // Update fields
-  order.status = status;
-  if (status === 'accepted') order.acceptedAt = new Date();
-  if (status === 'ready') order.readyAt = new Date();
-  if (status === 'served') order.servedAt = new Date();
-  if (status === 'completed') order.completedAt = new Date();
-
-  if (assignedWaiter) order.assignedWaiter = assignedWaiter;
-  if (assignedKitchenStaff) order.assignedKitchenStaff = assignedKitchenStaff;
-
-  await order.save();
-
-  // ────────────────────────────────────────────────
-  //          SOCKET BROADCAST - IMPROVED
-  // ────────────────────────────────────────────────
-  const io = getIo();
-  const branchId = order.branch.toString();
-
-  const payload = {
-    orderId: order._id.toString(),
-    orderNumber: order.orderNumber,
-    branchId,
-    tableNumber: order.tableNumber,
-    status: order.status,
-    previousStatus,
-    updatedAt: new Date().toISOString(),
-    assignedWaiter: order.assignedWaiter ? { id: order.assignedWaiter.toString() } : null,
-    assignedKitchenStaff: order.assignedKitchenStaff
-      ? { id: order.assignedKitchenStaff.toString() }
-      : null,
-    readyAt: order.readyAt?.toISOString() || null,
-    servedAt: order.servedAt?.toISOString() || null,
-    completedAt: order.completedAt?.toISOString() || null,
-  };
-
-  // 1. Send to users who can view/manage orders
-  io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:status-updated', payload);
-  io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:status-updated', payload);
-
-  // 2. Also useful for kitchen staff
-  if (['preparing', 'ready'].includes(status)) {
-    io.to(`branch:${branchId}:perm:KITCHEN_VIEW`).emit('order:status-updated', payload);
-  }
-
-  // 3. General branch room → good for table overview screens / big dashboard
-  io.to(`branch:${branchId}`).emit('order:status-updated', {
-    ...payload,
-    // lighter version if needed for table view
-    itemsCount: order.items.reduce((sum, i) => sum + i.quantity, 0),
+  const result = await OrderStateMachineService.transitionOrderStatus({
+    orderId: id,
+    toStatus: status,
+    merchantQuery: merchantScopedQuery({}, req),
+    user: req.user,
+    reason,
+    assignedWaiter,
+    assignedKitchenStaff,
   });
 
-  // 4. Optional: very important notification sound for certain transitions
-  if (status === 'ready' || status === 'served') {
-    io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('notification', {
-      title: status === 'ready' ? 'Order Ready!' : 'Order Served',
-      message: `Table ${order.tableNumber} — ${order.orderNumber}`,
-      type: 'success',
-      orderId: order._id.toString(),
-      sound: true,
-    });
-  }
+  const { order, noop } = result;
 
-  // Cleanup logic (table / session)
   if (status === 'completed' && order.paymentStatus === 'paid') {
     // ... your existing cleanup code ...
   }
 
   res.status(200).json({
     status: 'success',
-    message: `Order updated to ${status}`,
+    message: noop ? `Order already in status ${status}` : `Order updated to ${status}`,
     data: { order },
   });
 });
@@ -596,43 +392,12 @@ exports.markAsPaid = catchAsync(async (req, res, next) => {
       }
     }
 
-    // Commit all changes
+    await NotificationService.notifyOrderPaid(
+      { order, paymentMethod, bankName, image },
+      session
+    );
+
     await session.commitTransaction();
-
-    // ────────────────────────────────────────────────
-    // SOCKET BROADCAST - targeted
-    // ────────────────────────────────────────────────
-    const io = getIo();
-    const branchId = order.branch.toString();
-
-    const paidPayload = {
-      orderId: order._id.toString(),
-      orderNumber: order.orderNumber,
-      tableNumber: order.tableNumber,
-      paymentStatus: 'paid',
-      paymentMethod,
-      bankName,
-      receiptImage: image,
-      paidAt: order.paidAt.toISOString(),
-      completedAt: order.completedAt?.toISOString(),
-      totalAmount: order.totalAmount,
-    };
-
-    // Send to relevant branch rooms only (not io.emit!)
-    io.to(`branch:${branchId}`).emit('order-paid', paidPayload);
-
-    // Also notify staff who can manage/view
-    io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order-paid', paidPayload);
-    io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order-paid', paidPayload);
-
-    // Optional: special notification for cashiers/managers
-    io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('notification', {
-      title: 'Payment Received',
-      message: `Order #${order.orderNumber} – ${paymentMethod.toUpperCase()} – Table ${order.tableNumber || 'Takeaway'}`,
-      type: 'success',
-      sound: true,
-      orderId: order._id.toString(),
-    });
 
     res.status(200).json({
       status: 'success',
@@ -768,7 +533,7 @@ exports.getOrderByNumber = catchAsync(async (req, res, next) => {
 // ====================================================
 exports.getAllOrders = catchAsync(async (req, res, next) => {
   // 1. Build the Initial Base Query Object (Security First)
-  let queryObj = { merchant: req.user.merchant._id };
+  let queryObj = { merchant: OrderService.getMerchantId(req) };
 
   // 2. Handle Custom Logic (Regex, Dates, Search)
   // We do this manually because ApiFeatures handles exact matches better than complex $or logic
@@ -973,40 +738,45 @@ exports.cancelOrder = catchAsync(async (req, res, next) => {
   const { orderId } = req.params;
   const { reason = 'Customer/Staff Cancellation' } = req.body;
 
-  const order = await Order.findOne(merchantScopedQuery({ _id: orderId }, req));
+  const existing = await Order.findOne(merchantScopedQuery({ _id: orderId }, req));
+  if (!existing) return next(new AppError('Order not found', 404));
 
-  if (!order) return next(new AppError('Order not found', 404));
-
-  // Only allow cancellation if status is 'pending' or 'accepted' (staff override)
-  if (!['pending', 'accepted'].includes(order.status) && !req.isStaff) {
-    return next(new AppError(`Order cannot be canceled once it is ${order.status}`, 400));
+  if (!req.user && existing.status !== 'pending') {
+    return next(
+      new AppError('Customers can only cancel orders while they are still pending', 400)
+    );
   }
 
-  if (order.status === 'canceled' || order.status === 'completed') {
-    return next(new AppError('Order is already canceled or completed', 400));
+  if (!['pending', 'accepted'].includes(existing.status) && req.user) {
+    return next(new AppError(`Order cannot be canceled once it is ${existing.status}`, 400));
   }
 
-  order.status = 'canceled';
-  order.canceledAt = new Date();
-  order.canceledBy = req.isStaff ? req.user._id : req.customerId; // Track who canceled
-  order.canceledReason = reason;
+  if (existing.status === 'canceled') {
+    return res.status(200).json({
+      status: 'success',
+      message: `Order ${existing.orderNumber} already canceled`,
+      data: { order: existing },
+    });
+  }
 
-  await order.save();
+  if (existing.status === 'completed') {
+    return next(new AppError('Order is already completed', 400));
+  }
 
-  // Update customer stats (reduce total orders/spent if it was the last order)
-  // This logic is complex, often best handled by background jobs or simpler tracking.
-  const io = getIo();
-  io.emit('order-canceled', {
-    orderId: order._id,
-    orderNumber: order.orderNumber,
-    canceledBy: order.canceledBy,
-    canceledAt: order.canceledAt,
-    reason: order.canceledReason,
+  const result = await OrderStateMachineService.transitionOrderStatus({
+    orderId,
+    toStatus: 'canceled',
+    merchantQuery: merchantScopedQuery({}, req),
+    user: req.user || null,
+    actorType: req.user ? 'staff' : 'customer',
+    customerId: req.customerId,
+    reason,
   });
+
   res.status(200).json({
     status: 'success',
-    message: `Order ${order.orderNumber} successfully canceled`,
-    data: { order },
+    message: `Order ${result.order.orderNumber} successfully canceled`,
+    data: { order: result.order },
   });
 });
 
@@ -1047,14 +817,9 @@ exports.addItemToOrder = catchAsync(async (req, res, next) => {
   }
 
   await order.save();
-  const io = getIo();
-  io.emit('order-updated', {
-    orderId: order._id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    items: order.items,
-    totalAmount: order.totalAmount,
-  });
+
+  await NotificationService.notifyOrderUpdated({ order });
+
   res.status(200).json({
     status: 'success',
     message: `Item(s) added to order ${order.orderNumber}`,
@@ -1070,7 +835,7 @@ exports.addItemToOrder = catchAsync(async (req, res, next) => {
 //  For merchant owner / admin dashboard
 // ====================================================
 exports.getMerchantAllOrders = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id; // Assuming merchant owner has user.merchant
+  const merchantId = OrderService.getMerchantId(req);
 
   let queryObj = { merchant: merchantId };
 
@@ -1177,7 +942,7 @@ exports.getMerchantAllOrders = catchAsync(async (req, res, next) => {
 //  For branch managers / staff
 // ====================================================
 exports.getBranchOrders = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id;
+  const merchantId = OrderService.getMerchantId(req);
   const { id: branchId } = req.params;
 
   if (!branchId) return next(new AppError('branchId is required', 400));

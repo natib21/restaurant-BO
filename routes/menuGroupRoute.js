@@ -6,10 +6,9 @@ const authController = require('../controllers/authController');
 
 const router = express.Router();
 
-// Protect all routes (merchant login required)
+// Protect all routes (merchant login + task permissions)
 router.use(authController.protect);
-// Optional: restrict to specific roles
-// router.use(authController.restrictTo('admin', 'manager'));
+router.use(authController.restrictTo());
 
 // Lightweight list – useful for customer-facing menus (only IDs)
 router.get('/light', menuGroupController.getAllMenuGroupsLight);

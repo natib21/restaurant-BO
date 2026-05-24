@@ -25,8 +25,17 @@ const subscriptionSchema = new mongoose.Schema(
     endDate: { type: Date, required: true }, // When the month ends
 
     // Payment Gateway Info
-    paymentProvider: { type: String, enum: ['chapa', 'telebirr', 'manual','kispay'] },
-    transactionReference: { type: String, unique: true }, // From the gateway
+    paymentProvider: { 
+      type: String, 
+      enum: ['chapa', 'telebirr', 'manual', 'kispay'],
+      default: 'kispay' 
+    },
+    transactionReference: { type: String, unique: true }, 
+    orderId: { type: String }, 
+    
+    // For Audit/Professional tracking
+    gatewayResponse: { type: Object }, 
+    verifiedAt: { type: Date },
 
     invoiceUrl: String,
   },

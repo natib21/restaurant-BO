@@ -4,17 +4,7 @@ const Subscription = require('../models/subscriptionModel');
 const Merchant = require('../models/merchantModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
-const KISPAY_CONFIG = {
-    apiKey: 'KPG_PROD-24af96ce47e74859a938aee194d82983',
-    clientId: '931e3cac-ebfc-45bb-bebc-e5f92b6afbd8',
-    apiBaseUrl: 'https://api.kispay.et',
-    webhookSecret: '8ydzbk7oV2owAGAhpGJnN3pLUtOO14MUNTAIo8HI+Mo=',
-    webhookUrl: 'https://restaurant-bo.onrender.com/api/v1/subscriptions/webhooks/kispay',
-    supportedEvents: ['PAYMENT_CREATED', 'PAYMENT_COMPLETED', 'PAYMENT_FAILED', 'PAYMENT_CANCELED']
-};
-
-const KISPAY_WEBHOOK_SECRET = process.env.KISPAY_WEBHOOK_SECRET ||
-  '8ydzbk7oV2owAGAhpGJnN3pLUtOO14MUNTAIo8HI+Mo='; 
+const { getKispayConfig } = require('../src/infrastructure/payments/kispay.config'); 
 
 const calculateEndDate = (months = 1) => {
   const date = new Date();
@@ -33,7 +23,8 @@ const verifySignature = (rawBody, signatureHeader) => {
     sig = sig.slice(7);
   }
 
-  const hmac = crypto.createHmac('sha256', KISPAY_WEBHOOK_SECRET);
+  const { webhookSecret } = getKispayConfig();
+  const hmac = crypto.createHmac('sha256', webhookSecret);
   hmac.update(rawBody);
   const expected = hmac.digest('hex');
 
@@ -82,13 +73,13 @@ exports.initiateSubscription = catchAsync(async (req, res, next) => {
     redirectUrl: 'https://tirusolutions.et/payment-success',
   };
 
-  console.log(`[${new Date().toISOString()}] Creating Kispay Session:`, payload);
+  const kispay = getKispayConfig();
 
   const response = await axios.post(
-    `${KISPAY_CONFIG.apiBaseUrl}/api/checkout/create_checkout_session`,
+    `${kispay.apiBaseUrl}/api/checkout/create_checkout_session`,
     payload,
     {
-      headers: { 'Content-Type': 'application/json', 'x-api-key': KISPAY_CONFIG.apiKey },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': kispay.apiKey },
     }
   );
 
@@ -122,9 +113,11 @@ exports.verifySubscription = catchAsync(async (req, res, next) => {
     return next(new AppError('Transaction reference is missing.', 400));
   }
 
+  const kispay = getKispayConfig();
+
   const response = await axios.get(
-    `${KISPAY_CONFIG.apiBaseUrl}/api/checkout/verify_transaction/${tx_ref}`,
-    { headers: { 'x-api-key': KISPAY_CONFIG.apiKey } }
+    `${kispay.apiBaseUrl}/api/checkout/verify_transaction/${tx_ref}`,
+    { headers: { 'x-api-key': kispay.apiKey } }
   );
 
   const paymentData = response.data.body;
@@ -223,11 +216,12 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
   }
  console.log(payload)
   const eventType = (payload.event || payload.eventType || 'unknown').toLowerCase();
-  const tx_ref = payload.tx_ref || payload.reference || payload.orderNo || payload.txRef;
+  const kispayRef = payload.txn_ref; // 'K2WGUP5R4Z'
+  const kispayOrderId = payload.orderId;
 
-  console.log(`[Kispay Webhook] Verified → ${eventType} | tx_ref: ${tx_ref || 'missing'} | event_id: ${eventId || 'none'}`);
+  console.log(`[Kispay Webhook] Verified → ${eventType} | tx_ref: ${kispayRef || 'missing'} | event_id: ${eventId || 'none'}`);
 
-  if (!tx_ref) {
+  if (!kispayRef) {
     return res.status(200).json({ status: 'received', note: 'no tx_ref' });
   }
 
@@ -241,7 +235,7 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
   }
 
   // 3. Find subscription
-  const subscription = await Subscription.findOne({ transactionReference: tx_ref });
+  const subscription = await Subscription.findOne({ transactionReference: kispayRef });
 
   if (!subscription) {
     console.warn(`[Kispay Webhook] No subscription found for tx_ref: ${tx_ref}`);
@@ -252,39 +246,18 @@ exports.kispayWebhook = catchAsync(async (req, res, next) => {
   let shouldActivateMerchant = false;
 
   // Updated event mapping – prefer documented Kispay names + fallbacks
-  switch (eventType) {
-    case 'payment.completed':
-    case 'payment_complete':
-    case 'charge.success':
-      newStatus = 'active';
-      shouldActivateMerchant = true;
-      break;
-
-    case 'payment.failed':
-    case 'charge.failed':
-      newStatus = 'canceled';
-      break;
-
-    case 'payment.cancelled':
-    case 'payment_canceled':
-    case 'charge.cancelled':
-      newStatus = 'canceled';
-      break;
-
-    case 'payment.created':
-      newStatus = 'pending';
-      break;
-
-    default:
-      console.log(`[Kispay Webhook] Unhandled event: ${eventType}`);
-      return res.status(200).json({ status: 'received' });
+ if (eventType === 'PAYMENT_COMPLETED' || payload.status === 'COMPLETED') {
+    newStatus = 'active';
+    shouldActivateMerchant = true;
+  } else if (eventType === 'PAYMENT_FAILED') {
+    newStatus = 'canceled';
   }
 
   // 4. Update subscription
   const updateFields = {
     status: newStatus,
     verifiedAt: new Date(),
-    paymentWebhookData: payload,
+    gatewayResponse: payload,
     webhookReceivedAt: new Date(),
   };
 

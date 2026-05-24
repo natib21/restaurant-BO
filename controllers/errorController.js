@@ -89,7 +89,7 @@ module.exports = (err, req, res, next) => {
 
   if (process.env.NODE_ENV === 'development') {
     sendErrorForDev(err, res);
-  } else if (process.env.NODE_ENV === 'production') {
+  } else {
     let error = { ...err, name: err.name, code: err.code };
 
     if (error.name === 'CastError') error = handleCastErrorDb(error);
@@ -100,3 +100,4 @@ module.exports = (err, req, res, next) => {
     sendErrorProd(error, res);
   }
 };
+

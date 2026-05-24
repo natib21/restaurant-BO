@@ -37,7 +37,7 @@ router.patch(
 router.get(
   '/sessions',
   authController.protect,
-  // authController.restrictTo(),
+  authController.restrictTo(),
   customerAuthController.getAllSessions
 );
 

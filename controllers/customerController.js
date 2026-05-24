@@ -5,6 +5,7 @@ const Order = require('../models/orderModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
 const CustomerSession = require('../models/customerSessionModule');
+const { getMerchantId } = require('../src/common/utils/tenant-scope');
 // ====================== LOYALTY CONFIG ======================
 const POINTS_PER_BIRR = 1;
 const TIERS = { bronze: 0, silver: 5000, gold: 20000, platinum: 50000 };
@@ -192,15 +193,65 @@ exports.loginOrCreate = catchAsync(async (req, res, next) => {
     data: { customer },
   });
 });
+/**
+ * Customer identity — must belong to current merchant and match table session when present.
+ */
 exports.protectCustomer = catchAsync(async (req, res, next) => {
-  const id = req.customerId;
-  if (!id)
-    return next(new AppError('Customer id is required (x-customer-id / customerId / params)', 401));
+  const { getMerchantId, getBranchId, getCustomerId } = require('../src/common/utils/tenant-scope');
 
-  const customer = await Customer.findById(id);
-  if (!customer) return next(new AppError('Customer not found', 404));
+  const customerId = getCustomerId(req);
+  if (!customerId) {
+    return next(new AppError('Customer login is required for this action', 401));
+  }
+
+  const merchantId = getMerchantId(req);
+  if (!merchantId) {
+    return next(new AppError('Merchant context is required', 401));
+  }
+
+  const customer = await Customer.findOne({ _id: customerId, merchant: merchantId });
+  if (!customer) {
+    return next(new AppError('Customer not found', 404));
+  }
+
+  // Table session must align with this customer (prevents IDOR via leaked customer ids)
+  if (req.tableSession) {
+    if (req.tableSession.merchant.toString() !== merchantId.toString()) {
+      return next(new AppError('Session is not valid for this merchant', 403));
+    }
+    if (!req.tableSession.customer) {
+      return next(new AppError('Please log in at your table before continuing', 401));
+    }
+    if (req.tableSession.customer.toString() !== customerId.toString()) {
+      return next(new AppError('Session does not match customer', 403));
+    }
+    if (
+      req.tableSession.branch &&
+      customer.currentBranch &&
+      req.tableSession.branch.toString() !== customer.currentBranch.toString()
+    ) {
+      return next(new AppError('Customer is not registered for this branch session', 403));
+    }
+  }
+
+  const branchId = getBranchId(req);
+  if (branchId && customer.currentBranch) {
+    const resolved = Array.isArray(branchId) ? branchId[0] : branchId;
+    const branchStr = (resolved?._id ?? resolved)?.toString();
+    if (customer.currentBranch.toString() !== branchStr && req.tableSession?.branch) {
+      if (req.tableSession.branch.toString() !== customer.currentBranch.toString()) {
+        return next(new AppError('Branch context mismatch', 403));
+      }
+    }
+  }
 
   req.customer = customer;
+  if (req.ctx) {
+    req.ctx.customerId = customer._id;
+    req.ctx.actorType = 'customer';
+    req.ctx.actorId = customer._id;
+  }
+
   next();
 });
 
@@ -266,8 +317,12 @@ exports.getCustomer = catchAsync(async (req, res, next) => {
     'name price image'
   );
 
-  if (!customer || customer.merchant.toString() !== req.merchant._id.toString())
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
+  if (!customer || customer.merchant.toString() !== merchantId.toString()) {
     return next(new AppError('Customer not found', 404));
+  }
 
   // Basic stats via orders (completed)
   const stats = await Order.aggregate([
@@ -281,8 +336,11 @@ exports.getCustomer = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.getAllCustomers = catchAsync(async (req, res) => {
-  const customers = await Customer.find({ merchant: req.user.merchant._id }).sort('-lastSeen');
+exports.getAllCustomers = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
+  const customers = await Customer.find({ merchant: merchantId }).sort('-lastSeen');
 
   res.status(200).json({ status: 'success', results: customers.length, data: { customers } });
 });
@@ -303,8 +361,11 @@ exports.updateCustomer = catchAsync(async (req, res, next) => {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   });
 
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
   const customer = await Customer.findOneAndUpdate(
-    { _id: req.params.id, merchant: req.merchant._id },
+    { _id: req.params.id, merchant: merchantId },
     updates,
     { new: true, runValidators: true }
   );
@@ -324,8 +385,11 @@ exports.updateCustomer = catchAsync(async (req, res, next) => {
 });
 
 exports.deleteCustomer = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
   const customer = await Customer.findOneAndUpdate(
-    { _id: req.params.id, merchant: req.merchant._id },
+    { _id: req.params.id, merchant: merchantId },
     { isActive: false },
     { new: true }
   );
@@ -338,7 +402,10 @@ exports.deleteCustomer = catchAsync(async (req, res, next) => {
 exports.giveGift = catchAsync(async (req, res, next) => {
   const { name, type = 'free_item', value, menuItemId, expiresInDays = 30, reason } = req.body;
 
-  const customer = await Customer.findOne({ _id: req.params.id, merchant: req.merchant._id });
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
+  const customer = await Customer.findOne({ _id: req.params.id, merchant: merchantId });
   if (!customer) return next(new AppError('Customer not found', 404));
 
   customer.loyalty.gifts.push({
@@ -369,8 +436,11 @@ exports.addTagOrNote = catchAsync(async (req, res, next) => {
   if (tag) update.$push.tags = { value: tag, addedBy: req.user._id };
   if (note) update.$push.notes = { text: note, addedBy: req.user._id };
 
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
   const customer = await Customer.findOneAndUpdate(
-    { _id: req.params.id, merchant: req.merchant._id },
+    { _id: req.params.id, merchant: merchantId },
     update,
     { new: true }
   );

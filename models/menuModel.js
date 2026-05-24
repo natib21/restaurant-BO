@@ -107,6 +107,14 @@ const menuSchema = new mongoose.Schema(
     available: { type: Boolean, default: true },
     inStock: { type: Boolean, default: true },
 
+    /** draft | published | archived — existing docs without field behave as published */
+    publishStatus: {
+      type: String,
+      enum: ['draft', 'published', 'archived'],
+      default: 'published',
+      index: true,
+    },
+
     // Ratings
     ratingAverage: {
       type: Number,

@@ -91,41 +91,8 @@ exports.startTableSession = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.protectTableSession = catchAsync(async (req, res, next) => {
-  // 1. Get token from header: "Bearer <token>"
-  let token;
-  if (req.headers.authorization?.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token) {
-    return next(new AppError('You are not logged in. Please scan the QR code again.', 401));
-  }
-
-  // 2. Find active session by token
-  const session = await CustomerSession.findOne({
-    token,
-    isActive: true,
-    expiresAt: { $gt: new Date() },
-  }).select('+token'); // just in case
-
-  if (!session) {
-    return next(new AppError('Session expired or invalid. Please scan the QR code again.', 401));
-  }
-
-  // 3. OPTIONAL: Extend session lifetime on every request (sliding expiration)
-  session.expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000); // +4 hours
-  await session.save();
-
-  // 4. Attach everything to req — this is the key!
-  req.tableSession = session;
-  req.merchantId = session.merchant; // This is what you asked for
-  req.tableId = session.table;
-  req.customerId = session.customer; // null if anonymous, ObjectId if logged in
-  req.isAnonymous = !session.customer; // useful flag
-
-  next();
-});
+/** @deprecated Use src/modules/customers/customer-session.guard */
+exports.protectTableSession = require('../src/modules/customers').protectTableSession;
 
 /* ====================== 3. FREE TABLE (Staff Only) ====================== */
 exports.freeTable = catchAsync(async (req, res, next) => {
@@ -176,15 +143,23 @@ exports.linkAccount = catchAsync(async (req, res, next) => {
 
 // ===================== GET ALL ACTIVE TABLE SESSIONS (Admin) =====================
 exports.getAllSessions = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id;
-  const branchId = req.user.branch._id; // add branch filter
+  const { getMerchantId, resolveStaffBranchId } = require('../src/common/utils/tenant-scope');
 
-  const sessions = await CustomerSession.find({
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
+  const filter = {
     merchant: merchantId,
-    branch: branchId, // filter by branch
     isActive: true,
     expiresAt: { $gt: new Date() },
-  })
+  };
+
+  const branchId = resolveStaffBranchId(req);
+  if (branchId) {
+    filter.branch = branchId;
+  }
+
+  const sessions = await CustomerSession.find(filter)
     .populate('table', 'tableNumber status')
     .populate('branch', 'name location')
     .populate('customer', 'fullName phone');
@@ -198,17 +173,23 @@ exports.getAllSessions = catchAsync(async (req, res, next) => {
 
 // ===================== GET SESSION BY TABLE =====================
 exports.getSessionByTable = catchAsync(async (req, res, next) => {
-  const merchantId = req.user.merchant._id;
-  const branchId = req.user.branch._id; // add branch filter
+  const { getMerchantId, resolveStaffBranchId } = require('../src/common/utils/tenant-scope');
+
+  const merchantId = getMerchantId(req);
+  if (!merchantId) return next(new AppError('Merchant context is required', 403));
+
+  const branchId = resolveStaffBranchId(req);
   const { tableId } = req.params;
 
-  const session = await CustomerSession.findOne({
+  const sessionFilter = {
     table: tableId,
-    branch: branchId, // filter by branch
     merchant: merchantId,
     isActive: true,
     expiresAt: { $gt: new Date() },
-  })
+  };
+  if (branchId) sessionFilter.branch = branchId;
+
+  const session = await CustomerSession.findOne(sessionFilter)
     .populate('customer', 'fullName phone')
     .populate('table', 'tableNumber status')
     .populate('branch', 'name location');

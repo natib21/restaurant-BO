@@ -71,6 +71,18 @@ const orderSchema = new Schema(
       default: 'pending',
       index: true,
     },
+    statusHistory: [
+      {
+        fromStatus: { type: String, required: true },
+        toStatus: { type: String, required: true },
+        changedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, trim: true },
+      },
+    ],
+    canceledAt: Date,
+    canceledBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    canceledReason: { type: String, trim: true },
     items: { type: [orderItemSchema], required: true },
 
     subtotal: { type: Number, required: true, min: 0 },

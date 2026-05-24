@@ -48,16 +48,13 @@ router.get(
 );
 
 // ====================================================
-//  STAFF ROUTES
+//  STAFF ROUTES (JWT + task-based RBAC)
 // ====================================================
 router.use(authController.protect);
+router.use(authController.restrictTo());
 
 // Staff place order
-router.post(
-  '/staff',
-  // authController.restrictTo(), // add roles if needed
-  orderController.staffPlaceOrder
-);
+router.post('/staff', orderController.staffPlaceOrder);
 
 // Active orders (staff dashboard)
 router.get('/active', orderController.getActiveOrders);
@@ -91,18 +88,14 @@ router.patch('/:id/cancel', orderController.cancelOrder);
 // Merge orders
 router.post('/merge', orderController.mergeOrders);
 
+// ====================================================
+//  MERCHANT OWNER (ALL BRANCHES) — must be before /:id
+// ====================================================
+router.get('/merchant/all', orderController.getMerchantAllOrders);
+
 // All orders (branch scoped)
 router.get('/', orderController.getAllOrders);
 router.get('/:id', orderController.getOrderById);
 router.get('/:id/orders', orderController.getBranchOrders);
-
-// ====================================================
-//  MERCHANT OWNER (ALL BRANCHES)
-// ====================================================
-router.get(
-  '/merchant/all',
-  authController.restrictTo(), // owner/admin
-  orderController.getMerchantAllOrders
-);
 
 module.exports = router;

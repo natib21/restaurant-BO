@@ -37,6 +37,11 @@ const roleSchema = new Schema(
         ref: 'Task',
       },
     ],
+    /** Additive capability codes — optional; task RBAC still applies */
+    capabilities: {
+      type: [String],
+      default: [],
+    },
     createdAt: {
       type: Date,
       default: Date.now,
