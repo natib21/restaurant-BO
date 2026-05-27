@@ -8,7 +8,13 @@
 
 const express = require('express');
 
-const merchantController = require('../controllers/merchantController');
+const merchantController = require('../src/modules/merchants/controllers/merchant.controller');
+const merchantUserController = require('../src/modules/merchants/controllers/merchant-user.controller');
+const merchantRoleController = require('../src/modules/merchants/controllers/merchant-role.controller');
+const { validate } = require('../src/modules/merchants/validators/merchant.validator');
+const { createMerchantSchema } = require('../src/modules/merchants/dto/create-merchant.dto');
+const { updateMerchantSchema } = require('../src/modules/merchants/dto/update-merchant.dto');
+
 const authController = require('../controllers/authController');
 
 const router = express.Router();
@@ -29,132 +35,127 @@ router.post(
   authController.restrictTo(), // task: 'upload-kyc'
   merchantController.uploadMerchantPhotos,
   merchantController.processMerchantMedia,
+  validate(createMerchantSchema),
   merchantController.createNewMerchant
 );
 
 // ===================================================================
 // 3. MERCHANT-ONLY ROLE MANAGEMENT
 // ===================================================================
-// POST /api/v1/merchants/roles
-// GET  /api/v1/merchants/roles
 router
   .route('/roles')
   .post(
     authController.restrictTo(), // task: 'create-role'
-    merchantController.createMerchantRole
+    merchantRoleController.createMerchantRole
   )
   .get(
     authController.restrictTo(), // task: 'list-roles'
-    merchantController.getAllMerchantRoles
+    merchantRoleController.getAllMerchantRoles
   );
 
-// GET    /api/v1/merchants/roles/:roleId
-// PATCH  /api/v1/merchants/roles/:roleId
-// DELETE /api/v1/merchants/roles/:roleId
 router
   .route('/roles/:id')
   .get(
     authController.restrictTo(), // task: 'view-role'
-    merchantController.getMerchantRoleById
+    merchantRoleController.getMerchantRoleById
   )
   .patch(
     authController.restrictTo(), // task: 'update-role'
-    merchantController.updateMerchantRole
+    merchantRoleController.updateMerchantRole
   )
   .delete(
     authController.restrictTo(), // task: 'delete-role'
-    merchantController.deleteMerchantRole
+    merchantRoleController.deleteMerchantRole
   );
+
 router.patch(
   '/roles/:id/activate',
   authController.restrictTo(),
-  merchantController.activateMerchantRole
+  merchantRoleController.activateMerchantRole
 );
 
 // ===================================================================
 // 3. USER MANAGEMENT (no :merchantId in URL)
 // ===================================================================
 
-// GET    /api/v1/merchants/users
-// POST   /api/v1/merchants/users
 router
   .route('/users')
   .get(
     authController.restrictTo(), // task: 'view-users'
-    merchantController.getMerchantUsers
+    merchantUserController.getMerchantUsers
   )
   .post(
     authController.restrictTo(), // task: 'create-user'
-    merchantController.createMerchantUser
+    merchantUserController.createMerchantUser
   );
 
-// PATCH  /api/v1/merchants/users/:userId
-// DELETE /api/v1/merchants/users/:userId
 router
   .route('/users/:id')
-  .get(authController.restrictTo(), merchantController.getMerchantUserById)
+  .get(authController.restrictTo(), merchantUserController.getMerchantUserById)
   .patch(
     authController.restrictTo(), // task: 'update-user'
-    merchantController.updateMerchantUser
+    merchantUserController.updateMerchantUser
   )
   .delete(
     authController.restrictTo(), // task: 'delete-user'
-    merchantController.deleteMerchantUser
+    merchantUserController.deleteMerchantUser
   );
+
 router.patch(
   '/users/:id/activate',
   authController.restrictTo(),
-  merchantController.activateMerchantUser
+  merchantUserController.activateMerchantUser
 );
+
 // GET /api/v1/merchants/branches/:branchId/users
 router
   .route('/users/branch/:id')
-  .get(authController.restrictTo(), merchantController.getMerchantUsersByBranch);
+  .get(authController.restrictTo(), merchantUserController.getMerchantUsersByBranch);
 
 // ===================================================================
 // 4. MERCHANT CRUD (Back-office only)
 // ===================================================================
 
-// POST /api/v1/merchants
 router.post(
   '/',
   authController.restrictTo(), // task: 'create-merchant'
   merchantController.uploadMerchantPhotos,
   merchantController.processMerchantMedia,
+  validate(createMerchantSchema),
   merchantController.createNewMerchant
 );
 
-// GET /api/v1/merchants
 router.get(
   '/',
   authController.restrictTo(), // task: 'list-merchants'
   merchantController.getAllMerchants
 );
+
 router.get('/me', authController.restrictTo(), merchantController.getMe);
 
 router.patch(
   '/me',
   merchantController.uploadMerchantPhotos,
   merchantController.processMerchantMedia,
+  validate(updateMerchantSchema),
   merchantController.updateMe
 );
-// GET /api/v1/merchants/:id
+
 router.get(
   '/:id',
   authController.restrictTo(), // task: 'view-merchant'
   merchantController.getMerchant
 );
 
-// PATCH /api/v1/merchants/:id
 router.patch(
   '/:id',
   authController.restrictTo(), // task: 'update-merchant'
   merchantController.uploadMerchantPhotos,
   merchantController.processMerchantMedia,
+  validate(updateMerchantSchema),
   merchantController.updateMerchant
 );
 
-// DELETE /api/v1/merchants/:id
 router.delete(
   '/:id',
   authController.restrictTo(), // task: 'delete-merchant'

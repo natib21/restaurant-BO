@@ -60,26 +60,30 @@ const handleJWTError = () => new AppError('Invalid token, please log in again', 
 const handleJWTExpireError = () => new AppError('Your Token has expired', 401);
 
 const sendErrorForDev = (err, res) => {
+  // Development: detailed error info
   res.status(err.statusCode).json({
-    status: err.status,
-    error: err,
+    success: false,
     message: err.message,
-    stack: err.stack,
+    errors: [
+      {
+        status: err.status,
+        code: err.code,
+        stack: err.stack,
+        fullError: err,
+      },
+    ],
   });
 };
 
 const sendErrorProd = (err, res) => {
   if (err.isOperational) {
-    res.status(err.statusCode).json({
-      status: err.status,
-      message: err.message,
-    });
+    // Operational error: send to client
+    const errors = err.errors ? [{ message: err.message, details: err.errors }] : [];
+    res.sendError(err.message, err.statusCode, errors);
   } else {
+    // Programming error: don't leak details
     console.error('ERROR 🔥', err);
-    res.status(500).json({
-      status: 'Error',
-      message: 'Something went Very Wrong !',
-    });
+    res.sendError('Something went wrong. Please try again later.', 500, []);
   }
 };
 

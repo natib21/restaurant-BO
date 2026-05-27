@@ -19,7 +19,9 @@ const fileRoutes = require('../modules/files/file.routes');
 const menuMgmtRoutes = require('../modules/menu/menu.routes');
 const branchControlRoutes = require('../modules/branch/branch.routes');
 const tableSystemRoutes = require('../modules/tables/table.routes');
+const ordersRoutes = require('../modules/orders/orders.routes');
 const { enrichBranchContext } = require('../common/middleware/branch-context.middleware');
+const responseMiddleware = require('../common/middleware/response.middleware');
 
 const AppError = require('../../utils/appError');
 const GlobalErrorHandler = require('../../controllers/errorController');
@@ -108,6 +110,7 @@ function createApp() {
   app.use(initRequestContext);
   app.use(syncRequestContext);
   app.use(enrichBranchContext);
+  app.use(responseMiddleware);  // ← Add response/error formatting to all routes
 
   morgan.token('reqId', req => req.ctx?.requestId || '-');
   morgan.token('userId', req => req.user?._id?.toString() || req.ctx?.actorId?.toString() || '-');
@@ -133,6 +136,7 @@ function createApp() {
   app.use('/api/v1/menu-mgmt', menuMgmtRoutes);
   app.use('/api/v1/branch-control', branchControlRoutes);
   app.use('/api/v1/table-system', tableSystemRoutes);
+  app.use('/api/v1/orders', ordersRoutes);  // ← NEW clean routes (preferred)
 
   app.use('/api/v1/user', userRouter);
   app.use('/api/v1/tasks', taskRouter);
@@ -147,7 +151,7 @@ function createApp() {
   app.use('/api/v1/staff-assignments', assignTableRouter);
   app.use('/api/v1/customer', customerRouter);
   app.use('/api/v1/customerSession', customerSessionRouter);
-  app.use('/api/v1/order', orderRouter);
+  app.use('/api/v1/order', orderRouter);  // ← LEGACY routes (backward compatibility)
   app.use('/api/v1/subscriptions', subscriptionRouter);
   app.use('/api/v1/ingredients', ingredientsRouter);
   app.use('/api/v1/inventory', inventoryRouter);
