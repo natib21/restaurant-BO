@@ -9,8 +9,8 @@
  * All handlers require JWT + RBAC (staff/merchant scoped).
  */
 
-const catchAsync = require('../../../../utils/catchAsync');
-const { getMerchantId } = require('../../../common/utils/tenant-scope');
+const catchAsync = require('../../../../../utils/catchAsync');
+const { getMerchantId } = require('../../../../common/utils/tenant-scope');
 const { OrderService } = require('../../service/OrderService');
 
 /**

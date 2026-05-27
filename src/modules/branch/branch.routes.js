@@ -1,13 +1,13 @@
 const express = require('express');
-const authController = require('../../../controllers/authController');
+const { protect, restrictTo } = require('../../common/guards/auth.guard');
 const branchController = require('./controller/branch.controller');
 const { requireCapability } = require('../../common/guards/capability.guard');
 const { CAPABILITIES } = require('../../common/capabilities/capabilities');
 
 const router = express.Router();
 
-router.use(authController.protect);
-router.use(authController.restrictTo());
+router.use(protect);
+router.use(restrictTo());
 
 router.patch('/:id/suspend', requireCapability(CAPABILITIES.BRANCH_MANAGE), branchController.suspendBranch);
 router.patch('/:id/activate', requireCapability(CAPABILITIES.BRANCH_MANAGE), branchController.activateBranch);

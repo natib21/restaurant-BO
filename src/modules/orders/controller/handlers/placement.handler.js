@@ -5,9 +5,9 @@
  * Uses idempotency for customer orders and transaction service.
  */
 
-const catchAsync = require('../../../../utils/catchAsync');
-const AppError = require('../../../../utils/appError');
-const { getMerchantId, getBranchId } = require('../../../common/utils/tenant-scope');
+const catchAsync = require('../../../../../utils/catchAsync');
+const AppError = require('../../../../../utils/appError');
+const { getMerchantId, getBranchId } = require('../../../../common/utils/tenant-scope');
 const { OrderService } = require('../../service/OrderService');
 const { OrderTransactionService } = require('../../order-transaction.service');
 const { IdempotencyService } = require('../../idempotency.service');

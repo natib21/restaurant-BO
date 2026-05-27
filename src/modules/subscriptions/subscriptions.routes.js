@@ -12,15 +12,15 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 
-const subscriptionController = require('../controllers/subscription.controller');
-const { protect, restrictTo } = require('../../../common/guards/auth.guard');
-const validate = require('../../../common/middleware/validate.middleware');
+const subscriptionController = require('./controllers/subscription.controller');
+const { protect, restrictTo } = require('../../common/guards/auth.guard');
+const validate = require('../../common/middleware/validate.middleware');
 
 const {
   initiateSubscriptionSchema,
   verifySubscriptionSchema,
   checkFeatureAccessSchema,
-} = require('../dto/subscription.dto');
+} = require('./dto/subscription.dto');
 
 // ============================================================
 // PUBLIC ROUTES (before auth)

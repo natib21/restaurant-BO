@@ -5,8 +5,8 @@
  * All handlers extract context from req.ctx (table session).
  */
 
-const catchAsync = require('../../../../utils/catchAsync');
-const AppError = require('../../../../utils/appError');
+const catchAsync = require('../../../../../utils/catchAsync');
+const AppError = require('../../../../../utils/appError');
 const { OrderService } = require('../../service/OrderService');
 
 /**

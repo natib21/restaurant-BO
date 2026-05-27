@@ -4,7 +4,7 @@
  * Handles file uploads for order operations (e.g., payment photos).
  */
 
-const catchAsync = require('../../../../utils/catchAsync');
+const catchAsync = require('../../../../../utils/catchAsync');
 
 /**
  * Middleware: Upload order payment photo

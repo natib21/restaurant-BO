@@ -1,13 +1,13 @@
 const express = require('express');
-const authController = require('../../../controllers/authController');
+const { protect, restrictTo } = require('../../common/guards/auth.guard');
 const menuController = require('./controller/menu.controller');
 const { requireCapability } = require('../../common/guards/capability.guard');
 const { CAPABILITIES } = require('../../common/capabilities/capabilities');
 
 const router = express.Router();
 
-router.use(authController.protect);
-router.use(authController.restrictTo());
+router.use(protect);
+router.use(restrictTo());
 
 router.post('/publish', requireCapability(CAPABILITIES.MENU_MANAGE), menuController.publishMenuGroup);
 router.patch(

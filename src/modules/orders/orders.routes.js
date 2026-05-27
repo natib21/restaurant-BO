@@ -11,10 +11,10 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 
-const { placeOrder, getActiveOrders, updateOrderStatus, addItemToOrder } = require('../controller/order.controller');
-const { protect } = require('../../../common/guards/auth.guard');
-const { protectTableSession } = require('../../customers/guards/table-session.guard');
-const validate = require('../../../common/middleware/validate.middleware');
+const { placeOrder, getActiveOrders, updateOrderStatus, addItemToOrder } = require('./controller/order.controller');
+const { protect } = require('../../common/guards/auth.guard');
+const { protectTableSession } = require('../customers/customer-session.guard');
+const validate = require('../../common/middleware/validate.middleware');
 
 const {
   placeOrderCustomerSchema,
@@ -22,7 +22,7 @@ const {
   updateOrderStatusSchema,
   addItemToOrderSchema,
   orderFiltersSchema,
-} = require('../validators/order.validators');
+} = require('./validators/order.validators');
 
 // ============================================================
 // CUSTOMER ROUTES (Table session - QR menu ordering)
