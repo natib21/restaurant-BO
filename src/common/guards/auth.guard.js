@@ -104,11 +104,17 @@ function convertUrlToPattern(url) {
 }
 
 const PUBLIC_ROUTES = [
+  { path: /^\/api\/v1\/auth\/signup$/, method: 'POST' },
+  { path: /^\/api\/v1\/auth\/login$/, method: 'POST' },
+  { path: /^\/api\/v1\/auth\/forgot-password$/, method: 'POST' },
+  { path: /^\/api\/v1\/auth\/reset-password\/[^/]+$/, method: 'PATCH' },
   { path: /^\/api\/v1\/user\/signup$/, method: 'POST' },
   { path: /^\/api\/v1\/user\/login$/, method: 'POST' },
   { path: /^\/api\/v1\/user\/social-login$/, method: 'POST' },
   { path: /^\/api\/v1\/user\/forgotPassword$/, method: 'POST' },
   { path: /^\/api\/v1\/user\/resetPassword\/[^/]+$/, method: 'PATCH' },
+  { path: /^\/api\/auth\/forgot-password$/, method: 'POST' },
+  { path: /^\/api\/auth\/reset-password$/, method: 'POST' },
   { path: /^\/health$/, method: 'GET' },
   { path: /^\/health\/ready$/, method: 'GET' },
 ];

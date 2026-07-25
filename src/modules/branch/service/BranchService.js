@@ -295,8 +295,14 @@ class BranchService {
   }
 
   static async getAllBranches(req) {
-    const merchantId = req.user.merchant._id;
+    const merchantId = req.user.merchant?._id;
 
+    if (!merchantId) {
+       // If the user doesn't have a merchant, they might be a Super Admin 
+       // who should be able to see all branches. 
+       // Adjust this logic based on your system's business rules.
+       throw new AppError('User is not associated with a merchant', 403);
+    }
     const features = new ApiFeatures(
       BranchRepository.findBranches({ merchant: merchantId }),
       req.query
@@ -545,7 +551,9 @@ class BranchService {
   }
 
   static async getAllTables(req) {
+      console.log("user req",req)
     const features = new ApiFeatures(
+    
       BranchRepository.findTables({ merchant: req.user.merchant._id, isActive: true }),
       req.query
     )
@@ -699,6 +707,7 @@ class BranchService {
 
   static async getTablesByBranch(req) {
     const { id } = req.params;
+    console.log(req)
     const merchantId = req.user.merchant._id;
 
     if (!id) {

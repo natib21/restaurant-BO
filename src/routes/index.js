@@ -24,6 +24,7 @@ const fileRoutes          = require('../modules/files/file.routes');
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 const authRoutes          = require('../modules/auth/auth.routes');
+const legacyAuthRoutes    = require('../modules/auth/legacy-auth.routes');
 
 // ── Core Domain ──────────────────────────────────────────────────────────────
 const merchantRoutes      = require('../modules/merchants/merchants.routes');
@@ -76,32 +77,36 @@ router.use('/api/v1/files', fileRoutes);
 // ── 4. Auth ───────────────────────────────────────────────────────────────────
 router.use('/api/v1/auth', authRoutes);
 
+// Legacy auth aliases (pre-refactor paths)
+router.use('/api/v1/user', legacyAuthRoutes);
+router.use('/api/auth', legacyAuthRoutes.legacyApiAuthRouter);
+
 // ── 5. Users ──────────────────────────────────────────────────────────────────
 router.use('/api/v1/users', userRoutes);
 
 // ── 6. Merchants ──────────────────────────────────────────────────────────────
-router.use('/api/v1/merchants', merchantRoutes);
+router.use('/api/v1/merchant', merchantRoutes);
 
 // ── 7. Branches ───────────────────────────────────────────────────────────────
-router.use('/api/v1/branches', branchRoutes);
+router.use('/api/v1/branch', branchRoutes);
 
 // ── 8. Tables ─────────────────────────────────────────────────────────────────
-router.use('/api/v1/tables', tableRoutes);
+router.use('/api/v1/table', tableRoutes);
 
 // ── 9. Customers ──────────────────────────────────────────────────────────────
-router.use('/api/v1/customers', customerRoutes);
+router.use('/api/v1/customer', customerRoutes);
 
 // ── 10. Sessions (QR table sessions) ─────────────────────────────────────────
-router.use('/api/v1/sessions', sessionRoutes);
+router.use('/api/v1/session', sessionRoutes);
 
 // ── 11. Menu ──────────────────────────────────────────────────────────────────
-router.use('/api/v1/menus', menuRoutes);
-router.use('/api/v1/menu-groups', menuGroupRoutes);
-router.use('/api/v1/branch-menu-groups', branchMenuGroupRoutes);
-router.use('/api/v1/combos', comboRoutes);
+router.use('/api/v1/menu', menuRoutes);
+router.use('/api/v1/menu-group', menuGroupRoutes);
+router.use('/api/v1/branch-menu-group', branchMenuGroupRoutes);
+router.use('/api/v1/combo', comboRoutes);
 
 // ── 12. Orders ────────────────────────────────────────────────────────────────
-router.use('/api/v1/orders', orderRoutes);
+router.use('/api/v1/order', orderRoutes);
 
 // ── 13. Inventory ─────────────────────────────────────────────────────────────
 router.use('/api/v1/ingredients', ingredientRoutes);

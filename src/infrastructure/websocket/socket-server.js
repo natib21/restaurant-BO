@@ -11,11 +11,23 @@ let io;
 
 async function authenticateSocket(socket, next) {
   try {
-    const token =
-      socket.handshake.auth?.token ||
-      socket.handshake.headers.authorization?.split(' ')?.[1];
+    let token = socket.handshake.auth?.token;
+
+    // 2. If not in auth, parse from cookies header
+    if (!token && socket.handshake.headers.cookie) {
+      const cookies = socket.handshake.headers.cookie;
+      const match = cookies.match(/jwt=([^;]+)/); // Regex to grab value after 'jwt='
+      if (match) token = match[1];
+    }
+
+    // 3. Last resort: Auth header
+    if (!token && socket.handshake.headers.authorization) {
+      token = socket.handshake.headers.authorization.split(' ')[1];
+    }
 
     if (!token) return next(new Error('Authentication required'));
+
+    
 
     const env = loadEnv();
     const decoded = await verifyJwt(token, env.JWT_SECRET);

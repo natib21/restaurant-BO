@@ -9,10 +9,13 @@
     "build": "tsc",
     "start:prod": "cross-env NODE_ENV=production node server.js",
     "test": "cross-env NODE_ENV=test jest --runInBand --forceExit",
+    "test:unit": "cross-env NODE_ENV=test jest --runInBand --forceExit --testPathIgnorePatterns=inventory.test.js --testPathIgnorePatterns=orders-integration.test.js --testPathIgnorePatterns=order-history.test.js",
     "test:watch": "cross-env NODE_ENV=test jest --watch",
     "lint": "tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "verify:pre-commit": "npm run lint && npm run test:unit",
+    "githooks:install": "git config core.hooksPath .githooks"
   },
   "author": "Nathnael Zelalem",
   "license": "ISC",
@@ -41,7 +44,7 @@
     "sharp": "^0.33.5",
     "slugify": "^1.6.6",
     "socket.io": "^4.8.1",
-    "uuid": "^13.0.0",
+    "uuid": "^9.0.1",
     "validator": "^13.12.0",
     "winston": "^3.15.0",
     "xss": "^1.0.15",

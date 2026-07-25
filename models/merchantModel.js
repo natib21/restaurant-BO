@@ -98,13 +98,7 @@ const merchantSchema = new mongoose.Schema(
       address: { type: String, trim: true }, // Physical address string
       city: { type: String, default: 'Addis Ababa' },
       subcity: String,
-      woreda: String,
-      // GeoJSON for Map integration
-
-      coordinates: {
-        type: [Number],
-        default: [38.7578, 9.0192],
-      },
+     
     },
     // LEGAL & KYC
     tinId: {

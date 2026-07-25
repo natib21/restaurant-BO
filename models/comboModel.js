@@ -77,6 +77,11 @@ const comboSchema = new mongoose.Schema(
 
     // Visuals & Scheduling
     image: String,
+     image: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'FileAsset',
+          default: null,
+        },
     isActive: { type: Boolean, default: true },
     branches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
 
@@ -120,6 +125,12 @@ comboSchema.virtual('savingsAmount').get(function () {
 comboSchema.virtual('savingsPercentage').get(function () {
   if (!this.originalPrice || this.originalPrice <= this.comboPrice) return 0;
   return Math.round(((this.originalPrice - this.comboPrice) / this.originalPrice) * 100);
+});
+comboSchema.virtual('imageData').get(function () {
+  if (this.image) {
+    return `/api/v1/files/${this.image}/content`;
+  }
+  return this.imageUrl || null;
 });
 
 // ========================= METHODS =========================

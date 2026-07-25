@@ -1,8 +1,13 @@
+// modules/files/file.controller.js
+
 const multer = require('multer');
 const catchAsync = require('../../../utils/catchAsync');
 const AppError = require('../../../utils/appError');
 const { FileManagementService } = require('./file-management.service');
 const { getMerchantId } = require('../../common/utils/tenant-scope');
+// ✅ Add these imports for public access
+const FileAsset = require('../../../models/FileAsset');
+const { readLocal } = require('../../infrastructure/storage/local-storage.adapter');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -53,10 +58,51 @@ exports.uploadFile = catchAsync(async (req, res) => {
   });
 });
 
+// ✅ FIXED: Handle both authenticated and public access
 exports.getFileContent = catchAsync(async (req, res) => {
-  const merchantId = getMerchantId(req);
-  const { file, buffer } = await FileManagementService.getContent(req.params.id, merchantId);
+  const { id } = req.params;
+  
+  // Check if user is authenticated
+  const isAuthenticated = req.user && req.user._id;
+  const merchantId = isAuthenticated ? getMerchantId(req) : null;
+  
+  let file;
+  let buffer;
+  
+  if (isAuthenticated && merchantId) {
+    // ✅ Authenticated user - full access to their files
+    try {
+      const result = await FileManagementService.getContent(id, merchantId);
+      file = result.file;
+      buffer = result.buffer;
+    } catch (error) {
+      throw new AppError('File not found', 404);
+    }
+  } else {
+    // ✅ Public access - only allow specific entity types (menu images, etc.)
+    file = await FileAsset.findOne({
+      _id: id,
+      isDeleted: false,
+      entityType: { 
+        $in: ['menu', 'combo', 'branch', 'table', 'qr']
+      }
+    });
+    
+    if (!file) {
+      throw new AppError('File not found or access denied', 404);
+    }
+    
+    // Read file from storage
+    try {
+      buffer = await readLocal(file.storageKey);
+    } catch (error) {
+      throw new AppError('File content not found', 404);
+    }
+  }
+  
+  // Set content type and send
   res.set('Content-Type', file.mimeType || 'application/octet-stream');
+  res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
   res.send(buffer);
 });
 

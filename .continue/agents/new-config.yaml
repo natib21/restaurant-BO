@@ -1,0 +1,29 @@
+
+name: Local Assistant
+version: 1.0.0
+schema: v1
+
+models:
+  # Chat and Edit model
+  - name: llama3.1-8b
+    provider: ollama
+    model: llama3.1:8b
+    roles:
+      - chat
+      - edit
+      - apply
+
+  # Autocomplete model (fast)
+  - name: qwen2.5-coder-1.5b
+    provider: ollama
+    model: qwen2.5-coder:1.5b-base
+    roles:
+      - autocomplete
+
+  # Embeddings model for codebase search
+  - name: nomic-embed-text
+    provider: ollama
+    model: nomic-embed-text
+    roles:
+      - embed
+# Remove the 'embeddingsProvider' section entirely

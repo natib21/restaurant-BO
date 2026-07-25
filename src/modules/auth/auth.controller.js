@@ -26,11 +26,14 @@ function sendTokenResponse(user, statusCode, res) {
 }
 
 exports.signup = catchAsync(async (req, res, next) => {
+  console.log('SignUp req body:',req.body)
   const user = await AuthService.signup(req.body);
   sendTokenResponse(user, 201, res);
 });
 
 exports.login = catchAsync(async (req, res, next) => {
+  console.log('Login req body:',req.body)
+  
   const user = await AuthService.login(req.body.email, req.body.password);
   sendTokenResponse(user, 200, res);
 });
@@ -59,8 +62,13 @@ exports.changePassword = catchAsync(async (req, res, next) => {
 
 exports.forgotPassword = catchAsync(async (req, res, next) => {
   const { user, resetToken } = await AuthService.forgotPassword(req.body.email);
-  const resetURL = `${req.protocol}://${req.get('host')}/api/v1/user/resetPassword/${resetToken}`;
-  const message = `Reset your password: PATCH ${resetURL} with password and passwordConfirm.`;
+  const { loadEnv } = require('../../config/env');
+  const env = loadEnv();
+  const frontendBase = (env.FRONTEND_URL || env.APP_URL || '').replace(/\/$/, '');
+  const resetURL = frontendBase
+    ? `${frontendBase}/reset-password/${resetToken}`
+    : `${req.protocol}://${req.get('host')}/api/v1/auth/reset-password/${resetToken}`;
+  const message = `Reset your password using this link: ${resetURL}\n\nOr send a PATCH request to /api/v1/auth/reset-password/${resetToken} with password and passwordConfirm.`;
 
   try {
     await sendEmail({

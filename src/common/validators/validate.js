@@ -6,6 +6,8 @@ const AppError = require('../errors');
  */
 function validateBody(schema) {
   return (req, _res, next) => {
+      console.log('📋 Validator called with schema:', Object.keys(schema));
+    console.log('Request body:', req.body);
     const errors = [];
     const body = req.body || {};
 

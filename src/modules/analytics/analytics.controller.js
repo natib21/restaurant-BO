@@ -31,6 +31,18 @@ exports.getDashboard = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   if (!merchantId) return next(new AppError('Merchant context required', 403));
 
+  // Optional branch filter — if provided, scope all queries to that branch
+  const mongoose = require('mongoose');
+  const branchId = req.query.branchId
+    ? new mongoose.Types.ObjectId(String(req.query.branchId))
+    : null;
+
+  const baseMatch = (extra = {}) => ({
+    merchant: merchantId,
+    ...(branchId ? { branch: branchId } : {}),
+    ...extra,
+  });
+
   // Revenue & orders by period
   const periods = ['today', 'week', 'month', 'quarter', 'year'];
   const revenue = {};
@@ -38,7 +50,7 @@ exports.getDashboard = catchAsync(async (req, res, next) => {
   for (const p of periods) {
     const { start, end } = getDateRange(p);
     const result = await Order.aggregate([
-      { $match: { merchant: merchantId, status: 'completed', completedAt: { $gte: start, $lte: end } } },
+      { $match: baseMatch({ status: 'completed', completedAt: { $gte: start, $lte: end } }) },
       { $group: { _id: null, revenue: { $sum: '$totalAmount' }, orders: { $sum: 1 }, uniqueCustomers: { $addToSet: '$customer' } } },
     ]);
     const d = result[0] || { revenue: 0, orders: 0, uniqueCustomers: [] };
@@ -51,7 +63,7 @@ exports.getDashboard = catchAsync(async (req, res, next) => {
 
   // Top 5 most ordered items
   const topFoods = await Order.aggregate([
-    { $match: { merchant: merchantId, status: 'completed' } },
+    { $match: baseMatch({ status: 'completed' }) },
     { $unwind: '$items' },
     { $group: { _id: '$items.menuItem', name: { $first: '$items.name' }, quantity: { $sum: '$items.quantity' }, revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } } } },
     { $sort: { quantity: -1 } },
@@ -63,7 +75,7 @@ exports.getDashboard = catchAsync(async (req, res, next) => {
 
   // Top 10 VIP customers
   const topCustomers = await Order.aggregate([
-    { $match: { merchant: merchantId, status: 'completed' } },
+    { $match: baseMatch({ status: 'completed' }) },
     { $group: { _id: '$customer', totalSpent: { $sum: '$totalAmount' }, visits: { $sum: 1 }, lastVisit: { $max: '$completedAt' } } },
     { $sort: { totalSpent: -1 } },
     { $limit: 10 },
@@ -75,7 +87,7 @@ exports.getDashboard = catchAsync(async (req, res, next) => {
   // Customer growth this month
   const { start: monthStart } = getDateRange('month');
   const growth = await Order.aggregate([
-    { $match: { merchant: merchantId, status: 'completed', completedAt: { $gte: monthStart } } },
+    { $match: baseMatch({ status: 'completed', completedAt: { $gte: monthStart } }) },
     { $group: { _id: '$customer', firstOrder: { $min: '$completedAt' } } },
     { $group: { _id: null, new: { $sum: { $cond: [{ $gte: ['$firstOrder', monthStart] }, 1, 0] } }, returning: { $sum: { $cond: [{ $lt: ['$firstOrder', monthStart] }, 1, 0] } } } },
   ]);

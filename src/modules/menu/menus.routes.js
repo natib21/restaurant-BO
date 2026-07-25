@@ -40,9 +40,9 @@ router.get('/staff', menuController.getStaffMenu);
 router.route('/')
   .get(menuController.getAllMenu)
   .post(
-    menuController.uploadMenuPhoto,
-    menuController.resizeMenuPhoto,
-    menuController.createNewMenu
+  menuController.uploadMenuPhoto,     // Single or multiple images
+  menuController.resizeAndProcessImages, // Saves as FileAsset (ObjectId)
+  menuController.createNewMenu
   );
 
 router.patch('/:id/toggle-availability', menuController.toggleMenuItemAvailability);

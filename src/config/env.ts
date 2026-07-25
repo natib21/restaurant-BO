@@ -54,17 +54,19 @@ export function loadEnv(): Env {
     throw new Error('Environment validation failed');
   }
   cached = parsed.data;
-  return cached.data;
+  return cached;
 }
 
 export function getMongoUri(): string {
   const env = loadEnv();
   const isProd = env.NODE_ENV === 'production';
-
+  console.log('Loading MongoDB URI for env',env.NODE_ENV)
   if (isProd && env.DATABASE_SECOND && env.DATABASE_PASSWORD_SECOND) {
+    console.log(process.env.MONGO_URI);
     return env.DATABASE_SECOND.replace('<PASSWORD>', env.DATABASE_PASSWORD_SECOND);
   }
   if (isProd && env.DATABASE && env.DATABASE_PASSWORD) {
+    console.log(process.env.MONGO_URI);
     return env.DATABASE.replace('<PASSWORD>', env.DATABASE_PASSWORD);
   }
 

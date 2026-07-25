@@ -22,7 +22,12 @@ exports.getAllCustomers = catchAsync(async (req, res, next) => {
 
   const customers = await customerRepository.findAllByMerchant(merchantId);
 
-  res.status(200).json({ status: 'success', results: customers.length, data: { customers } });
+  res.status(200)
+  .json({
+     status: 'success', 
+     results: customers.length,
+      data: { customers }
+     });
 });
 
 exports.updateCustomer = catchAsync(async (req, res, next) => {

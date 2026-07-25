@@ -10,6 +10,7 @@ const mongooseOptions = {
 let isConnected = false;
 
 export async function connectDatabase(): Promise<typeof mongoose> {
+  console.log("connectDatabase called");
   if (isConnected) return mongoose;
 
   const uri = getMongoUri();

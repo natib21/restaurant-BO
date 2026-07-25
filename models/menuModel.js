@@ -96,9 +96,24 @@ const menuSchema = new mongoose.Schema(
     // Fallback price if no variants (rare, for simple items)
     price: { type: Number, min: 0 },
 
-    image: { type: String, default: 'default-menu-item.jpg' },
-    images: [String],
-
+    image: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
+    // Multiple images - array of FileAsset references
+    images: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+    }],
+ imageUrl: {
+      type: String,
+      default: null,
+    },
+    imageFilename: {
+      type: String,
+      default: 'default-menu-item.jpg',
+    },
     prepTime: { type: String, default: '15-25 min' },
 
     ingredients: [String],
@@ -173,6 +188,20 @@ menuSchema.virtual('averagePrice').get(function () {
 // Default variant (usually first one)
 menuSchema.virtual('defaultVariant').get(function () {
   return this.variants?.[0] || null;
+});
+
+menuSchema.virtual('imageData').get(function () {
+  if (this.image) {
+    return `/api/v1/files/${this.image}/content`;
+  }
+  return this.imageUrl || null;
+});
+
+menuSchema.virtual('imagesData').get(function () {
+  if (this.images && this.images.length > 0) {
+    return this.images.map(id => `/api/v1/files/${id}/content`);
+  }
+  return [];
 });
 
 module.exports = mongoose.model('Menu', menuSchema);

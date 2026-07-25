@@ -19,12 +19,24 @@ declare global {
   namespace Express {
     interface Request {
       ctx: RequestContext;
+      user?: {
+        _id?: unknown;
+        id?: unknown;
+        merchant?: { _id?: unknown } | unknown;
+        role?: { tasks?: Array<{ name?: string }> } | unknown;
+        isActive?: boolean;
+        branch?: unknown;
+        [key: string]: unknown;
+      };
       /** @deprecated Use req.ctx.merchantId */
       merchantId?: Types.ObjectId | string;
       /** @deprecated Use req.ctx.branchId */
       branchId?: Types.ObjectId | string;
       /** @deprecated Use req.ctx.customerId */
       customerId?: Types.ObjectId | string;
+      /** @deprecated Use req.ctx.tableId */
+      tableId?: Types.ObjectId | string;
+      tableSession?: unknown;
       requestId?: string;
       requestTime?: string;
     }

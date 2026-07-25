@@ -5,8 +5,8 @@ import { promisify } from 'util';
 import type { Express } from 'express';
 import { logger } from '../../common/logger';
 import { loadEnv, getCorsOrigins } from '../../config/env';
-
-const verifyJwt = promisify(jwt.verify) as (
+const User = require('../../../models/userModel');
+const verifyJwt = promisify(jwt.verify) as unknown as (
   token: string,
   secret: string
 ) => Promise<{ id: string; merchant?: string; branch?: string }>;
@@ -29,7 +29,7 @@ async function authenticateSocket(
     const env = loadEnv();
     const decoded = await verifyJwt(token, env.JWT_SECRET);
 
-    const User = require('../../../models/userModel');
+   
     const user = await User.findById(decoded.id)
       .populate({
         path: 'role',
