@@ -14,6 +14,7 @@ const {
   attachComboImage,
   attachMenuGroupImages,
 } = require('../dto/menu-response.dto');
+const { resolveSingleImageData } = require('../utils/image-response');
 
 class MenuService {
   /* ---------- Publish / orderability (MenuManagementService — unchanged logic) ---------- */
@@ -139,10 +140,9 @@ class MenuService {
         path: 'items.menu',
         match: { available: true, inStock: true },
         select:
-          'name description image variants price type isVeg isSpicy isAlcoholic prepTime tags ingredients allergens ratingAverage',
+          'name description image imageUrl imageFilename variants price type isVeg isSpicy isAlcoholic prepTime tags ingredients allergens ratingAverage',
       });
-
-    const baseUrl = `${req.protocol}://${req.get('host')}/img/menu/`;
+    const origin = `${req.protocol}://${req.get('host')}`;
 
     const seenItemIds = new Set();
     const finalItems = [];
@@ -157,11 +157,19 @@ class MenuService {
         const menu = item.menu;
         const defaultPrice = item.overridePrice || menu.variants?.[0]?.price || menu.price || 0;
 
+        const imageData = resolveSingleImageData({
+          image: menu.image,
+          imageFilename: menu.imageFilename,
+          imageUrl: menu.imageUrl,
+          legacyBasePath: '/img/menu',
+          origin,
+        });
+
         finalItems.push({
           _id: menu._id,
           name: item.customName || menu.name,
           description: item.customDescription || menu.description || '',
-          image: menu.image ? `${baseUrl}${menu.image}` : null,
+          image: imageData?.url || null,
           price: defaultPrice,
           variants: menu.variants || [],
           type: menu.type,
@@ -450,7 +458,12 @@ static async createNewMenu(menuData, req) {
             _id: i.menuItem._id,
             name: i.customName || i.menuItem.name,
             description: i.customDescription || i.menuItem.description,
-            image: i.menuItem.image,
+            image: resolveSingleImageData({
+              image: i.menuItem.image,
+              imageFilename: i.menuItem.imageFilename,
+              imageUrl: i.menuItem.imageUrl,
+              legacyBasePath: '/img/menu',
+            })?.url || null,
             price: i.overridePrice || i.menuItem.variants[0]?.price || i.menuItem.price,
             variants: i.menuItem.variants,
             isVeg: i.menuItem.isVeg,
@@ -583,7 +596,7 @@ static async createNewMenu(menuData, req) {
         match: { available: true, inStock: true },
       });
 
-    const baseUrl = protocol + '://' + host + '/img/menu/';
+    const origin = `${protocol}://${host}`;
     const seenItemIds = new Set();
     const finalItems = [];
 
@@ -607,11 +620,19 @@ static async createNewMenu(menuData, req) {
           (menu.variants && menu.variants[0] ? menu.variants[0].price : menu.price) ||
           0;
 
+        const imageData = resolveSingleImageData({
+          image: menu.image,
+          imageFilename: menu.imageFilename,
+          imageUrl: menu.imageUrl,
+          legacyBasePath: '/img/menu',
+          origin,
+        });
+
         finalItems.push({
           id: menu._id,
           name: itemEntry.customName || menu.name,
           description: itemEntry.customDescription || menu.description || '',
-          image: menu.image ? baseUrl + menu.image : null,
+          image: imageData?.url || null,
           price: itemPrice,
           variants: menu.variants || [],
           type: menu.type,

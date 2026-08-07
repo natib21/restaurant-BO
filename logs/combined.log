@@ -11840,3 +11840,28 @@
 {"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-25T09:13:24.126Z"}
 {"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-25T09:13:24.133Z"}
 {"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-07-25T09:14:47.566Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-25T09:16:33.701Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-25T09:16:33.714Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-25T09:16:33.720Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-28T12:22:26.262Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-28T12:22:26.270Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-28T12:22:26.275Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-28T13:32:51.254Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-28T13:32:51.261Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-28T13:32:51.266Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-28T13:32:55.001Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-28T13:32:55.012Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-28T13:32:55.016Z"}
+{"entityType":"menu","fileId":"6a68b07c00f24d944c89ee22","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"file.registered","timestamp":"2026-07-28T13:37:00.953Z"}
+{"entityType":"menu","fileId":"6a68b0c500f24d944c89eee4","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"file.registered","timestamp":"2026-07-28T13:38:13.053Z"}
+{"entityType":"menu","fileId":"6a68b10c00f24d944c89efb7","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"file.registered","timestamp":"2026-07-28T13:39:24.758Z"}
+{"entityType":"menu","fileId":"6a68b22500f24d944c89f227","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"file.registered","timestamp":"2026-07-28T13:44:05.022Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-28T13:48:03.771Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-28T13:48:03.777Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-28T13:48:03.780Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-28T13:48:12.847Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-28T13:48:12.853Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-28T13:48:12.856Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-07-28T13:48:28.325Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-07-28T13:48:28.342Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-07-28T13:48:28.351Z"}

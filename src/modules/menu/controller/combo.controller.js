@@ -8,6 +8,7 @@ const { MenuService } = require('../service/MenuService');
 const { FileAsset } = require('../../../../models/FileAsset');
 const { FileManagementService } = require('../../files/file-management.service');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
+const { resolveSingleImageData } = require('../utils/image-response');
 
 const multerStorage = multer.memoryStorage();
 
@@ -343,40 +344,18 @@ function formatComboResponse(combo) {
   if (!combo) return null;
 
   const comboObj = combo.toObject ? combo.toObject() : combo;
-
-  // Handle single image
-  let imageData = null;
-  if (comboObj.image) {
-    if (typeof comboObj.image === 'object' && comboObj.image._id) {
-      // Populated ObjectId
-      imageData = {
-        id: comboObj.image._id,
-        url: `/api/v1/files/${comboObj.image._id}/content`,
-        originalName: comboObj.image.originalName,
-        mimeType: comboObj.image.mimeType,
-        sizeBytes: comboObj.image.sizeBytes,
-        createdAt: comboObj.image.createdAt,
-      };
-    } else if (typeof comboObj.image === 'string') {
-      // Legacy string filename
-      imageData = {
-        url: `/uploads/img/combo/${comboObj.image}`,
-        filename: comboObj.image,
-      };
-    } else {
-      // ObjectId as string
-      imageData = {
-        id: comboObj.image,
-        url: `/api/v1/files/${comboObj.image}/content`,
-      };
-    }
-  }
+  const imageData = resolveSingleImageData({
+    image: comboObj.image,
+    imageFilename: comboObj.imageFilename,
+    imageUrl: comboObj.imageUrl,
+    legacyBasePath: '/img/combo',
+  });
 
   return {
     ...comboObj,
     imageData,
     // Backward compatibility
-    imageUrl: imageData?.url || comboObj.imageUrl || null,
+    imageUrl: imageData?.url || null,
     // Keep ID for reference
     mainImageId: imageData?.id || null,
   };

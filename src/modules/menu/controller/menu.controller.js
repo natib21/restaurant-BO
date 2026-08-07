@@ -8,6 +8,10 @@ const { getMerchantId } = require('../../../common/utils/tenant-scope');
 const { MenuService } = require('../service/MenuService');
 const { FileManagementService } = require('../../files/file-management.service');
 const FileAsset = require('../../../../models/FileAsset');
+const {
+  resolveSingleImageData,
+  resolveImageCollectionData,
+} = require('../utils/image-response');
 
 const multerStorage = multer.memoryStorage();
 
@@ -462,68 +466,22 @@ function formatMenuResponse(menu) {
   if (!menu) return null;
 
   const menuObj = menu.toObject ? menu.toObject() : menu;
-
-  // Handle single image
-  let imageData = null;
-  if (menuObj.image) {
-    if (typeof menuObj.image === 'object' && menuObj.image._id) {
-      // Populated ObjectId
-      imageData = {
-        id: menuObj.image._id,
-        url: `/api/v1/files/${menuObj.image._id}/content`,
-        originalName: menuObj.image.originalName,
-        mimeType: menuObj.image.mimeType,
-        sizeBytes: menuObj.image.sizeBytes,
-        createdAt: menuObj.image.createdAt,
-      };
-    } else if (typeof menuObj.image === 'string') {
-      // Legacy string filename
-      imageData = {
-        url: `/uploads/img/menu/${menuObj.image}`,
-        filename: menuObj.image,
-      };
-    } else {
-      // ObjectId as string
-      imageData = {
-        id: menuObj.image,
-        url: `/api/v1/files/${menuObj.image}/content`,
-      };
-    }
-  }
-
-  // Handle multiple images
-  let imagesData = [];
-  if (menuObj.images && menuObj.images.length > 0) {
-    imagesData = menuObj.images.map(img => {
-      if (typeof img === 'object' && img._id) {
-        return {
-          id: img._id,
-          url: `/api/v1/files/${img._id}/content`,
-          originalName: img.originalName,
-          mimeType: img.mimeType,
-          sizeBytes: img.sizeBytes,
-          createdAt: img.createdAt,
-        };
-      } else if (typeof img === 'string') {
-        return {
-          url: `/uploads/img/menu/${img}`,
-          filename: img,
-        };
-      } else {
-        return {
-          id: img,
-          url: `/api/v1/files/${img}/content`,
-        };
-      }
-    });
-  }
+  const imageData = resolveSingleImageData({
+    image: menuObj.image,
+    imageFilename: menuObj.imageFilename,
+    imageUrl: menuObj.imageUrl,
+    legacyBasePath: '/img/menu',
+  });
+  const imagesData = resolveImageCollectionData(menuObj.images, {
+    legacyBasePath: '/img/menu',
+  });
 
   return {
     ...menuObj,
     imageData,
     imagesData,
     // Backward compatibility
-    imageUrl: imageData?.url || menuObj.imageUrl || null,
+    imageUrl: imageData?.url || null,
     imageUrls: imagesData.map(img => img.url),
     // Keep IDs for reference
     mainImageId: imageData?.id || null,
