@@ -137,11 +137,6 @@ exports.createCombo = catchAsync(async (req, res) => {
     });
   }
 
-  // Populate image reference for response
-  await combo.populate([
-    { path: 'image', match: { isDeleted: false } },
-  ]);
-
   res.status(201).json({
     status: 'success',
     data: { combo: formatComboResponse(combo) },
@@ -162,15 +157,12 @@ exports.getAllCombos = catchAsync(async (req, res) => {
     });
   }
 
-  // Populate and format each combo
-  const formattedCombos = await Promise.all(
-    combos.map(async (combo) => {
-      await combo.populate([
-        { path: 'image', match: { isDeleted: false } },
-      ]);
-      return formatComboResponse(combo);
-    })
-  );
+  if (process.env.NODE_ENV === 'development') {
+    console.log('GET ALL COMBOS returned', combos.length, 'records');
+    console.log('Combo prototype isDocument:', combos[0]?.toObject ? true : false);
+  }
+
+  const formattedCombos = combos.map(combo => formatComboResponse(combo));
 
   res.status(200).json({
     status: 'success',
@@ -185,15 +177,12 @@ exports.getAllCombos = catchAsync(async (req, res) => {
 exports.getActiveCombos = catchAsync(async (req, res) => {
   const combos = await MenuService.getActiveCombos(req);
 
-  // Populate and format active combos
-  const formattedCombos = await Promise.all(
-    combos.map(async (combo) => {
-      await combo.populate([
-        { path: 'image', match: { isDeleted: false } },
-      ]);
-      return formatComboResponse(combo);
-    })
-  );
+  if (process.env.NODE_ENV === 'development') {
+    console.log('GET ACTIVE COMBOS returned', combos.length, 'records');
+    console.log('Combo prototype isDocument:', combos[0]?.toObject ? true : false);
+  }
+
+  const formattedCombos = combos.map(combo => formatComboResponse(combo));
 
   res.status(200).json({
     status: 'success',
@@ -212,10 +201,10 @@ exports.getCombo = catchAsync(async (req, res) => {
     throw new AppError('Combo not found', 404);
   }
 
-  // Populate image reference
-  await combo.populate([
-    { path: 'image', match: { isDeleted: false } },
-  ]);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('GET SINGLE COMBO returned type:', typeof combo);
+    console.log('Combo has toObject:', combo?.toObject ? true : false);
+  }
 
   res.status(200).json({
     status: 'success',
@@ -241,12 +230,7 @@ exports.updateCombo = catchAsync(async (req, res) => {
     });
   }
 
-  // Populate image reference
-  await combo.populate([
-    { path: 'image', match: { isDeleted: false } },
-  ]);
-
-  res.status(200).json({
+  res.status(201).json({
     status: 'success',
     data: { combo: formatComboResponse(combo) },
   });
@@ -257,11 +241,6 @@ exports.updateCombo = catchAsync(async (req, res) => {
 // ============================================
 exports.updateBranchOverride = catchAsync(async (req, res) => {
   const { combo, message } = await MenuService.updateBranchOverride(req);
-
-  // Populate image reference
-  await combo.populate([
-    { path: 'image', match: { isDeleted: false } },
-  ]);
 
   res.status(200).json({
     status: 'success',

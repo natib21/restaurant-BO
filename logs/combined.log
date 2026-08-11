@@ -11870,3 +11870,128 @@
 {"level":"info","message":"Socket disconnected: HSWv0zG9AuOySr8HAAAB (transport close)","timestamp":"2026-07-28T14:37:58.174Z"}
 {"level":"info","message":"Socket connected: OLAo2XUA9XdiF_QcAAAD user=6a243d6c5dd23ba4b994e150","timestamp":"2026-07-28T14:38:02.336Z"}
 {"level":"info","message":"Socket disconnected: OLAo2XUA9XdiF_QcAAAD (transport close)","timestamp":"2026-07-28T14:38:02.781Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T06:38:41.703Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T06:38:41.709Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T06:38:41.713Z"}
+{"level":"info","message":"Socket connected: U0M71D5WFYyk4TnjAAAB user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-08T06:57:03.502Z"}
+{"level":"info","message":"Socket disconnected: U0M71D5WFYyk4TnjAAAB (client namespace disconnect)","timestamp":"2026-08-08T06:57:19.813Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T07:01:09.142Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T07:01:58.701Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T07:01:58.708Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T07:01:58.713Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T08:12:48.957Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T08:12:52.759Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T08:12:52.765Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T08:12:52.769Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T08:38:34.870Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T08:38:38.148Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T08:38:38.155Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T08:38:38.159Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T08:39:02.487Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T08:39:05.005Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T08:39:05.012Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T08:39:05.015Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T09:41:27.781Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T09:41:30.636Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T09:41:30.642Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T09:41:30.646Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T09:45:35.687Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T09:45:56.710Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T09:45:56.721Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T09:45:56.730Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-08T10:43:43.242Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-08T10:49:10.200Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-08T10:49:10.206Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-08T10:49:10.210Z"}
+{"entityType":"menu","fileId":"6a799115e0cbfe64d9285618","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"file.registered","timestamp":"2026-08-10T08:51:33.222Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-10T12:16:59.933Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-10T12:18:10.602Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-10T12:18:10.615Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-10T12:18:10.623Z"}
+{"level":"info","message":"Socket connected: XFLX8QdX2ORy-sDSAAAB user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-10T12:43:37.321Z"}
+{"level":"warn","message":"Socket XFLX8QdX2ORy-sDSAAAB denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T12:43:40.793Z"}
+{"level":"info","message":"Socket disconnected: XFLX8QdX2ORy-sDSAAAB (client namespace disconnect)","timestamp":"2026-08-10T12:43:44.288Z"}
+{"level":"info","message":"Socket connected: DkmD6srQlZR8aYXfAAAD user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-10T12:44:06.555Z"}
+{"level":"warn","message":"Socket DkmD6srQlZR8aYXfAAAD denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T12:44:08.956Z"}
+{"level":"warn","message":"Socket DkmD6srQlZR8aYXfAAAD denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T12:44:14.523Z"}
+{"level":"warn","message":"Socket DkmD6srQlZR8aYXfAAAD denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T12:58:29.824Z"}
+{"level":"info","message":"Socket disconnected: DkmD6srQlZR8aYXfAAAD (transport close)","timestamp":"2026-08-10T13:01:05.613Z"}
+{"level":"info","message":"Socket connected: l9E3IKVjWScQtHuGAAAF user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-10T14:22:24.497Z"}
+{"level":"warn","message":"Socket l9E3IKVjWScQtHuGAAAF denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T14:22:24.516Z"}
+{"level":"warn","message":"Socket l9E3IKVjWScQtHuGAAAF denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T14:25:34.067Z"}
+{"level":"info","message":"Socket disconnected: l9E3IKVjWScQtHuGAAAF (transport close)","timestamp":"2026-08-10T14:28:42.556Z"}
+{"level":"info","message":"Socket connected: oTlsWuvCSTWh2EVjAAAH user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-10T14:29:03.399Z"}
+{"level":"warn","message":"Socket oTlsWuvCSTWh2EVjAAAH denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T14:29:42.278Z"}
+{"aggregateType":"order","count":3,"eventTypes":["order:status-updated"],"level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.created","orderId":"6a2e8e8ff9b9137f1d3b70e6","timestamp":"2026-08-10T14:31:30.497Z"}
+{"category":"order","count":3,"level":"info","message":"notification.queued","timestamp":"2026-08-10T14:31:30.498Z"}
+{"changedBy":"6a243d6c5dd23ba4b994e150","fromStatus":"pending","level":"info","message":"order.status.transition","orderId":"6a2e8e8ff9b9137f1d3b70e6","roleCategory":"admin","timestamp":"2026-08-10T14:31:30.510Z","toStatus":"accepted"}
+{"eventId":"6a79e0c23811073451a75a13","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:31.390Z"}
+{"eventId":"6a79e0c23811073451a75a13","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:31.397Z"}
+{"eventId":"6a79e0c23811073451a75a14","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:31.423Z"}
+{"eventId":"6a79e0c23811073451a75a14","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:31.424Z"}
+{"eventId":"6a79e0c23811073451a75a15","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:31.445Z"}
+{"eventId":"6a79e0c23811073451a75a15","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:31.447Z"}
+{"aggregateType":"order","count":4,"eventTypes":["order:status-updated"],"level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.created","orderId":"6a2e8e8ff9b9137f1d3b70e6","timestamp":"2026-08-10T14:31:45.412Z"}
+{"category":"order","count":4,"level":"info","message":"notification.queued","timestamp":"2026-08-10T14:31:45.413Z"}
+{"changedBy":"6a243d6c5dd23ba4b994e150","fromStatus":"accepted","level":"info","message":"order.status.transition","orderId":"6a2e8e8ff9b9137f1d3b70e6","roleCategory":"admin","timestamp":"2026-08-10T14:31:45.422Z","toStatus":"preparing"}
+{"eventId":"6a79e0d13811073451a75a88","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.736Z"}
+{"eventId":"6a79e0d13811073451a75a88","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.738Z"}
+{"eventId":"6a79e0d13811073451a75a89","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.757Z"}
+{"eventId":"6a79e0d13811073451a75a89","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.766Z"}
+{"eventId":"6a79e0d13811073451a75a8a","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.788Z"}
+{"eventId":"6a79e0d13811073451a75a8a","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.792Z"}
+{"eventId":"6a79e0d13811073451a75a8b","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.813Z"}
+{"eventId":"6a79e0d13811073451a75a8b","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:45.819Z"}
+{"aggregateType":"order","count":5,"eventTypes":["order:status-updated","notification"],"level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.created","orderId":"6a2e8e8ff9b9137f1d3b70e6","timestamp":"2026-08-10T14:31:52.498Z"}
+{"category":"order","count":5,"level":"info","message":"notification.queued","timestamp":"2026-08-10T14:31:52.500Z"}
+{"changedBy":"6a243d6c5dd23ba4b994e150","fromStatus":"preparing","level":"info","message":"order.status.transition","orderId":"6a2e8e8ff9b9137f1d3b70e6","roleCategory":"admin","timestamp":"2026-08-10T14:31:52.510Z","toStatus":"ready"}
+{"eventId":"6a79e0d83811073451a75af7","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:52.938Z"}
+{"eventId":"6a79e0d83811073451a75af7","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:52.940Z"}
+{"eventId":"6a79e0d83811073451a75af8","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:52.962Z"}
+{"eventId":"6a79e0d83811073451a75af8","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:52.966Z"}
+{"eventId":"6a79e0d83811073451a75af9","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:52.998Z"}
+{"eventId":"6a79e0d83811073451a75af9","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:53.004Z"}
+{"eventId":"6a79e0d83811073451a75afa","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:53.026Z"}
+{"eventId":"6a79e0d83811073451a75afa","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e8e8ff9b9137f1d3b70e6","retryCount":0,"timestamp":"2026-08-10T14:31:53.035Z"}
+{"eventId":"6a79e0d83811073451a75afb","eventType":"notification","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","retryCount":0,"timestamp":"2026-08-10T14:31:53.059Z"}
+{"eventId":"6a79e0d83811073451a75afb","eventType":"notification","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","retryCount":0,"timestamp":"2026-08-10T14:31:53.063Z"}
+{"level":"info","message":"Socket disconnected: oTlsWuvCSTWh2EVjAAAH (transport close)","timestamp":"2026-08-10T14:33:17.477Z"}
+{"aggregateType":"order","count":3,"eventTypes":["order:status-updated"],"level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.created","orderId":"6a2e92c9d5d95abcdcdcfcac","timestamp":"2026-08-10T14:34:36.461Z"}
+{"category":"order","count":3,"level":"info","message":"notification.queued","timestamp":"2026-08-10T14:34:36.462Z"}
+{"changedBy":"6a243d6c5dd23ba4b994e150","fromStatus":"pending","level":"info","message":"order.status.transition","orderId":"6a2e92c9d5d95abcdcdcfcac","roleCategory":"admin","timestamp":"2026-08-10T14:34:36.470Z","toStatus":"accepted"}
+{"eventId":"6a79e17c3811073451a75d19","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e92c9d5d95abcdcdcfcac","retryCount":0,"timestamp":"2026-08-10T14:34:36.706Z"}
+{"eventId":"6a79e17c3811073451a75d19","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e92c9d5d95abcdcdcfcac","retryCount":0,"timestamp":"2026-08-10T14:34:36.710Z"}
+{"eventId":"6a79e17c3811073451a75d1a","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e92c9d5d95abcdcdcfcac","retryCount":0,"timestamp":"2026-08-10T14:34:36.731Z"}
+{"eventId":"6a79e17c3811073451a75d1a","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e92c9d5d95abcdcdcfcac","retryCount":0,"timestamp":"2026-08-10T14:34:36.737Z"}
+{"eventId":"6a79e17c3811073451a75d1b","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.claimed","orderId":"6a2e92c9d5d95abcdcdcfcac","retryCount":0,"timestamp":"2026-08-10T14:34:36.797Z"}
+{"eventId":"6a79e17c3811073451a75d1b","eventType":"order:status-updated","level":"info","merchantId":"6a243d6c5dd23ba4b994e149","message":"outbox.event.emit.success","orderId":"6a2e92c9d5d95abcdcdcfcac","retryCount":0,"timestamp":"2026-08-10T14:34:36.799Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-10T19:05:36.982Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-10T19:05:36.996Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-10T19:05:37.007Z"}
+{"level":"info","message":"Socket connected: 5pHqyIwrfI_ay-RhAAAB user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-10T19:06:53.490Z"}
+{"level":"info","message":"Socket disconnected: 5pHqyIwrfI_ay-RhAAAB (transport close)","timestamp":"2026-08-10T19:10:46.772Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-10T19:51:42.110Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-10T19:56:33.643Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-10T19:56:33.648Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-10T19:56:33.651Z"}
+{"level":"info","message":"Socket connected: jWA9EfU84dvV47frAAAB user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-10T21:34:57.866Z"}
+{"level":"warn","message":"Socket jWA9EfU84dvV47frAAAB denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-10T21:35:08.445Z"}
+{"level":"info","message":"Socket disconnected: jWA9EfU84dvV47frAAAB (transport close)","timestamp":"2026-08-10T21:39:35.807Z"}
+{"level":"info","message":"Socket connected: LdJWksejuqQr0ozIAAAD user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-11T03:47:17.720Z"}
+{"level":"warn","message":"Socket LdJWksejuqQr0ozIAAAD denied branch 6a255cf79223fde720b639fe","timestamp":"2026-08-11T03:47:17.799Z"}
+{"level":"info","message":"Socket disconnected: LdJWksejuqQr0ozIAAAD (transport close)","timestamp":"2026-08-11T03:47:20.764Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-11T07:03:00.242Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-11T07:03:48.749Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-11T07:03:48.756Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-11T07:03:48.761Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-11T07:29:16.471Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-11T07:48:42.115Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-11T07:48:42.121Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-11T07:48:42.126Z"}
+{"level":"info","message":"Socket connected: YAJ5uSRGzVgJPG8MAAAB user=6a243d6c5dd23ba4b994e150","timestamp":"2026-08-11T07:54:17.495Z"}
+{"level":"info","message":"Socket disconnected: YAJ5uSRGzVgJPG8MAAAB (transport close)","timestamp":"2026-08-11T07:55:06.806Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-11T08:55:01.452Z"}
+{"level":"info","message":"\u001b[37m\u001b[42mMongoDB connected successfully!\u001b[49m\u001b[39m","timestamp":"2026-08-11T08:59:16.035Z"}
+{"batchSize":20,"level":"info","maxRetries":8,"message":"outbox.worker.started","pollIntervalMs":1000,"timestamp":"2026-08-11T08:59:16.040Z"}
+{"level":"info","message":"\u001b[46mServer running on port 8000 [development]\u001b[49m","timestamp":"2026-08-11T08:59:16.044Z"}
+{"level":"info","message":"SIGINT received — shutting down gracefully","timestamp":"2026-08-11T10:33:32.387Z"}

@@ -14,14 +14,14 @@ const { SubscriptionService } = require('../services/subscription.service');
 /**
  * POST /api/v1/subscriptions/initiate
  * 
- * Initiate subscription payment via Kispay
+ * Initiate subscription payment via configured provider
  * 
  * Body: { plan, durationMonths, phone? }
  * Response: { checkout_url, tx_ref }
  */
 exports.initiateSubscription = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
-  const { plan, durationMonths = 1, phone } = req.body;
+  const { features, durationMonths = 1, phone } = req.body;
 
   // Get merchant data for payment payload
   const Merchant = require('../../../../models/merchantModel');
@@ -31,10 +31,9 @@ exports.initiateSubscription = catchAsync(async (req, res, next) => {
     return next(new AppError('Merchant not found', 404));
   }
 
-  // Initiate subscription
   const result = await SubscriptionService.initiateSubscription(
     merchantId,
-    plan,
+    features,
     durationMonths,
     {
       email: merchant.email,
@@ -74,6 +73,8 @@ exports.verifySubscription = catchAsync(async (req, res, next) => {
         subscription: {
           _id: subscription._id,
           plan: subscription.plan,
+          features: subscription.features || [],
+          isTrial: Boolean(subscription.isTrial),
           status: subscription.status,
           endDate: subscription.endDate,
         },
@@ -81,6 +82,37 @@ exports.verifySubscription = catchAsync(async (req, res, next) => {
     });
   } catch (error) {
     return next(new AppError(error.message || 'Payment verification failed', 400));
+  }
+});
+
+/**
+ * POST /api/v1/subscriptions/trial
+ * 
+ * Create a 3-month free trial with full feature access
+ * 
+ * Response: { subscription }
+ */
+exports.createTrialSubscription = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+
+  try {
+    const subscription = await SubscriptionService.createTrialSubscription(merchantId);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Free trial activated successfully',
+      data: {
+        subscription: {
+          _id: subscription._id,
+          features: subscription.features,
+          isTrial: subscription.isTrial,
+          status: subscription.status,
+          endDate: subscription.endDate,
+        },
+      },
+    });
+  } catch (error) {
+    return next(new AppError(error.message, 400));
   }
 });
 
@@ -133,24 +165,33 @@ exports.checkFeatureAccess = catchAsync(async (req, res) => {
 });
 
 /**
- * POST /api/v1/subscriptions/webhook
+ * POST /api/v1/subscriptions/webhook/:provider
  * 
- * Kispay webhook handler (real-time payment updates)
+ * Handle payment provider webhook notifications
  * 
- * Headers: x-kispay-signature, x-kispay-event-id
- * Body: Kispay webhook payload
+ * Headers: x-<provider>-signature, x-<provider>-event-id
+ * Body: provider-specific webhook payload
  */
-exports.handleKispayWebhook = catchAsync(async (req, res, next) => {
-  const signature = req.headers['x-kispay-signature'];
-  const eventId = req.headers['x-kispay-event-id'];
+exports.handlePaymentWebhook = catchAsync(async (req, res, next) => {
+  const provider = String(req.params.provider || '').toLowerCase();
+  const signature = req.headers[`x-${provider}-signature`];
+  const eventId = req.headers[`x-${provider}-event-id`];
+
+  if (!provider) {
+    return res.status(400).json({ error: 'Missing provider in webhook path' });
+  }
 
   if (!signature) {
-    return res.status(400).json({ error: 'Missing x-kispay-signature header' });
+    return res.status(400).json({ error: `Missing x-${provider}-signature header` });
+  }
+
+  if (!Buffer.isBuffer(req.body)) {
+    return res.status(400).json({ error: 'Raw request body is required for signature verification' });
   }
 
   // Verify webhook signature
   try {
-    const isValid = SubscriptionService.verifyWebhookSignature(req.body, signature);
+    const isValid = SubscriptionService.verifyWebhookSignature(provider, req.body, signature);
 
     if (!isValid) {
       console.error('[Subscription Webhook] Invalid signature');
@@ -166,7 +207,7 @@ exports.handleKispayWebhook = catchAsync(async (req, res, next) => {
   try {
     payload = JSON.parse(req.body.toString('utf-8'));
   } catch (err) {
-    console.error('[Subscription Webhook] Invalid JSON');
+    console.error('[Subscription Webhook] Invalid JSON', err.message);
     return res.status(400).json({ error: 'Invalid JSON' });
   }
 
@@ -174,7 +215,7 @@ exports.handleKispayWebhook = catchAsync(async (req, res, next) => {
 
   // Process webhook event
   try {
-    const result = await SubscriptionService.handleWebhookEvent(payload, eventId);
+    const result = await SubscriptionService.handleWebhookEvent(provider, payload, eventId);
 
     if (result.status === 'duplicate') {
       console.log('[Subscription Webhook] Duplicate event ignored');

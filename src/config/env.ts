@@ -28,12 +28,14 @@ const envSchema = z.object({
   CUSTOMER_APP_URL: z.string().url().optional(),
   FRONTEND_URL: z.string().url().optional(),
   APP_URL: z.string().url().optional(),
+  PUBLIC_API_BASE_URL: z.string().url().optional(),
 
-  KISPAY_API_KEY: z.string().optional(),
-  KISPAY_CLIENT_ID: z.string().optional(),
-  KISPAY_API_BASE_URL: z.string().url().default('https://api.kispay.et'),
-  KISPAY_WEBHOOK_SECRET: z.string().optional(),
-  KISPAY_WEBHOOK_URL: z.string().url().optional(),
+
+  PAYMENT_PROVIDER: z.enum(['manual', 'chapa', 'telebirr']).default('manual'),
+  CHAPA_API_KEY: z.string().optional(),
+  CHAPA_API_BASE_URL: z.string().url().default('https://api.chapa.co'),
+  CHAPA_WEBHOOK_SECRET: z.string().optional(),
+  CHAPA_WEBHOOK_URL: z.string().url().optional(),
 
   SESSION_DURATION_HOURS: z.coerce.number().default(4),
   CORS_ORIGINS: z.string().optional(),

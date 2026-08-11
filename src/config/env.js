@@ -3,6 +3,7 @@ const path = require('path');
 
 dotenv.config({ path: path.resolve(process.cwd(), 'config.env') });
 
+PUBLIC_API_URL= 'http://localhost:8000';
 function loadEnv() {
   const env = process.env;
   if (!env.JWT_SECRET || env.JWT_SECRET.length < 16) {

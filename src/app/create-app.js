@@ -42,8 +42,7 @@ const GlobalErrorHandler                = require('../../utils/globalErrorHandle
 // ── Single aggregated router (all domains) ────────────────────────────────────
 const apiRoutes = require('../routes/index');
 
-// ── Subscription webhook controller (raw body — registered before json parser) ─
-const { handleKispayWebhook } = require('../modules/subscriptions/controllers/subscription.controller');
+// ── Subscription webhook controller is registered by the subscriptions router ─
 
 function createApp() {
   const env = loadEnv();
@@ -98,14 +97,7 @@ function createApp() {
   app.use('/img/orderPayment', express.static(path.join(process.cwd(), 'uploads/img/orderPayment')));
   app.use('/img/merchants',    express.static(path.join(process.cwd(), 'uploads/img/merchants')));
 
-  // ── 6. Webhook (raw body — MUST be before express.json) ───────────────────
-  app.post(
-    '/api/v1/subscriptions/webhook',
-    express.raw({ type: 'application/json' }),
-    handleKispayWebhook
-  );
-
-  // ── 7. Body parser ────────────────────────────────────────────────────────
+  // ── 6. Body parser ────────────────────────────────────────────────────────
   app.use(express.json({ limit: '10mb' }));
 
   // ── 8. Security middleware ────────────────────────────────────────────────

@@ -9,6 +9,10 @@ const {
   startIntegrityScheduler,
   stopIntegrityScheduler,
 } = require('./modules/integrity/integrity.scheduler');
+const {
+  startSubscriptionScheduler,
+  stopSubscriptionScheduler,
+} = require('./modules/subscriptions/subscription.scheduler');
 
 process.on('uncaughtException', err => {
   logger.error(`UNHANDLED EXCEPTION: ${err.name} - ${err.message}`);
@@ -25,6 +29,7 @@ async function bootstrap() {
   const server = createSocketServer(app);
   const outboxWorker = startOutboxWorker();
   const integrityScheduler = startIntegrityScheduler();
+  const subscriptionScheduler = startSubscriptionScheduler();
 
   const httpServer = server.listen(env.PORT || 3000, () => {
     logger.info(
@@ -44,6 +49,8 @@ async function bootstrap() {
     }
     stopIntegrityScheduler();
     if (integrityScheduler?.stop) integrityScheduler.stop();
+    stopSubscriptionScheduler();
+    if (subscriptionScheduler?.stop) subscriptionScheduler.stop();
     httpServer.close(() => process.exit(0));
   };
 

@@ -10,12 +10,12 @@
  */
 
 const axios = require('axios');
-const crypto = require('crypto');
 const { SubscriptionRepository } = require('../repositories/subscription.repository');
-const { getKispayConfig } = require('../../../infrastructure/payments/kispay.config');
+const { getPaymentProvider } = require('../../../infrastructure/payments/payment-provider.interface');
 const {
-  planPricingConfig,
-  featureAccessMatrix,
+  featureCatalog,
+  trialFeatureSet,
+  trialDurationMonths,
 } = require('../dto/subscription.dto');
 
 class SubscriptionService {
@@ -39,6 +39,40 @@ class SubscriptionService {
   }
 
   /**
+   * Validate requested feature list
+   */
+  static validateFeatures(features) {
+    if (!Array.isArray(features) || features.length === 0) {
+      throw new Error('At least one feature must be selected');
+    }
+
+    const invalid = features.filter(feature => !featureCatalog[feature]);
+    if (invalid.length > 0) {
+      throw new Error(`Invalid features: ${invalid.join(', ')}`);
+    }
+
+    return Array.from(new Set(features));
+  }
+
+  /**
+   * Calculate total amount for chosen features
+   */
+  static calculateSubscriptionAmount(features, durationMonths) {
+    const normalized = this.validateFeatures(features);
+    return normalized.reduce((sum, feature) => {
+      const price = featureCatalog[feature]?.pricePerMonth || 0;
+      return sum + price * durationMonths;
+    }, 0);
+  }
+
+  /**
+   * Find the latest active subscription for merchant
+   */
+  static async getActiveSubscription(merchantId) {
+    return SubscriptionRepository.findByMerchant(merchantId);
+  }
+
+  /**
    * Check if subscription is currently active
    */
   static isSubscriptionCurrentlyActive(subscription) {
@@ -50,64 +84,50 @@ class SubscriptionService {
    * Initiate subscription payment
    * 
    * @param {string} merchantId - Merchant requesting subscription
-   * @param {string} plan - Plan tier (basic, pro, enterprise)
+   * @param {string[]} features - Feature keys to purchase
    * @param {number} durationMonths - Duration in months
    * @param {Object} merchantData - Merchant object with email, phone, businessName
-   * @returns {Object} { tx_ref, checkout_url, session }
+   * @returns {Object} { tx_ref, checkout_url, session, subscription }
    */
-  static async initiateSubscription(merchantId, plan, durationMonths, merchantData) {
-    // Validate plan
-    if (!planPricingConfig[plan]) {
-      throw new Error(`Invalid plan: ${plan}`);
-    }
-
-    // Calculate amount and create transaction reference
-    const amount = planPricingConfig[plan] * durationMonths;
+  static async initiateSubscription(merchantId, features, durationMonths, merchantData) {
+    const normalizedFeatures = this.validateFeatures(features);
+    const amount = this.calculateSubscriptionAmount(normalizedFeatures, durationMonths);
     const tx_ref = `tx-${merchantId}-${Date.now()}`;
+    const provider = process.env.PAYMENT_PROVIDER || 'manual';
+    const paymentProvider = getPaymentProvider(provider);
 
-    // Build Kispay payload
-    const payload = {
-      amount: amount.toString(),
-      email: merchantData.email,
-      description: `${plan.toUpperCase()} Plan - ${durationMonths} month(s)`,
-      fullName: merchantData.businessName || merchantData.fullName || 'Merchant',
-      phone: merchantData.phone,
-      orderNo: tx_ref,
-      successUrl: 'https://tirusolutions.et/payment-success',
-      cancelUrl: 'https://tirusolutions.et/payment-cancel',
-      errorUrl: 'https://tirusolutions.et/payment-error',
-      redirectUrl: 'https://tirusolutions.et/payment-success',
-    };
-
-    // Call Kispay API
-    const kispay = getKispayConfig();
-    const response = await axios.post(
-      `${kispay.apiBaseUrl}/api/checkout/create_checkout_session`,
-      payload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': kispay.apiKey,
-        },
-      }
-    );
-
-    const session = response.data.body;
-
-    // Create subscription record with pending status
     const subscription = await SubscriptionRepository.createSubscription({
       merchant: merchantId,
-      plan,
+      plan: 'feature',
+      features: normalizedFeatures,
       amount,
+      currency: 'ETB',
       transactionReference: tx_ref,
       status: 'pending',
-      paymentProvider: 'kispay',
+      paymentProvider: provider,
+      startDate: new Date(),
       endDate: this.calculateEndDate(durationMonths),
     });
 
+    let session = null;
+    let checkout_url = null;
+
+    if (provider !== 'manual' && typeof paymentProvider.createCheckoutSession === 'function') {
+      const result = await paymentProvider.createCheckoutSession({
+        amount,
+        merchantData,
+        features: normalizedFeatures,
+        durationMonths,
+        tx_ref,
+        subscription,
+      });
+      session = result || null;
+      checkout_url = session?.checkout_url || null;
+    }
+
     return {
       tx_ref,
-      checkout_url: session.checkout_url,
+      checkout_url,
       session,
       subscription,
     };
@@ -119,32 +139,28 @@ class SubscriptionService {
    * Called after customer returns from payment gateway
    */
   static async verifySubscription(tx_ref) {
-    const kispay = getKispayConfig();
+    const provider = process.env.PAYMENT_PROVIDER || 'manual';
+    const paymentProvider = getPaymentProvider(provider);
 
-    // Call Kispay to verify transaction
-    const response = await axios.get(
-      `${kispay.apiBaseUrl}/api/checkout/verify_transaction/${tx_ref}`,
-      { headers: { 'x-api-key': kispay.apiKey } }
-    );
+    if (typeof paymentProvider.verifyTransaction !== 'function') {
+      throw new Error('Payment provider is not configured');
+    }
 
-    const paymentData = response.data.body;
+    const paymentData = await paymentProvider.verifyTransaction(tx_ref);
 
-    // Check if payment completed
     if (
-      response.data.status !== 'success' ||
+      !paymentData ||
       !['COMPLETED', 'SUCCESS', 'completed'].includes(paymentData.status?.toUpperCase?.())
     ) {
       throw new Error('Payment not completed or failed');
     }
 
-    // Find and update subscription
     const subscription = await SubscriptionRepository.findByTransactionReference(tx_ref);
 
     if (!subscription) {
       throw new Error('Subscription record not found');
     }
 
-    // Update subscription to active
     const updated = await SubscriptionRepository.updateSubscriptionById(
       subscription._id,
       {
@@ -154,14 +170,20 @@ class SubscriptionService {
       }
     );
 
-    // Update merchant subscription info
-    await SubscriptionRepository.updateMerchantSubscription(subscription.merchant, {
-      subscriptionPlan: subscription.plan,
+    const merchantUpdate = {
+      currentSubscription: subscription._id,
       isSubscriptionActive: true,
       status: 'approved',
       mode: 'Live',
-    });
+    };
 
+    if (subscription.plan) {
+      merchantUpdate.subscriptionPlan = subscription.plan;
+    } else {
+      merchantUpdate.subscriptionPlan = 'feature';
+    }
+
+    await SubscriptionRepository.updateMerchantSubscription(subscription.merchant, merchantUpdate);
     return updated;
   }
 
@@ -178,8 +200,11 @@ class SubscriptionService {
     return {
       _id: subscription._id,
       plan: subscription.plan,
+      features: subscription.features || [],
+      isTrial: Boolean(subscription.isTrial),
       status: subscription.status,
       endDate: subscription.endDate,
+      trialEndDate: subscription.isTrial ? subscription.endDate : undefined,
       isActive: this.isSubscriptionCurrentlyActive(subscription),
       daysRemaining: this.calculateDaysRemaining(subscription.endDate),
     };
@@ -188,66 +213,51 @@ class SubscriptionService {
   /**
    * Check if merchant has feature access
    * 
-   * Validates if merchant's plan includes requested feature
+   * Validates if merchant's subscription includes requested feature
    */
   static async checkFeatureAccess(merchantId, feature) {
-    const subscription = await SubscriptionRepository.findByMerchant(merchantId);
+    const subscription = await this.getActiveSubscription(merchantId);
 
     if (!subscription || !this.isSubscriptionCurrentlyActive(subscription)) {
-      return { hasAccess: false, reason: 'No active subscription' };
+      return { hasAccess: false, reason: 'No active subscription or trial' };
     }
 
-    const planFeatures = featureAccessMatrix[subscription.plan];
-
-    if (!planFeatures || !(feature in planFeatures)) {
-      return { hasAccess: false, reason: 'Feature not found in plan' };
+    if (subscription.isTrial) {
+      return { hasAccess: true };
     }
 
-    const featureValue = planFeatures[feature];
-
-    // Handle boolean features
-    if (typeof featureValue === 'boolean') {
-      return { hasAccess: featureValue };
+    const activeFeatures = Array.isArray(subscription.features) ? subscription.features : [];
+    if (!activeFeatures.includes(feature)) {
+      return { hasAccess: false, reason: 'Feature not included in purchased subscription' };
     }
 
-    // Handle unlimited or numeric features
-    return { hasAccess: featureValue !== false };
+    return { hasAccess: true };
   }
 
   /**
-   * Verify webhook signature from Kispay
+   * Verify webhook signature from the configured payment provider
    * 
-   * Ensures webhook is authentic from Kispay
+   * Ensures webhook events are authentic for the given provider
    */
-  static verifyWebhookSignature(rawBody, signatureHeader) {
+  static verifyWebhookSignature(provider, rawBody, signatureHeader) {
     if (!signatureHeader) {
-      throw new Error('Missing x-kispay-signature header');
+      throw new Error(`Missing x-${provider}-signature header`);
     }
 
-    let sig = signatureHeader;
-    if (sig.startsWith('sha256=')) {
-      sig = sig.slice(7);
+    const paymentProvider = getPaymentProvider(provider);
+    if (typeof paymentProvider.verifyWebhookSignature !== 'function') {
+      throw new Error(`Webhook verification is not supported for provider "${provider}"`);
     }
 
-    const { webhookSecret } = getKispayConfig();
-    const hmac = crypto.createHmac('sha256', webhookSecret);
-    hmac.update(rawBody);
-    const expected = hmac.digest('hex');
-
-    const valid = crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(sig, 'hex')
-    );
-
-    return valid;
+    return paymentProvider.verifyWebhookSignature(rawBody, signatureHeader);
   }
 
   /**
-   * Handle Kispay webhook event
+   * Handle webhook event from a payment provider
    * 
-   * Processes payment events from Kispay (payment completed, failed, etc.)
+   * Processes provider-specific payment events and updates subscription state
    */
-  static async handleWebhookEvent(payload, eventId) {
+  static async handleWebhookEvent(provider, payload, eventId) {
     // Check for duplicate (idempotency)
     if (eventId) {
       const alreadyProcessed = await SubscriptionRepository.isWebhookProcessed(eventId);
@@ -256,15 +266,16 @@ class SubscriptionService {
       }
     }
 
-    const kispayRef = payload.txn_ref;
-    const eventType = (payload.event || payload.eventType || '').toLowerCase();
+    const transactionReference =
+      payload.txn_ref || payload.tx_ref || payload.reference || payload.orderNo || payload.txRef;
+    const eventType = (payload.event || payload.eventType || payload.type || '').toLowerCase();
 
-    if (!kispayRef) {
-      return { status: 'ignored', reason: 'No txn_ref' };
+    if (!transactionReference) {
+      return { status: 'ignored', reason: 'No transaction reference' };
     }
 
     // Find subscription
-    const subscription = await SubscriptionRepository.findByTransactionReference(kispayRef);
+    const subscription = await SubscriptionRepository.findByTransactionReference(transactionReference);
 
     if (!subscription) {
       return { status: 'ignored', reason: 'Subscription not found' };
@@ -355,19 +366,33 @@ class SubscriptionService {
       throw new Error('No active subscription to renew');
     }
 
-    // Calculate new end date
+    const activeFeatures = Array.isArray(currentSub.features) ? currentSub.features : [];
+    const amount = activeFeatures.length
+      ? this.calculateSubscriptionAmount(activeFeatures, durationMonths)
+      : 0;
+
     const newEndDate = new Date(currentSub.endDate);
     newEndDate.setMonth(newEndDate.getMonth() + durationMonths);
 
-    // Create new subscription record for renewal
     const renewal = await SubscriptionRepository.createSubscription({
       merchant: merchantId,
-      plan: currentSub.plan,
-      amount: planPricingConfig[currentSub.plan] * durationMonths,
+      plan: currentSub.plan || 'feature',
+      features: activeFeatures,
+      amount,
+      currency: currentSub.currency || 'ETB',
       transactionReference: `renewal-${merchantId}-${Date.now()}`,
       status: 'active',
       paymentProvider: currentSub.paymentProvider,
+      startDate: new Date(),
       endDate: newEndDate,
+    });
+
+    await SubscriptionRepository.updateMerchantSubscription(merchantId, {
+      currentSubscription: renewal._id,
+      isSubscriptionActive: true,
+      status: 'approved',
+      mode: 'Live',
+      subscriptionPlan: renewal.plan,
     });
 
     return renewal;
@@ -376,6 +401,43 @@ class SubscriptionService {
   /**
    * Get subscription statistics
    */
+  static async createTrialSubscription(merchantId) {
+    const existing = await this.getActiveSubscription(merchantId);
+    if (existing && this.isSubscriptionCurrentlyActive(existing)) {
+      throw new Error('An active subscription or trial already exists for this merchant');
+    }
+
+    const tx_ref = `trial-${merchantId}-${Date.now()}`;
+    const startDate = new Date();
+    const endDate = this.calculateEndDate(trialDurationMonths);
+
+    const subscription = await SubscriptionRepository.createSubscription({
+      merchant: merchantId,
+      plan: 'trial',
+      features: trialFeatureSet,
+      amount: 0,
+      currency: 'ETB',
+      transactionReference: tx_ref,
+      status: 'active',
+      isTrial: true,
+      trialStartDate: startDate,
+      trialEndDate: endDate,
+      startDate,
+      endDate,
+      paymentProvider: 'manual',
+    });
+
+    await SubscriptionRepository.updateMerchantSubscription(merchantId, {
+      currentSubscription: subscription._id,
+      isSubscriptionActive: true,
+      status: 'approved',
+      mode: 'Trial',
+      subscriptionPlan: 'trial',
+    });
+
+    return subscription;
+  }
+
   static async getSubscriptionStats() {
     return SubscriptionRepository.getSubscriptionStats();
   }

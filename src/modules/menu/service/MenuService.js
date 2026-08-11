@@ -872,20 +872,20 @@ static async createNewMenu(menuData, req) {
     });
   }
 
-  static async createCombo(req) {
-    MenuService.parseComboFormFields(req.body);
+  static async createCombo(comboData, req) {
+    MenuService.parseComboFormFields(comboData);
 
     if (req.user.role.name !== 'SUPER-MERCHANT-ADMIN') {
       if (!req.user.branch) throw new AppError('No branch assigned', 403);
-      req.body.branches = [req.user.branch._id];
-    } else if (!req.body.branches?.length) {
+      comboData.branches = [req.user.branch._id];
+    } else if (!comboData.branches?.length) {
       throw new AppError('Super admin must select at least one branch', 400);
     }
 
-    req.body.items = await MenuService.enrichComboItems(req.body.items);
-    req.body.merchant = req.user.merchant._id;
+    comboData.items = await MenuService.enrichComboItems(comboData.items);
+    comboData.merchant = req.user.merchant._id;
 
-    return MenuRepository.createCombo(req.body);
+    return MenuRepository.createCombo(comboData);
   }
 
   static async getActiveCombos(req) {

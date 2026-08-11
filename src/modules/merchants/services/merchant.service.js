@@ -121,7 +121,7 @@ class MerchantService {
   }
 
   async updateSubscription(id, plan) {
-    const valid = ['free', 'basic', 'pro', 'enterprise'];
+    const valid = ['free', 'basic', 'pro', 'enterprise', 'feature', 'trial'];
     if (!valid.includes(plan)) throw new AppError('Invalid plan', 400);
 
     const merchant = await merchantRepository.updateById(id, {

@@ -55,77 +55,93 @@ const staffAssignmentRoutes = require('../modules/branches/staff-assignments.rou
 const roleRoutes          = require('../modules/roles/roles.routes');
 const taskRoutes          = require('../modules/roles/tasks.routes');
 
-// ── Subscriptions ─────────────────────────────────────────────────────────────
+// ── Feedback / Campaigns ───────────────────────────────────────────────────────
 const subscriptionRoutes  = require('../modules/subscriptions/subscriptions.routes');
+const feedbackRoutes      = require('../modules/feedback/feedback.routes');
+const campaignRoutes      = require('../modules/campaign/campaignRoutes');
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
-const analyticsRoutes     = require('../modules/analytics/analytics.routes');
+const analyticsRoutes       = require('../modules/analytics/analytics.routes');
+
+// ── Telegram ──────────────────────────────────────────────────────────────────
+const telegramWebhookRoutes = require('../modules/telegram/routes/telegramWebhookRoute'); // public
+const telegramAdminRoutes   = require('../modules/telegram/routes/telegramAdminRoute');   // authenticated
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const router = express.Router();
 
-// ── 1. Health (public, no auth) ───────────────────────────────────────────────
+// ── 1. Public webhooks (no auth — verified via per-merchant secret) ─────────
+router.use('/api/v1/telegram', telegramWebhookRoutes); // POST /api/v1/telegram/webhook/:merchantId
+
+// ── 2. Health (public, no auth) ───────────────────────────────────────────────
 router.use(healthRoutes);
 
-// ── 2. System (SUPER-ADMIN only) ──────────────────────────────────────────────
+// ── 3. System (SUPER-ADMIN only) ──────────────────────────────────────────────
 router.use('/api/v1/system/integrity', integrityRoutes);
 
-// ── 3. Files ──────────────────────────────────────────────────────────────────
+// ── 4. Files ──────────────────────────────────────────────────────────────────
 router.use('/api/v1/files', fileRoutes);
 
-// ── 4. Auth ───────────────────────────────────────────────────────────────────
+// ── 5. Auth ───────────────────────────────────────────────────────────────────
 router.use('/api/v1/auth', authRoutes);
 
 // Legacy auth aliases (pre-refactor paths)
 router.use('/api/v1/user', legacyAuthRoutes);
 router.use('/api/auth', legacyAuthRoutes.legacyApiAuthRouter);
 
-// ── 5. Users ──────────────────────────────────────────────────────────────────
+// ── 6. Users ──────────────────────────────────────────────────────────────────
 router.use('/api/v1/users', userRoutes);
 
-// ── 6. Merchants ──────────────────────────────────────────────────────────────
+// ── 7. Merchants ──────────────────────────────────────────────────────────────
 router.use('/api/v1/merchant', merchantRoutes);
+router.use('/api/v1/merchant', telegramAdminRoutes); // POST /api/v1/merchant/:merchantId/telegram/connect
 
-// ── 7. Branches ───────────────────────────────────────────────────────────────
+// ── 8. Branches ───────────────────────────────────────────────────────────────
 router.use('/api/v1/branch', branchRoutes);
 
-// ── 8. Tables ─────────────────────────────────────────────────────────────────
+// ── 9. Tables ─────────────────────────────────────────────────────────────────
 router.use('/api/v1/table', tableRoutes);
 
-// ── 9. Customers ──────────────────────────────────────────────────────────────
+// ── 10. Customers ─────────────────────────────────────────────────────────────
 router.use('/api/v1/customer', customerRoutes);
 
-// ── 10. Sessions (QR table sessions) ─────────────────────────────────────────
+// ── 11. Sessions (QR table sessions) ─────────────────────────────────────────
 router.use('/api/v1/session', sessionRoutes);
 
-// ── 11. Menu ──────────────────────────────────────────────────────────────────
+// ── 12. Menu ──────────────────────────────────────────────────────────────────
 router.use('/api/v1/menu', menuRoutes);
 router.use('/api/v1/menu-group', menuGroupRoutes);
 router.use('/api/v1/branch-menu-group', branchMenuGroupRoutes);
 router.use('/api/v1/combo', comboRoutes);
 
-// ── 12. Orders ────────────────────────────────────────────────────────────────
+// ── 13. Orders ────────────────────────────────────────────────────────────────
 router.use('/api/v1/order', orderRoutes);
 
-// ── 13. Inventory ─────────────────────────────────────────────────────────────
+// ── 14. Inventory ─────────────────────────────────────────────────────────────
 router.use('/api/v1/ingredients', ingredientRoutes);
 router.use('/api/v1/inventory', inventoryRoutes);
 router.use('/api/v1/recipes', recipeRoutes);
 router.use('/api/v1/suppliers', supplierRoutes);
 router.use('/api/v1/purchase-orders', purchaseOrderRoutes);
 
-// ── 14. Staff Assignments ─────────────────────────────────────────────────────
+// ── 15. Staff Assignments ─────────────────────────────────────────────────────
 router.use('/api/v1/staff-assignments', staffAssignmentRoutes);
 
-// ── 15. RBAC (SUPER-ADMIN) ────────────────────────────────────────────────────
+// ── 16. RBAC (SUPER-ADMIN) ────────────────────────────────────────────────────
 router.use('/api/v1/roles', roleRoutes);
 router.use('/api/v1/tasks', taskRoutes);
 
-// ── 16. Subscriptions ─────────────────────────────────────────────────────────
+// ── 17. Subscriptions ─────────────────────────────────────────────────────────
 router.use('/api/v1/subscriptions', subscriptionRoutes);
 
-// ── 17. Analytics ─────────────────────────────────────────────────────────────
+// ── 18. Feedback ──────────────────────────────────────────────────────────────
+router.use('/api/v1/feedback', feedbackRoutes);
+
+// ── 19. Campaigns ─────────────────────────────────────────────────────────────
+router.use('/api/v1/campaigns', campaignRoutes);
+
+// ── 20. Analytics ─────────────────────────────────────────────────────────────
 router.use('/api/v1/analytics', analyticsRoutes);
 
 module.exports = router;

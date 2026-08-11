@@ -27,13 +27,13 @@ const {
 // ============================================================
 
 /**
- * POST /api/v1/subscriptions/webhook
- * Kispay webhook handler - raw body for signature verification
+ * POST /api/v1/subscriptions/webhook/:provider
+ * Payment provider webhook handler - raw body for signature verification
  */
 router.post(
-  '/webhook',
+  '/webhook/:provider',
   express.raw({ type: 'application/json' }), // Raw body for signature verification
-  subscriptionController.handleKispayWebhook
+  subscriptionController.handlePaymentWebhook
 );
 
 // ============================================================
@@ -61,6 +61,12 @@ router.post(
   validate(verifySubscriptionSchema, 'body'),
   subscriptionController.verifySubscription
 );
+
+/**
+ * POST /api/v1/subscriptions/trial
+ * Activate a 3-month free trial with full feature access
+ */
+router.post('/trial', subscriptionController.createTrialSubscription);
 
 /**
  * GET /api/v1/subscriptions/status

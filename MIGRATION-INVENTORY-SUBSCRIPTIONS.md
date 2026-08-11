@@ -154,7 +154,7 @@ try {
 ## Subscriptions Module
 
 ### Purpose
-Manages merchant subscription tiers (basic, pro, enterprise), payment processing via Kispay, and feature access gating.
+Manages merchant subscription tiers (basic, pro, enterprise), payment processing via configurable payment providers, and feature access gating.
 
 ### File Structure
 
@@ -244,17 +244,17 @@ if (!hasAccess) {
 }
 ```
 
-#### 3. **Webhook Handling (Kispay)**
+#### 3. **Webhook Handling (Payment Provider)**
 
 ```javascript
-// Automatically called when Kispay sends payment update
-POST /api/v1/subscriptions/webhook
+// Automatically called when a configured provider sends payment updates
+POST /api/v1/subscriptions/webhook/:provider
 Headers:
-  x-kispay-signature: sha256=...
-  x-kispay-event-id: webhook_event_123
+  x-<provider>-signature: sha256=...
+  x-<provider>-event-id: webhook_event_123
 
 // Service handles:
-// - Signature verification (HMAC-SHA256)
+// - Provider-specific signature verification
 // - Event deduplication (prevents double-activation)
 // - Subscription status updates
 // - Merchant activation
@@ -289,7 +289,7 @@ POST   /api/v1/subscriptions/verify          # Verify & activate
 GET    /api/v1/subscriptions/status          # Check current status
 POST   /api/v1/subscriptions/check-feature   # Feature access check
 POST   /api/v1/subscriptions/renew           # Renew subscription
-POST   /api/v1/subscriptions/webhook         # Kispay webhook handler
+POST   /api/v1/subscriptions/webhook/:provider # Payment provider webhook handler
 GET    /api/v1/subscriptions/expiring-soon   # Admin: expiring subs
 GET    /api/v1/subscriptions/stats           # Admin: statistics
 ```
@@ -397,10 +397,11 @@ async function placeOrder(merchantId, orderData) {
 ## Environment Variables
 
 ```bash
-# Kispay Configuration (in config.env)
-KISPAY_API_KEY=your_api_key
-KISPAY_WEBHOOK_SECRET=your_webhook_secret
-KISPAY_API_BASE_URL=https://api.kispay.io
+# Payment provider configuration (in config.env)
+PAYMENT_PROVIDER=manual
+CHAPA_API_KEY=your_api_key
+CHAPA_WEBHOOK_SECRET=your_webhook_secret
+CHAPA_API_BASE_URL=https://api.chapa.co
 
 # Subscription Plans (optional, can be in DTOs)
 PLAN_BASIC_PRICE=1
@@ -516,7 +517,7 @@ describe('SubscriptionService Webhook', () => {
    - Feature access matrix tests
 
 5. **Deploy & Monitor:**
-   - Monitor Kispay webhook processing
+   - Monitor payment provider webhook processing
    - Track inventory transaction completion rates
    - Alert on stock shortage events
 

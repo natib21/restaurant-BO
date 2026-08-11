@@ -9,4 +9,5 @@ module.exports = {
   SubscriptionRepository: require('./repositories/subscription.repository').SubscriptionRepository,
   SubscriptionController: require('./controllers/subscription.controller'),
   subscriptionRoutes: require('./subscriptions.routes'),
+  requireFeature: require('./middleware/feature-access.middleware').requireFeature,
 };

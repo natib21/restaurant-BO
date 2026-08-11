@@ -52,7 +52,7 @@ src/
 
     ├── websocket/socket-server.js
 
-    └── payments/kispay.config.js
+    └── payments/payment-provider.interface.js
 
 ```
 
@@ -142,7 +142,7 @@ npm test
 
 - User list/delete protected with RBAC
 
-- Kispay keys from env only (`KISPAY_API_KEY`, `KISPAY_WEBHOOK_SECRET`)
+- Payment provider keys from env only (`PAYMENT_PROVIDER`, `CHAPA_API_KEY`, `CHAPA_WEBHOOK_SECRET`)
 
 - Password change invalidates old JWTs via `passwordChangedAt`
 

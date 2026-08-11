@@ -75,8 +75,6 @@ const comboSchema = new mongoose.Schema(
       min: [0.01, 'Combo price must be greater than zero'],
     },
 
-    // Visuals & Scheduling
-    image: String,
      image: {
           type: mongoose.Schema.Types.ObjectId,
           ref: 'FileAsset',

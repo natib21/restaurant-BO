@@ -1,4 +1,3 @@
-// models/menuItemModel.js
 const mongoose = require('mongoose');
 const slugify = require('slugify');
 
@@ -7,19 +6,16 @@ const variantSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: 60,
-    default: 'Regular', // fallback
+    default: 'Regular',
   },
-  // Keep size/volume for specific cases
   size: {
     type: String,
     trim: true,
     maxlength: 50,
-    // Remove 'required' or make it conditional
   },
   volume: {
     type: String,
     trim: true,
-    // e.g., "330ml", "Large", "500g"
   },
   price: {
     type: Number,
@@ -27,7 +23,7 @@ const variantSchema = new mongoose.Schema({
   },
   calories: { type: Number },
   available: { type: Boolean, default: true },
-  isDefault: { type: Boolean, default: false }, // useful for pre-selecting in UI
+  isDefault: { type: Boolean, default: false },
 });
 
 const menuSchema = new mongoose.Schema(
@@ -84,16 +80,14 @@ const menuSchema = new mongoose.Schema(
     isAlcoholic: { type: Boolean, default: false },
     alcoholPercentage: { type: Number, min: 0, max: 100, default: 0 },
 
-    isVeg: { type: Boolean, default: null }, // null = not specified
+    isVeg: { type: Boolean, default: null },
     isSpicy: { type: Boolean, default: false },
 
-    // Variants (most items have multiple sizes/prices)
     variants: {
       type: [variantSchema],
-      default: [], // ensures it's always an array
+      default: [],
     },
 
-    // Fallback price if no variants (rare, for simple items)
     price: { type: Number, min: 0 },
 
     image: {
@@ -101,12 +95,11 @@ const menuSchema = new mongoose.Schema(
       ref: 'FileAsset',
       default: null,
     },
-    // Multiple images - array of FileAsset references
     images: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'FileAsset',
     }],
- imageUrl: {
+    imageUrl: {
       type: String,
       default: null,
     },
@@ -122,7 +115,6 @@ const menuSchema = new mongoose.Schema(
     available: { type: Boolean, default: true },
     inStock: { type: Boolean, default: true },
 
-    /** draft | published | archived — existing docs without field behave as published */
     publishStatus: {
       type: String,
       enum: ['draft', 'published', 'archived'],
@@ -130,7 +122,6 @@ const menuSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Ratings
     ratingAverage: {
       type: Number,
       default: 4.5,
@@ -140,7 +131,7 @@ const menuSchema = new mongoose.Schema(
     },
     ratingQuantity: { type: Number, default: 0 },
 
-    tags: [String], // e.g., ["trending", "chef-special", "ramadan", "vegan"]
+    tags: [String],
 
     createdAt: {
       type: Date,
@@ -158,14 +149,15 @@ const menuSchema = new mongoose.Schema(
   }
 );
 
-// ========================= INDEXES =========================
-
+// FIX: this file previously had two extra indexes referencing a `branches`
+// field that doesn't exist anywhere in this schema (`{ merchant: 1, branches: 1 }`
+// and `{ branches: 1, available: 1 }`). Mongo will happily build an index on a
+// path that's always undefined — it just never gets used and wastes write
+// overhead. If branch-level menu visibility is something you need (the way
+// `Combo` supports `branchOverrides`), that has to be added as a real field
+// first — see note in the review.
 menuSchema.index({ merchant: 1, available: 1 });
-menuSchema.index({ merchant: 1, branches: 1 }); // fastest query
-menuSchema.index({ branches: 1, available: 1 });
 
-// ========================= MIDDLEWARE =========================
-// Generate unique slug + update timestamp
 menuSchema.pre('save', function (next) {
   if (this.isModified('name') || !this.slug) {
     const baseSlug = slugify(this.name, { lower: true, strict: true });
@@ -175,8 +167,6 @@ menuSchema.pre('save', function (next) {
   next();
 });
 
-// ========================= VIRTUALS =========================
-// Average price across variants
 menuSchema.virtual('averagePrice').get(function () {
   if (this.variants && this.variants.length > 0) {
     const sum = this.variants.reduce((acc, v) => acc + v.price, 0);
@@ -185,7 +175,6 @@ menuSchema.virtual('averagePrice').get(function () {
   return this.price || 0;
 });
 
-// Default variant (usually first one)
 menuSchema.virtual('defaultVariant').get(function () {
   return this.variants?.[0] || null;
 });

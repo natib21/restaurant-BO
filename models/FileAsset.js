@@ -67,7 +67,8 @@ fileAssetSchema.index({ merchant: 1, entityType: 1, entityId: 1, isDeleted: 1 })
 fileAssetSchema.index({ merchant: 1, branch: 1, isDeleted: 1 });
 
 fileAssetSchema.methods.getPublicUrl = function getPublicUrl() {
-  return `/api/v1/files/${this._id}/content`;
+  const base = process.env.PUBLIC_API_URL || '';
+  return `${base}/api/v1/files/${this._id}/content`;
 };
 
 module.exports = mongoose.model('FileAsset', fileAssetSchema);

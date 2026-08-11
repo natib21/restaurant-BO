@@ -14,7 +14,6 @@ import healthRoutes from '../modules/health/health.routes';
 
 const AppError = require('../../utils/appError');
 const GlobalErrorHandler = require('../../controllers/errorController');
-const subscriptionController = require('../../controllers/subscriptionController');
 
 // Legacy routers (migrated incrementally to src/modules)
 const branchGroupRouter = require('../../routes/branchMenuGroupRouter');
@@ -89,12 +88,6 @@ export function createApp(): Express {
   app.use('/img/combo', express.static(path.join(process.cwd(), 'uploads/img/combo')));
   app.use('/img/orderPayment', express.static(path.join(process.cwd(), 'uploads/img/orderPayment')));
   app.use('/img/merchants', express.static(path.join(process.cwd(), 'uploads/img/merchants')));
-
-  app.post(
-    '/api/v1/subscriptions/webhooks/kispay',
-    express.raw({ type: 'application/json' }),
-    subscriptionController.kispayWebhook
-  );
 
   app.use(express.json({ limit: '10mb' }));
   app.use(mongoSanitize());
