@@ -1,6 +1,6 @@
 /**
  * Subscriptions Repository
- * 
+ *
  * Pure MongoDB data access layer.
  * No business logic, no service calls, no Express dependencies.
  * All methods accept optional `session` for transaction support.
@@ -10,9 +10,6 @@ const Subscription = require('../../../../models/subscriptionModel');
 const Merchant = require('../../../../models/merchantModel');
 
 class SubscriptionRepository {
-  /**
-   * Create subscription record
-   */
   static createSubscription(data, options = {}) {
     const { session } = options;
     if (session) {
@@ -21,9 +18,6 @@ class SubscriptionRepository {
     return Subscription.create(data);
   }
 
-  /**
-   * Find subscription by transaction reference
-   */
   static findByTransactionReference(tx_ref, options = {}) {
     const { session } = options;
     let query = Subscription.findOne({ transactionReference: tx_ref });
@@ -31,23 +25,17 @@ class SubscriptionRepository {
     return query.exec();
   }
 
-  /**
-   * Find subscription by merchant
-   */
   static findByMerchant(merchantId, options = {}) {
     const { session } = options;
     let query = Subscription.findOne({
       merchant: merchantId,
       status: 'active',
     }).sort({ createdAt: -1 });
-    
+
     if (session) query = query.session(session);
     return query.exec();
   }
 
-  /**
-   * Find all subscriptions for merchant
-   */
   static findAllByMerchant(merchantId, options = {}) {
     const { session } = options;
     let query = Subscription.find({ merchant: merchantId }).sort({ createdAt: -1 });
@@ -55,27 +43,18 @@ class SubscriptionRepository {
     return query.exec();
   }
 
-  /**
-   * Update subscription status
-   */
   static updateSubscription(filter, update, options = {}) {
     const { session } = options;
     let query = Subscription.findOneAndUpdate(filter, update, { new: true, session });
     return query.exec();
   }
 
-  /**
-   * Update subscription by ID
-   */
   static updateSubscriptionById(subscriptionId, update, options = {}) {
     const { session } = options;
     let query = Subscription.findByIdAndUpdate(subscriptionId, update, { new: true, session });
     return query.exec();
   }
 
-  /**
-   * Find subscription by ID
-   */
   static findSubscriptionById(subscriptionId, options = {}) {
     const { session } = options;
     let query = Subscription.findById(subscriptionId);
@@ -83,32 +62,23 @@ class SubscriptionRepository {
     return query.exec();
   }
 
-  /**
-   * Check if subscription is active
-   */
   static async isSubscriptionActive(subscriptionId, options = {}) {
     const sub = await this.findSubscriptionById(subscriptionId, options);
     if (!sub) return false;
     return sub.status === 'active' && new Date() < sub.endDate;
   }
 
-  /**
-   * Get expired subscriptions (status active but past end date)
-   */
   static getExpiredSubscriptions(options = {}) {
     const { session } = options;
     let query = Subscription.find({
       status: 'active',
       endDate: { $lt: new Date() },
     });
-    
+
     if (session) query = query.session(session);
     return query.exec();
   }
 
-  /**
-   * Get subscriptions expiring soon (within 7 days)
-   */
   static getExpiringSubscriptions(daysAhead = 7, options = {}) {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + daysAhead);
@@ -127,17 +97,23 @@ class SubscriptionRepository {
   }
 
   /**
-   * Update merchant subscription info
+   * Update merchant subscription info AND/OR feature flags.
+   *
+   * FIX: previously called `Merchant.findByIdAndUpdate(merchantId, data, ...)`
+   * with `data` as a raw plain object. That works fine for simple top-level
+   * fields (isSubscriptionActive, mode, ...) because Mongoose auto-wraps them,
+   * but it can't safely carry dot-path keys like
+   * 'features.optional.orders.enabled' alongside other fields in the same
+   * call. Wrapping everything in $set explicitly makes both cases work
+   * identically and lets callers pass feature-flag updates in the same
+   * object as status updates.
    */
   static updateMerchantSubscription(merchantId, data, options = {}) {
     const { session } = options;
-    let query = Merchant.findByIdAndUpdate(merchantId, data, { new: true, session });
+    let query = Merchant.findByIdAndUpdate(merchantId, { $set: data }, { new: true, session });
     return query.exec();
   }
 
-  /**
-   * Get merchant subscription details
-   */
   static getMerchantWithSubscription(merchantId, options = {}) {
     const { session } = options;
     let query = Merchant.findById(merchantId).select(
@@ -147,9 +123,6 @@ class SubscriptionRepository {
     return query.exec();
   }
 
-  /**
-   * Record webhook event (idempotency)
-   */
   static markWebhookProcessed(subscriptionId, eventId, options = {}) {
     const { session } = options;
     let query = Subscription.findByIdAndUpdate(
@@ -162,9 +135,6 @@ class SubscriptionRepository {
     return query.exec();
   }
 
-  /**
-   * Check if webhook already processed (idempotency)
-   */
   static async isWebhookProcessed(eventId, options = {}) {
     const { session } = options;
     let query = Subscription.findOne({ webhookEventId: eventId });
@@ -173,23 +143,16 @@ class SubscriptionRepository {
     return !!result;
   }
 
-  /**
-   * Create audit log entry for subscription changes
-   */
   static createAuditLog(data, options = {}) {
     const { session } = options;
-    // Assuming you have AuditLog model
     const AuditLog = require('../../../../models/auditLogModel');
-    
+
     if (session) {
       return AuditLog.create([data], { session }).then(docs => docs[0]);
     }
     return AuditLog.create(data);
   }
 
-  /**
-   * Get subscription statistics
-   */
   static async getSubscriptionStats(options = {}) {
     const { session } = options;
     let query = Subscription.aggregate([

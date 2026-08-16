@@ -124,7 +124,7 @@ exports.getMe = catchAsync(async (req, res) => {
 exports.updateMe = catchAsync(async (req, res) => {
   const merchantId = req.user.merchant?._id || req.user.merchant;
   const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
-  
+
   const updatedMerchant = await merchantService.updateMe(merchantId, req.body);
   const merchantObj = updatedMerchant.toObject();
 
@@ -135,7 +135,7 @@ exports.updateMe = catchAsync(async (req, res) => {
         ...merchantObj,
         logo: merchantObj.logo ? `${baseUrl}/${merchantObj.logo}` : null,
         coverImage: merchantObj.coverImage ? `${baseUrl}/${merchantObj.coverImage}` : null,
-      }
+      },
     },
   });
 });

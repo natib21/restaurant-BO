@@ -1,4 +1,3 @@
-
 /**
  * Response shaping helpers — no business rules.
  */

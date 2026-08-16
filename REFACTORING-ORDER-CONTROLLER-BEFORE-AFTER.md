@@ -29,6 +29,7 @@ src/modules/orders/controller/
 ```
 
 **Problems:**
+
 - 🔴 Mixed concerns (customer, placement, status, mutations, retrieval)
 - 🔴 Hard to find specific handler
 - 🔴 Difficult to maintain and test
@@ -82,6 +83,7 @@ src/modules/orders/controller/
 ```
 
 **Benefits:**
+
 - ✅ Clear separation of concerns
 - ✅ Easy to locate specific handler
 - ✅ Focused, testable modules
@@ -121,16 +123,16 @@ const allHandlers = require('../controller/handlers');
 
 ## Line Count Comparison
 
-| File | Before | After |
-|------|--------|-------|
-| order.controller.js | 400+ | 20 |
-| placement.handler.js | — | 70 |
-| status.handler.js | — | 110 |
-| mutation.handler.js | — | 50 |
-| retrieval.handler.js | — | 70 |
-| customer.handler.js | — | 60 |
-| handlers/index.js | — | 30 |
-| **TOTAL** | **400+** | **410** |
+| File                 | Before   | After   |
+| -------------------- | -------- | ------- |
+| order.controller.js  | 400+     | 20      |
+| placement.handler.js | —        | 70      |
+| status.handler.js    | —        | 110     |
+| mutation.handler.js  | —        | 50      |
+| retrieval.handler.js | —        | 70      |
+| customer.handler.js  | —        | 60      |
+| handlers/index.js    | —        | 30      |
+| **TOTAL**            | **400+** | **410** |
 
 > **Note:** Slight increase due to better documentation and whitespace. Code is actually more readable and maintainable.
 
@@ -139,16 +141,19 @@ const allHandlers = require('../controller/handlers');
 ## Handler Grouping Logic
 
 ### By Actor Type
+
 - **Customer Handlers:** Operations via table session (QR menu)
 - **Staff Handlers:** Operations via JWT + RBAC
 
 ### By Operation Type
+
 - **Placement:** Creating new orders
 - **Status:** Reading and updating order status
 - **Mutations:** Modifying order (add items, cancel, merge)
 - **Retrieval:** Fetching existing orders
 
 ### By API Pattern
+
 ```
 POST /orders           → placement.handler
 GET  /pending          → status.handler
@@ -174,10 +179,11 @@ const { getMerchantId, getBranchId } = require('../../../common/utils/tenant-sco
 ```
 
 **Tenant Context Pattern:**
+
 ```javascript
 // Extract tenant context (works for both customer & staff)
-const merchantId = getMerchantId(req);    // From JWT or table session
-const branchId = getBranchId(req);        // From JWT or table session
+const merchantId = getMerchantId(req); // From JWT or table session
+const branchId = getBranchId(req); // From JWT or table session
 ```
 
 ---
@@ -185,17 +191,25 @@ const branchId = getBranchId(req);        // From JWT or table session
 ## Testing Improvements
 
 ### Before: Testing Monolithic Controller
+
 ```javascript
 // Had to require entire 400-line file
 const controller = require('./order.controller');
 
 // Tests were intermingled and hard to isolate
-test('place order', () => { /* ... */ });
-test('update status', () => { /* ... */ });
-test('get pending', () => { /* ... */ });
+test('place order', () => {
+  /* ... */
+});
+test('update status', () => {
+  /* ... */
+});
+test('get pending', () => {
+  /* ... */
+});
 ```
 
 ### After: Testing Focused Handlers
+
 ```javascript
 // Can test each concern independently
 const { placeOrder } = require('./handlers/placement.handler');
@@ -203,12 +217,18 @@ const { updateOrderStatus } = require('./handlers/status.handler');
 const { getPendingOrders } = require('./handlers/status.handler');
 
 describe('Placement Handlers', () => {
-  test('place order', () => { /* ... */ });
+  test('place order', () => {
+    /* ... */
+  });
 });
 
 describe('Status Handlers', () => {
-  test('update status', () => { /* ... */ });
-  test('get pending', () => { /* ... */ });
+  test('update status', () => {
+    /* ... */
+  });
+  test('get pending', () => {
+    /* ... */
+  });
 });
 ```
 
@@ -256,19 +276,19 @@ All routes maintain existing validation and guards:
 // CUSTOMER routes
 router.post(
   '/',
-  protectTableSession,      // ✓ Guard
+  protectTableSession, // ✓ Guard
   CustomerController.protectCustomer,
-  validate(placeOrderCustomerSchema),  // ✓ Validation
-  placeOrder                 // ← handler
+  validate(placeOrderCustomerSchema), // ✓ Validation
+  placeOrder // ← handler
 );
 
 // STAFF routes
-router.use(authController.protect);       // ✓ Guard
-router.use(authController.restrictTo());  // ✓ RBAC
+router.use(authController.protect); // ✓ Guard
+router.use(authController.restrictTo()); // ✓ RBAC
 router.patch(
   '/:id/status',
-  validate(updateOrderStatusSchema),      // ✓ Validation
-  updateOrderStatus          // ← handler
+  validate(updateOrderStatusSchema), // ✓ Validation
+  updateOrderStatus // ← handler
 );
 ```
 
@@ -290,16 +310,16 @@ router.patch(
 
 ## Backward Compatibility Matrix
 
-| Item | Before | After | Status |
-|------|--------|-------|--------|
-| Route paths | ✓ | ✓ | **UNCHANGED** |
-| Router imports | ✓ | ✓ | **COMPATIBLE** |
-| Request context | ✓ | ✓ | **ENHANCED** |
-| Response format | ✓ | ✓ | **UNCHANGED** |
-| Middleware chain | ✓ | ✓ | **UNCHANGED** |
-| Service calls | ✓ | ✓ | **UNCHANGED** |
-| Database queries | ✓ | ✓ | **UNCHANGED** |
-| Error handling | ✓ | ✓ | **UNCHANGED** |
+| Item             | Before | After | Status         |
+| ---------------- | ------ | ----- | -------------- |
+| Route paths      | ✓      | ✓     | **UNCHANGED**  |
+| Router imports   | ✓      | ✓     | **COMPATIBLE** |
+| Request context  | ✓      | ✓     | **ENHANCED**   |
+| Response format  | ✓      | ✓     | **UNCHANGED**  |
+| Middleware chain | ✓      | ✓     | **UNCHANGED**  |
+| Service calls    | ✓      | ✓     | **UNCHANGED**  |
+| Database queries | ✓      | ✓     | **UNCHANGED**  |
+| Error handling   | ✓      | ✓     | **UNCHANGED**  |
 
 ✅ **Complete backward compatibility confirmed!**
 
@@ -310,6 +330,7 @@ router.patch(
 All refactoring is complete. No further changes needed to routers or existing code.
 
 To verify:
+
 1. Run your existing tests (no failures expected)
 2. Check route imports in router files (should work as-is)
 3. Verify all endpoints respond correctly

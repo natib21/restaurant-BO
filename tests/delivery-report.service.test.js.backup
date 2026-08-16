@@ -1,0 +1,554 @@
+/**
+ * Unit Tests for Delivery Report Service
+ * 
+ * Coverage:
+ * - Core report generation with delivery-specific filters
+ * - Delivery duration calculation (deliveredAt - dispatchedAt)
+ * - Delivery fee aggregation
+ * - Pagination logic
+ * - Date grouping (day, week, month)
+ * - Branch filtering
+ * - Edge cases: null timestamps, empty results
+ * 
+ * Task 8.1: Implement DeliveryReportService.generate() (Advanced Reporting Spec)
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7
+ */
+
+const mongoose = require('mongoose');
+const { DeliveryReportService } = require('../src/modules/reports/service/delivery-report.service');
+const Order = require('../models/orderModel');
+const AppError = require('../utils/appError');
+
+// Mock the Order model
+jest.mock('../models/orderModel');
+
+describe('DeliveryReportService', () => {
+  const merchantId = new mongoose.Types.ObjectId();
+  const branchId = new mongoose.Types.ObjectId();
+  const dateFrom = new Date('2024-01-01');
+  const dateTo = new Date('2024-01-31');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('generate()', () => {
+    describe('Parameter Validation', () => {
+      test('should throw error when merchantId is missing', async () => {
+        await expect(
+          DeliveryReportService.generate({
+            dateFrom,
+            dateTo
+          })
+        ).rejects.toThrow(AppError);
+
+        await expect(
+          DeliveryReportService.generate({
+            dateFrom,
+            dateTo
+          })
+        ).rejects.toThrow('merchantId is required for delivery report');
+      });
+
+      test('should throw error when dateFrom is missing', async () => {
+        await expect(
+          DeliveryReportService.generate({
+            merchantId: merchantId.toString(),
+            dateTo
+          })
+        ).rejects.toThrow(AppError);
+
+        await expect(
+          DeliveryReportService.generate({
+            merchantId: merchantId.toString(),
+            dateTo
+          })
+        ).rejects.toThrow('dateFrom and dateTo are required');
+      });
+
+      test('should throw error when dateTo is missing', async () => {
+        await expect(
+          DeliveryReportService.generate({
+            merchantId: merchantId.toString(),
+            dateFrom
+          })
+        ).rejects.toThrow(AppError);
+      });
+    });
+
+    describe('Delivery-Specific Filtering', () => {
+      test('should filter orders to delivery type only', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 25,
+          totalDeliveryFees: 1250,
+          averageDeliveryDuration: 600000, // 10 minutes in ms
+          onTimeDeliveryPercentage: null
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult) // summary
+          .mockResolvedValueOnce([]) // breakdown
+          .mockResolvedValueOnce([{ total: 0 }]); // count
+
+        await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        // Verify the first aggregate call (summary pipeline)
+        const summaryPipeline = Order.aggregate.mock.calls[0][0];
+        const matchStage = summaryPipeline[0].$match;
+
+        expect(matchStage.orderType).toBe('delivery');
+        expect(matchStage.merchant).toEqual(new mongoose.Types.ObjectId(merchantId));
+        // Delivery reports track ALL delivery orders, not just paid ones
+        expect(matchStage.paymentStatus).toBeUndefined();
+      });
+
+      test('should include branch filter when branchId provided', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 10,
+          totalDeliveryFees: 500,
+          averageDeliveryDuration: 600000, // 10 minutes in ms
+          onTimeDeliveryPercentage: null
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          branchId: branchId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        const summaryPipeline = Order.aggregate.mock.calls[0][0];
+        const matchStage = summaryPipeline[0].$match;
+
+        expect(matchStage.branch).toEqual(new mongoose.Types.ObjectId(branchId));
+      });
+    });
+
+    describe('Delivery Fee Calculation', () => {
+      test('should sum delivery fees from paid orders', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 30,
+          totalDeliveryFees: 1500, // 30 orders × 50 average fee
+          ordersWithDuration: 25,
+          totalDeliveryDuration: 15000000
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        expect(result.summary.totalDeliveryFees).toBe(1500);
+        expect(result.summary.deliveryOrderCount).toBe(30);
+      });
+    });
+
+    describe('Delivery Duration Calculation', () => {
+      test('should calculate average delivery duration from dispatchedAt to deliveredAt', async () => {
+        // Mock: 20 orders with timestamps, total duration 12,000,000ms (200 minutes total)
+        // Average: 200 / 20 = 10 minutes per delivery
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 25,
+          totalDeliveryFees: 1250,
+          averageDeliveryDuration: 600000, // 10 minutes in milliseconds
+          onTimeDeliveryPercentage: null
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        // Average duration should be 10 minutes
+        expect(result.summary.averageDeliveryDuration).toBe(10);
+      });
+
+      test('should exclude orders without timestamps from duration calculation', async () => {
+        // Mock: 30 total orders, but only 15 have both timestamps
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 30,
+          totalDeliveryFees: 1500,
+          averageDeliveryDuration: 600000, // 10 minutes in milliseconds
+          onTimeDeliveryPercentage: null
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        // Average should be calculated only from 15 orders with timestamps
+        // 150 / 15 = 10 minutes
+        expect(result.summary.averageDeliveryDuration).toBe(10);
+        expect(result.summary.deliveryOrderCount).toBe(30);
+      });
+
+      test('should return null average duration when no orders have timestamps', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 10,
+          totalDeliveryFees: 500,
+          averageDeliveryDuration: null, // Pipeline returns null when no timestamps
+          onTimeDeliveryPercentage: null
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        expect(result.summary.averageDeliveryDuration).toBeNull();
+      });
+    });
+
+    describe('On-Time Delivery Percentage', () => {
+      test('should stub on-time delivery percentage as null (SLA field not implemented)', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 20,
+          totalDeliveryFees: 1000,
+          averageDeliveryDuration: 600000, // 10 minutes in ms
+          onTimeDeliveryPercentage: null // Stubbed as null per requirements
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        expect(result.summary.onTimeDeliveryPercentage).toBeNull();
+      });
+    });
+
+    describe('Empty Result Handling', () => {
+      test('should return empty summary when no delivery orders exist', async () => {
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce([]) // empty summary
+          .mockResolvedValueOnce([]) // empty breakdown
+          .mockResolvedValueOnce([{ total: 0 }]); // zero count
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo
+        });
+
+        expect(result.summary).toEqual({
+          totalDeliveryOrders: 0,
+          totalDeliveryFees: 0,
+          averageDeliveryDuration: null,
+          onTimeDeliveryPercentage: null
+        });
+        expect(result.breakdown).toEqual([]);
+        expect(result.total).toBe(0);
+      });
+    });
+
+    describe('Breakdown Time-Series', () => {
+      test('should generate breakdown grouped by day', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 60,
+          totalDeliveryFees: 3000,
+          averageDeliveryDuration: 600000, // 10 minutes in ms
+          onTimeDeliveryPercentage: null
+        }];
+
+        const mockBreakdownResult = [
+          {
+            period: 'period: '2024-01-15',
+            deliveryOrderCount:', totalDeliveryOrders: 20,
+          totalDeliveryFees: 1000,
+            averageDeliveryDuration: 720000 // 12 minutes in ms
+          },
+          {
+            period: 'period: '2024-01-14',
+            deliveryOrderCount:', totalDeliveryOrders: 25,
+          totalDeliveryFees: 1250,
+            averageDeliveryDuration: 480000 // 8 minutes in ms
+          },
+          {
+            period: 'period: '2024-01-13',
+            deliveryOrderCount:', totalDeliveryOrders: 15,
+          totalDeliveryFees: 750,
+            averageDeliveryDuration: 900000 // 15 minutes in ms
+          }
+        ];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce(mockBreakdownResult)
+          .mockResolvedValueOnce([{ total: 3 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo,
+          groupBy: 'day',
+          page: 1,
+          limit: 50
+        });
+
+        expect(result.breakdown).toHaveLength(3);
+        expect(result.breakdown[0].period).toBe('2024-01-15');
+        expect(result.breakdown[0].deliveryOrderCount).toBe(20);
+        expect(result.breakdown[0].totalDeliveryFees).toBe(1000);
+      });
+
+      test('should generate breakdown grouped by week', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 100,
+          totalDeliveryFees: 5000,
+          averageDeliveryDuration: 600000, // 10 minutes in ms
+          onTimeDeliveryPercentage: null
+        }];
+
+        const mockBreakdownResult = [
+          {
+            period: 'period: '2024-W03',
+            deliveryOrderCount:', totalDeliveryOrders: 60,
+          totalDeliveryFees: 3000,
+            averageDeliveryDuration: 10
+          },
+          {
+            period: 'period: '2024-W02',
+            deliveryOrderCount:', totalDeliveryOrders: 40,
+          totalDeliveryFees: 2000,
+            averageDeliveryDuration: 720000 // 12 minutes in ms
+          }
+        ];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce(mockBreakdownResult)
+          .mockResolvedValueOnce([{ total: 2 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo,
+          groupBy: 'week',
+          page: 1,
+          limit: 50
+        });
+
+        expect(result.breakdown).toHaveLength(2);
+        expect(result.breakdown[0].period).toBe('2024-W03');
+      });
+
+      test('should generate breakdown grouped by month', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 500,
+          totalDeliveryFees: 25000,
+          averageDeliveryDuration: 600000, // 10 minutes in ms
+          onTimeDeliveryPercentage: null
+        }];
+
+        const mockBreakdownResult = [
+          {
+            period: 'period: '2024-01',
+            deliveryOrderCount:', totalDeliveryOrders: 500,
+          totalDeliveryFees: 25000,
+            averageDeliveryDuration: 10
+          }
+        ];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce(mockBreakdownResult)
+          .mockResolvedValueOnce([{ total: 1 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo,
+          groupBy: 'month',
+          page: 1,
+          limit: 50
+        });
+
+        expect(result.breakdown).toHaveLength(1);
+        expect(result.breakdown[0].period).toBe('2024-01');
+      });
+    });
+
+    describe('Pagination', () => {
+      test('should apply pagination to breakdown results', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 100,
+          totalDeliveryFees: 5000,
+          ordersWithDuration: 85,
+          totalDeliveryDuration: 51000000
+        }];
+
+        const mockBreakdownResult = Array.from({ length: 10 }, (_, i) => ({
+          period: `2024-01-${String(i + 1).padStart(2, '0')}`,
+          totalDeliveryOrders: 10,
+          totalDeliveryFees: 500,
+          averageDeliveryDuration: 10
+        }));
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce(mockBreakdownResult)
+          .mockResolvedValueOnce([{ total: 31 }]); // 31 total days
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo,
+          groupBy: 'day',
+          page: 1,
+          limit: 10
+        });
+
+        expect(result.page).toBe(1);
+        expect(result.pages).toBe(4); // ceil(31 / 10)
+        expect(result.total).toBe(31);
+        expect(result.breakdown).toHaveLength(10);
+      });
+
+      test('should handle second page request correctly', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 100,
+          totalDeliveryFees: 5000,
+          ordersWithDuration: 85,
+          totalDeliveryDuration: 51000000
+        }];
+
+        const mockBreakdownResult = Array.from({ length: 10 }, (_, i) => ({
+          period: `2024-01-${String(i + 11).padStart(2, '0')}`,
+          totalDeliveryOrders: 10,
+          totalDeliveryFees: 500,
+          averageDeliveryDuration: 10
+        }));
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce(mockBreakdownResult)
+          .mockResolvedValueOnce([{ total: 31 }]);
+
+        const result = await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom,
+          dateTo,
+          groupBy: 'day',
+          page: 2,
+          limit: 10
+        });
+
+        // Verify skip calculation in pipeline
+        const breakdownPipeline = Order.aggregate.mock.calls[1][0];
+        const skipStage = breakdownPipeline.find(stage => stage.$skip !== undefined);
+        
+        expect(skipStage.$skip).toBe(10); // (page 2 - 1) * 10
+        expect(result.page).toBe(2);
+      });
+    });
+
+    describe('Date Range Filtering', () => {
+      test('should filter orders within date range', async () => {
+        const mockSummaryResult = [{
+          totalDeliveryOrders: 45,
+          totalDeliveryFees: 2250,
+          ordersWithDuration: 40,
+          totalDeliveryDuration: 24000000
+        }];
+
+        Order.aggregate = jest.fn()
+          .mockResolvedValueOnce(mockSummaryResult)
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ total: 0 }]);
+
+        await DeliveryReportService.generate({
+          merchantId: merchantId.toString(),
+          dateFrom: new Date('2024-01-10'),
+          dateTo: new Date('2024-01-20')
+        });
+
+        const summaryPipeline = Order.aggregate.mock.calls[0][0];
+        const matchStage = summaryPipeline[0].$match;
+
+        expect(matchStage.placedAt.$gte).toEqual(new Date('2024-01-10'));
+        expect(matchStage.placedAt.$lte).toEqual(new Date('2024-01-20'));
+      });
+    });
+  });
+
+  describe('Helper Methods', () => {
+    describe('buildGroupByExpression()', () => {
+      test('should build day expression', () => {
+        const expression = DeliveryReportService.buildGroupByExpression('day');
+        expect(expression).toHaveProperty('$dateToString');
+        expect(expression.$dateToString.format).toBe('%Y-%m-%d');
+      });
+
+      test('should build week expression', () => {
+        const expression = DeliveryReportService.buildGroupByExpression('week');
+        expect(expression).toHaveProperty('$dateToString');
+        expect(expression.$dateToString.format).toBe('%Y-W%V');
+      });
+
+      test('should build month expression', () => {
+        const expression = DeliveryReportService.buildGroupByExpression('month');
+        expect(expression).toHaveProperty('$dateToString');
+        expect(expression.$dateToString.format).toBe('%Y-%m');
+      });
+
+      test('should default to day expression for invalid groupBy', () => {
+        const expression = DeliveryReportService.buildGroupByExpression('invalid');
+        expect(expression).toHaveProperty('$dateToString');
+        expect(expression.$dateToString.format).toBe('%Y-%m-%d');
+      });
+    });
+
+    describe('getEmptySummary()', () => {
+      test('should return empty summary with zero/null values', () => {
+        const empty = DeliveryReportService.getEmptySummary();
+        
+        expect(empty).toEqual({
+          totalDeliveryOrders: 0,
+          totalDeliveryFees: 0,
+          averageDeliveryDuration: null,
+          onTimeDeliveryPercentage: null
+        });
+      });
+    });
+  });
+});

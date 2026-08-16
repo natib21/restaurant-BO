@@ -4,8 +4,8 @@
  */
 
 const PurchaseOrder = require('../../../../models/PurchaseOrder');
-const catchAsync    = require('../../../../utils/catchAsync');
-const AppError      = require('../../../../utils/appError');
+const catchAsync = require('../../../../utils/catchAsync');
+const AppError = require('../../../../utils/appError');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
 const { InventoryService } = require('../service/inventory.service');
 
@@ -15,7 +15,9 @@ exports.getAllPurchaseOrders = catchAsync(async (req, res) => {
     .populate('supplier', 'name')
     .populate('createdBy', 'firstName lastName')
     .sort({ createdAt: -1 });
-  res.status(200).json({ status: 'success', results: purchaseOrders.length, data: { purchaseOrders } });
+  res
+    .status(200)
+    .json({ status: 'success', results: purchaseOrders.length, data: { purchaseOrders } });
 });
 
 exports.getPurchaseOrder = catchAsync(async (req, res, next) => {
@@ -52,7 +54,10 @@ exports.updatePurchaseOrder = catchAsync(async (req, res, next) => {
 
 exports.deletePurchaseOrder = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
-  const purchaseOrder = await PurchaseOrder.findOneAndDelete({ _id: req.params.id, merchant: merchantId });
+  const purchaseOrder = await PurchaseOrder.findOneAndDelete({
+    _id: req.params.id,
+    merchant: merchantId,
+  });
   if (!purchaseOrder) return next(new AppError('Purchase order not found', 404));
   res.status(204).json({ status: 'success', data: null });
 });
@@ -62,7 +67,8 @@ exports.receivePurchaseOrder = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   const purchaseOrder = await PurchaseOrder.findOne({ _id: req.params.id, merchant: merchantId });
   if (!purchaseOrder) return next(new AppError('Purchase order not found', 404));
-  if (purchaseOrder.status === 'received') return next(new AppError('Purchase order already received', 400));
+  if (purchaseOrder.status === 'received')
+    return next(new AppError('Purchase order already received', 400));
 
   const { receivedItems } = req.body; // [{ ingredientId, receivedQuantity }]
 

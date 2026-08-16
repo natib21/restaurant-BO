@@ -14,7 +14,7 @@ function getChapaProvider() {
         durationMonths,
       };
     },
-    verifyTransaction: async (tx_ref) => {
+    verifyTransaction: async tx_ref => {
       // Placeholder verification for Chapa.
       // Replace with real Chapa transaction lookup when ready.
       return {

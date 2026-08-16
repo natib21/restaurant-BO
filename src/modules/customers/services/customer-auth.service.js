@@ -88,11 +88,16 @@ class CustomerAuthService {
 
     let session = null;
     if (sessionToken && tableId && branchId) {
-      session = await customerRepository.findSessionAndRefresh(sessionToken, merchantId, branchId, tableId);
+      session = await customerRepository.findSessionAndRefresh(
+        sessionToken,
+        merchantId,
+        branchId,
+        tableId
+      );
     }
 
     let customer = await customerRepository.findOne(filter);
-    
+
     const recordHistory = (cust, action, details) => {
       if (!Array.isArray(cust.history)) cust.history = [];
       cust.history.push({
@@ -128,7 +133,7 @@ class CustomerAuthService {
         customer,
         isNew: false,
         seated: !!session,
-        message: session ? 'Welcome back! You are now seated.' : 'Logged in successfully'
+        message: session ? 'Welcome back! You are now seated.' : 'Logged in successfully',
       };
     }
 
@@ -146,7 +151,7 @@ class CustomerAuthService {
       customer,
       isNew: true,
       seated: !!session,
-      message: session ? 'Welcome! You are now seated.' : 'Account created successfully'
+      message: session ? 'Welcome! You are now seated.' : 'Account created successfully',
     };
   }
 }

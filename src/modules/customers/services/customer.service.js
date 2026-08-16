@@ -82,15 +82,25 @@ class CustomerService {
 
   async updateCustomerByStaff(merchantId, customerId, data, staffId) {
     const allowed = [
-      'fullName', 'phone', 'tags', 'notes', 'loyalty.points',
-      'loyalty.tier', 'stats.totalOrders', 'stats.totalSpent',
+      'fullName',
+      'phone',
+      'tags',
+      'notes',
+      'loyalty.points',
+      'loyalty.tier',
+      'stats.totalOrders',
+      'stats.totalSpent',
     ];
     const updates = {};
     allowed.forEach(field => {
       if (data[field] !== undefined) updates[field] = data[field];
     });
 
-    const customer = await customerRepository.updateByIdAndMerchant(customerId, merchantId, updates);
+    const customer = await customerRepository.updateByIdAndMerchant(
+      customerId,
+      merchantId,
+      updates
+    );
     if (!customer) throw new AppError('Customer not found', 404);
 
     ensureHistoryArray(customer);
@@ -100,7 +110,7 @@ class CustomerService {
       addedAt: new Date(),
       addedBy: staffId,
     });
-    
+
     return await customer.save();
   }
 
@@ -125,7 +135,9 @@ class CustomerService {
     customer.loyalty.points += points;
     customer.loyalty.totalPointsEarned += points;
 
-    const newTier = Object.keys(TIERS).reverse().find(t => customer.loyalty.totalPointsEarned >= TIERS[t]);
+    const newTier = Object.keys(TIERS)
+      .reverse()
+      .find(t => customer.loyalty.totalPointsEarned >= TIERS[t]);
     if (newTier && newTier !== customer.loyalty.tier) customer.loyalty.tier = newTier;
 
     ensureHistoryArray(customer);

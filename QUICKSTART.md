@@ -5,6 +5,7 @@
 ### Step 1: Test Backend Changes
 
 #### 1.1 Check middleware is loaded
+
 ```bash
 # Start the backend
 npm run dev
@@ -16,6 +17,7 @@ npm run dev
 #### 1.2 Test new Orders routes with curl
 
 **Place order (staff):**
+
 ```bash
 curl -X POST http://localhost:3000/api/v1/orders/staff \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -37,6 +39,7 @@ curl -X POST http://localhost:3000/api/v1/orders/staff \
 ```
 
 **Expected Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -52,6 +55,7 @@ curl -X POST http://localhost:3000/api/v1/orders/staff \
 ```
 
 **Test validation error:**
+
 ```bash
 curl -X POST http://localhost:3000/api/v1/orders/staff \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -66,6 +70,7 @@ curl -X POST http://localhost:3000/api/v1/orders/staff \
 ```
 
 **Expected Response (400 Bad Request):**
+
 ```json
 {
   "success": false,
@@ -86,12 +91,14 @@ curl -X POST http://localhost:3000/api/v1/orders/staff \
 ```
 
 #### 1.3 Get active orders
+
 ```bash
 curl -X GET http://localhost:3000/api/v1/orders/active \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 **Expected Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -114,6 +121,7 @@ curl -X GET http://localhost:3000/api/v1/orders/active \
 ```
 
 #### 1.4 Update order status
+
 ```bash
 curl -X PATCH http://localhost:3000/api/v1/orders/ORDER_ID/status \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -141,6 +149,7 @@ npm test -- --coverage
 ```
 
 **Expected output:**
+
 ```
 PASS  tests/orders-integration.test.js
   Orders Module - Integration Tests
@@ -165,6 +174,7 @@ Time:        XXs
 #### 3.1 Check Error Boundary works
 
 In your React component:
+
 ```typescript
 import ErrorBoundary from '@/components/ErrorBoundary';
 
@@ -174,6 +184,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 ```
 
 Simulate error (in component):
+
 ```typescript
 throw new Error('Test error');
 ```
@@ -183,6 +194,7 @@ Expected: Error boundary catches it, shows user-friendly message with retry butt
 #### 3.2 Test new query hooks
 
 In your component:
+
 ```typescript
 import { useActiveOrders, usePlaceOrderStaff } from '@/api/Queries/orderQuery-refactored';
 
@@ -194,6 +206,7 @@ const { mutate, isPending } = usePlaceOrderStaff();
 ```
 
 Test states:
+
 - **Loading:** Page shows skeleton loaders
 - **Error:** Page shows error message with retry button
 - **Empty:** Page shows "no orders" message
@@ -214,32 +227,41 @@ export default function MyDashboard() {
 ## 🐛 Troubleshooting
 
 ### Issue: Middleware not loaded
+
 **Check:** Is `responseMiddleware` imported in `src/app/create-app.js`?
+
 ```javascript
 const responseMiddleware = require('../common/middleware/response.middleware');
 ```
 
 ### Issue: Validation not working
+
 **Check:** Is `validate` middleware imported in routes?
+
 ```javascript
 const validate = require('../../../common/middleware/validate.middleware');
 ```
 
 ### Issue: Old routes return 404
+
 **Check:** Are both routes registered in app.js?
+
 ```javascript
-app.use('/api/v1/orders', ordersRoutes);  // NEW
-app.use('/api/v1/order', orderRouter);    // LEGACY
+app.use('/api/v1/orders', ordersRoutes); // NEW
+app.use('/api/v1/order', orderRouter); // LEGACY
 ```
 
 ### Issue: Tests fail
+
 **Common causes:**
+
 1. MongoDB not running
 2. Test data not seeding properly
 3. Auth token invalid
 4. Missing environment variables
 
 **Solution:**
+
 ```bash
 # Check MongoDB
 mongod --version
@@ -255,7 +277,9 @@ DEBUG=* npm test
 ```
 
 ### Issue: Frontend not showing error states
+
 **Check:** Are you using the refactored hooks?
+
 ```typescript
 // ✅ Good
 import { useActiveOrders } from '@/api/Queries/orderQuery-refactored';
@@ -271,6 +295,7 @@ import { useActiveOrders } from '@/api/Queries/orderQuery';
 All responses should follow this format:
 
 **Success:**
+
 ```javascript
 {
   "success": true,
@@ -281,6 +306,7 @@ All responses should follow this format:
 ```
 
 **Error:**
+
 ```javascript
 {
   "success": false,
@@ -290,6 +316,7 @@ All responses should follow this format:
 ```
 
 **List:**
+
 ```javascript
 {
   "success": true,
@@ -307,6 +334,7 @@ All responses should follow this format:
 ## 🔄 Backward Compatibility Check
 
 **Old routes still work?**
+
 ```bash
 # Old route should still work
 curl http://localhost:3000/api/v1/order/active \
@@ -318,6 +346,7 @@ curl http://localhost:3000/api/v1/orders/active \
 ```
 
 **Old clients continue working?**
+
 - Yes! Legacy `/api/v1/order` routes still functional
 - New clients should use `/api/v1/orders`
 - Gradual migration possible
@@ -343,18 +372,18 @@ curl http://localhost:3000/api/v1/orders/active \
 
 ## 📚 Reference Files
 
-| What | Where |
-|------|-------|
-| Refactoring guide | `REFACTORING-GUIDE.md` |
-| Response middleware | `src/common/middleware/response.middleware.js` |
-| Validation middleware | `src/common/middleware/validate.middleware.js` |
-| Orders routes | `src/modules/orders/orders.routes.js` |
-| Orders controller | `src/modules/orders/controller/order.controller.js` |
-| Orders validators | `src/modules/orders/validators/order.validators.js` |
-| Integration tests | `tests/orders-integration.test.js` |
-| Error boundary | `src/components/ErrorBoundary.tsx` |
-| Query hooks | `src/api/Queries/orderQuery-refactored.ts` |
-| Reference component | `src/features/Order/pages/ActiveOrders-refactored.tsx` |
+| What                  | Where                                                  |
+| --------------------- | ------------------------------------------------------ |
+| Refactoring guide     | `REFACTORING-GUIDE.md`                                 |
+| Response middleware   | `src/common/middleware/response.middleware.js`         |
+| Validation middleware | `src/common/middleware/validate.middleware.js`         |
+| Orders routes         | `src/modules/orders/orders.routes.js`                  |
+| Orders controller     | `src/modules/orders/controller/order.controller.js`    |
+| Orders validators     | `src/modules/orders/validators/order.validators.js`    |
+| Integration tests     | `tests/orders-integration.test.js`                     |
+| Error boundary        | `src/components/ErrorBoundary.tsx`                     |
+| Query hooks           | `src/api/Queries/orderQuery-refactored.ts`             |
+| Reference component   | `src/features/Order/pages/ActiveOrders-refactored.tsx` |
 
 ---
 

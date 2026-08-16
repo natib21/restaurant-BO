@@ -13,7 +13,7 @@ const { formatOrderByNumberPayload } = require('../../dto/order-response.dto');
 /**
  * GET /api/v1/orders/my-history
  * Get customer's order history
- * 
+ *
  * Context: req.customerId (from table session)
  * Response: { status, results, data: { orders } }
  */
@@ -30,7 +30,7 @@ exports.getMyOrderHistory = catchAsync(async (req, res) => {
 /**
  * GET /api/v1/orders/number/:orderNumber
  * Lookup order by order number (customer view)
- * 
+ *
  * Context: req.customerId (from table session)
  * Response: { status, data: { order } }
  */
@@ -48,7 +48,7 @@ exports.getOrderByNumber = catchAsync(async (req, res) => {
 /**
  * GET /api/v1/orders/my-active
  * Get customer's currently active order at table
- * 
+ *
  * Context: req.customerId, req.tableId (from table session)
  * Response: { status, data: { order } }
  */
@@ -67,4 +67,3 @@ exports.getMyActiveOrder = catchAsync(async (req, res) => {
     data: { order },
   });
 });
-

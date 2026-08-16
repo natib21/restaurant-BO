@@ -13,7 +13,9 @@ exports.createMerchantUser = catchAsync(async (req, res, next) => {
   const required = { firstName, phone, password, role };
   const missing = Object.keys(required).find(k => !required[k]);
   if (missing) {
-    return next(new AppError(`Missing required field: ${missing} (firstName, phone, password, role)`, 400));
+    return next(
+      new AppError(`Missing required field: ${missing} (firstName, phone, password, role)`, 400)
+    );
   }
 
   const roleDoc = await Role.findOne({
@@ -24,7 +26,12 @@ exports.createMerchantUser = catchAsync(async (req, res, next) => {
   });
 
   if (!roleDoc) {
-    return next(new AppError('Invalid role: role does not exist, is inactive, or does not belong to your merchant', 400));
+    return next(
+      new AppError(
+        'Invalid role: role does not exist, is inactive, or does not belong to your merchant',
+        400
+      )
+    );
   }
 
   const duplicate = await User.findOne({
@@ -106,7 +113,9 @@ exports.deleteMerchantUser = catchAsync(async (req, res, next) => {
   if (!user) return next(new AppError('User not found or does not belong to your merchant', 404));
 
   await User.findByIdAndUpdate(req.params.id, { isActive: false });
-  res.status(200).json({ status: 'success', message: 'User deactivated and unlinked successfully' });
+  res
+    .status(200)
+    .json({ status: 'success', message: 'User deactivated and unlinked successfully' });
 });
 
 exports.activateMerchantUser = catchAsync(async (req, res, next) => {
@@ -118,11 +127,21 @@ exports.activateMerchantUser = catchAsync(async (req, res, next) => {
   if (!wasLinked) return next(new AppError('This user was never part of your merchant', 403));
   if (user.isActive) return next(new AppError('User is already active', 400));
 
-  const activatedUser = await User.findByIdAndUpdate(req.params.id, { isActive: true }, { new: true, runValidators: true })
+  const activatedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    { isActive: true },
+    { new: true, runValidators: true }
+  )
     .populate('role', 'name description')
     .select('firstName lastName email phone role isActive');
 
-  res.status(200).json({ status: 'success', message: 'User reactivated successfully', data: { user: activatedUser } });
+  res
+    .status(200)
+    .json({
+      status: 'success',
+      message: 'User reactivated successfully',
+      data: { user: activatedUser },
+    });
 });
 
 exports.getMerchantUsers = catchAsync(async (req, res, next) => {
@@ -133,10 +152,16 @@ exports.getMerchantUsers = catchAsync(async (req, res, next) => {
       path: 'users',
       select: 'firstName lastName email phone role isActive',
       populate: { path: 'role', select: 'name description' },
-    }).lean();
+    })
+    .lean();
 
   if (!merchant) return next(new AppError('Merchant not found', 404));
-  res.status(200).json({ status: 'success', data: { merchantName: merchant.businessName, users: merchant.users || [] } });
+  res
+    .status(200)
+    .json({
+      status: 'success',
+      data: { merchantName: merchant.businessName, users: merchant.users || [] },
+    });
 });
 
 exports.getMerchantUserById = catchAsync(async (req, res, next) => {
@@ -148,10 +173,17 @@ exports.getMerchantUserById = catchAsync(async (req, res, next) => {
       match: { _id: req.params.id, isActive: true },
       select: 'firstName lastName email phone role isActive',
       populate: { path: 'role', select: 'name description' },
-    }).lean();
+    })
+    .lean();
 
-  if (!merchant || !merchant.users?.length) return next(new AppError('User not found or not active', 404));
-  res.status(200).json({ status: 'success', data: { merchantName: merchant.businessName, user: merchant.users[0] } });
+  if (!merchant || !merchant.users?.length)
+    return next(new AppError('User not found or not active', 404));
+  res
+    .status(200)
+    .json({
+      status: 'success',
+      data: { merchantName: merchant.businessName, user: merchant.users[0] },
+    });
 });
 
 exports.getMerchantUsersByBranch = catchAsync(async (req, res) => {

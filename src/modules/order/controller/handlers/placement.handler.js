@@ -1,7 +1,6 @@
-
 /**
  * Order Placement Handlers
- * 
+ *
  * Handles order creation for both customers (via QR) and staff (manual).
  * Uses idempotency for customer orders and transaction service.
  */
@@ -16,7 +15,7 @@ const { IdempotencyService } = require('../../service/IdempotencyService');
 /**
  * POST /api/v1/orders (customer)
  * Place order from QR menu
- * 
+ *
  * Guard: protectTableSession
  * Context: req.customerId, req.tableId, req.tableSession
  * Body: { items: [...] }
@@ -73,17 +72,16 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
 /**
  * POST /api/v1/orders/staff (staff)
  * Staff places order manually
- * 
+ *
  * Guard: protect, restrictTo (RBAC)
  * Context: req.user (JWT), req.ctx (tenant)
  * Body: { tableNumber, customerName, items, [...] }
  * Response: { success, message, data: { order } }
  */
 exports.staffPlaceOrder = catchAsync(async (req, res, next) => {
-
-  console.log("staffPlaceOrder req", req.body, req.user, req.validatedBody);  
+  console.log('staffPlaceOrder req', req.body, req.user, req.validatedBody);
   const validatedData = req.validatedBody || req.body;
-  
+
   const order = await OrderService.staffPlaceOrder({
     ...validatedData,
     performedBy: req.user?._id,

@@ -1,10 +1,5 @@
 function getMerchantId(req) {
-  return (
-    req.ctx?.merchantId ??
-    req.merchantId ??
-    req.user?.merchant?._id ??
-    req.user?.merchant
-  );
+  return req.ctx?.merchantId ?? req.merchantId ?? req.user?.merchant?._id ?? req.user?.merchant;
 }
 
 function getBranchId(req) {

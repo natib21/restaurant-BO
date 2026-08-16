@@ -22,34 +22,42 @@ src/modules/orders/controller/
 ## File Responsibilities
 
 ### 1. **customer.handler.js** (Customer Operations)
+
 Handles customer-specific operations via table session authentication.
 
 **Exports:**
+
 - `getMyOrderHistory()` - GET /my-history
 - `getOrderByNumber()` - GET /number/:orderNumber
 - `getMyActiveOrder()` - GET /my-active
 
 **Context Used:**
+
 - `req.customerId` (from table session guard)
 - `req.tableId` (from table session)
 - `req.tableSession` (session data)
 
 ### 2. **placement.handler.js** (Order Creation)
+
 Handles order placement for both customers (QR menu) and staff (manual).
 
 **Exports:**
+
 - `placeOrder()` - POST / (customer, table session)
 - `staffPlaceOrder()` - POST /staff (staff, JWT + RBAC)
 
 **Key Features:**
+
 - Customer orders use **idempotency** for retry safety
 - Leverages `OrderTransactionService` for complex business logic
 - Extracts tenant context via `getMerchantId()` and `getBranchId()`
 
 ### 3. **status.handler.js** (Status Management)
+
 Handles all status-related operations: queries and transitions.
 
 **Exports:**
+
 - `updateOrderStatus()` - PATCH /:id/status
 - `getActiveOrders()` - GET /active
 - `getPendingOrders()` - GET /pending
@@ -64,37 +72,45 @@ Handles all status-related operations: queries and transitions.
 Status filters use a factory function `createStatusEndpoint(status)` to avoid code duplication.
 
 ### 4. **mutation.handler.js** (Order Modifications)
+
 Handles operations that modify order state.
 
 **Exports:**
+
 - `addItemToOrder()` - PATCH /:id/add-items
 - `cancelOrder()` - PATCH /:id/cancel
 - `mergeOrders()` - POST /merge
 - `markAsPaid()` - POST /:id/pay
 
 **Characteristics:**
+
 - All require tenant context (`getMerchantId()`)
 - All require staff/merchant RBAC
 - Handle both success and no-op scenarios gracefully
 
 ### 5. **retrieval.handler.js** (Listing & Fetching)
+
 Handles all list and fetch operations with pagination and filtering.
 
 **Exports:**
+
 - `getAllOrders()` - GET / (branch scoped)
 - `getMerchantAllOrders()` - GET /merchant/all (all branches)
 - `getBranchOrders()` - GET /:id/orders (specific branch)
 - `getOrderById()` - GET /:id (single order)
 
 **Characteristics:**
+
 - Support pagination via query params
 - Return consistent metadata (total, page, pages, summary)
 - Branch vs merchant scoping handled internally
 
 ### 6. **file-upload.middleware.js** (File Upload Stubs)
+
 Placeholder middleware for file handling.
 
 **Exports:**
+
 - `uploadOrderPaymentPhoto` - Multer integration (TODO)
 - `resizeOrderPaymentPhoto` - Image processing (TODO)
 
@@ -121,12 +137,14 @@ src/modules/orders/controller/handlers/index.js
 ### Re-export Pattern (Backward Compatible)
 
 **order.controller.js:**
+
 ```javascript
 // Re-export all handlers from the handlers directory
 module.exports = require('./handlers');
 ```
 
 **handlers/index.js:**
+
 ```javascript
 module.exports = {
   ...customerHandlers,
@@ -190,15 +208,16 @@ All handlers respect the unified request context pattern:
 
 ```javascript
 // Customer routes (table session)
-const merchantId = getMerchantId(req);  // from req.tableSession.merchant
+const merchantId = getMerchantId(req); // from req.tableSession.merchant
 const branchId = getBranchId(req) ?? req.tableSession.branch;
 
 // Staff routes (JWT)
-const merchantId = getMerchantId(req);  // from req.user.merchant
-const branchId = getBranchId(req);      // from req.user.branch[0]
+const merchantId = getMerchantId(req); // from req.user.merchant
+const branchId = getBranchId(req); // from req.user.branch[0]
 ```
 
 **Import:**
+
 ```javascript
 const { getMerchantId, getBranchId } = require('../../../common/utils/tenant-scope');
 ```
@@ -238,6 +257,7 @@ const { getMerchantId, getBranchId } = require('../../../common/utils/tenant-sco
 ## Backward Compatibility Verification
 
 ✅ **All routes remain unchanged:**
+
 - POST /api/v1/orders
 - POST /api/v1/orders/staff
 - GET /api/v1/orders/active

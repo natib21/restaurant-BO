@@ -21,14 +21,10 @@ class FeedbackRepository {
   }
 
   async updateById(id, merchantId, update) {
-    return await Feedback.findOneAndUpdate(
-      { _id: id, merchant: merchantId },
-      update,
-      {
-        new: true,
-        runValidators: true,
-      }
-    ).exec();
+    return await Feedback.findOneAndUpdate({ _id: id, merchant: merchantId }, update, {
+      new: true,
+      runValidators: true,
+    }).exec();
   }
 
   async getStats(filter = {}) {

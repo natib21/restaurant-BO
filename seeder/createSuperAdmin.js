@@ -6,7 +6,7 @@ require('../models/taskModel');
 const { logger } = require('../utils/logger');
 
 // Ensure path to config is correct relative to the file location
-dotenv.config({ path: './config.env' }); 
+dotenv.config({ path: './config.env' });
 
 const SUPER_ADMIN_CONFIG = {
   email: process.env.SUPER_ADMIN_EMAIL || 'admin@system.com',
@@ -20,7 +20,7 @@ const SUPER_ADMIN_CONFIG = {
 const createSuperAdmin = async () => {
   try {
     const Local_DB = process.env.LOCAL_DATABASE;
-    
+
     await mongoose.connect(Local_DB);
     logger.info('MongoDB connected successfully!');
 
@@ -49,7 +49,7 @@ const createSuperAdmin = async () => {
       lastName: SUPER_ADMIN_CONFIG.lastName,
       email: SUPER_ADMIN_CONFIG.email,
       phone: SUPER_ADMIN_CONFIG.phone,
-      password: SUPER_ADMIN_CONFIG.password,         // Raw
+      password: SUPER_ADMIN_CONFIG.password, // Raw
       passwordConfirm: SUPER_ADMIN_CONFIG.password, // Raw (matches password for validation)
       role: role._id,
       isActive: true,

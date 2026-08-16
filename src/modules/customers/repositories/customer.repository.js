@@ -38,11 +38,10 @@ class CustomerRepository {
   }
 
   async updateByIdAndMerchant(id, merchantId, data) {
-    return await Customer.findOneAndUpdate(
-      { _id: id, merchant: merchantId },
-      data,
-      { new: true, runValidators: true }
-    );
+    return await Customer.findOneAndUpdate({ _id: id, merchant: merchantId }, data, {
+      new: true,
+      runValidators: true,
+    });
   }
 
   async softDelete(id, merchantId) {

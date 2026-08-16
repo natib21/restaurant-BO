@@ -13,23 +13,53 @@
  */
 
 const express = require('express');
-const { protect, restrictTo }   = require('../../common/guards/auth.guard');
-const { requireCapability }     = require('../../common/guards/capability.guard');
-const { CAPABILITIES }          = require('../../common/capabilities/capabilities');
-const { protectTableSession }   = require('../customers/customer-session.guard');
-const menuController      = require('./controller/menu.controller');
-const menuMgmtController  = menuController; // same file handles both CRUD and publish lifecycle
+const { protect, restrictTo } = require('../../common/guards/auth.guard');
+const { requireCapability } = require('../../common/guards/capability.guard');
+const { CAPABILITIES } = require('../../common/capabilities/capabilities');
+const { protectTableSession } = require('../customers/customer-session.guard');
+const menuController = require('./controller/menu.controller');
+const menuMgmtController = menuController; // same file handles both CRUD and publish lifecycle
 
 const router = express.Router();
 
 // ── 1. Public (table session) ─────────────────────────────────────────────────
-router.get('/public',             protectTableSession, menuController.getPublicMenu);
-router.get('/public/beverages',   protectTableSession, menuController.getAllBeverage, menuController.getPublicMenu);
-router.get('/public/drinks',      protectTableSession, menuController.getAllBeverage, menuController.getPublicMenu);
-router.get('/public/food',        protectTableSession, menuController.getFoodOnly,    menuController.getPublicMenu);
-router.get('/public/appetizers',  protectTableSession, menuController.getAppetizers,  menuController.getPublicMenu);
-router.get('/public/specials',    protectTableSession, menuController.getSpecials,    menuController.getPublicMenu);
-router.get('/public/search',      protectTableSession, menuController.searchMenu,     menuController.getPublicMenu);
+router.get('/public', protectTableSession, menuController.getPublicMenu);
+router.get(
+  '/public/beverages',
+  protectTableSession,
+  menuController.getAllBeverage,
+  menuController.getPublicMenu
+);
+router.get(
+  '/public/drinks',
+  protectTableSession,
+  menuController.getAllBeverage,
+  menuController.getPublicMenu
+);
+router.get(
+  '/public/food',
+  protectTableSession,
+  menuController.getFoodOnly,
+  menuController.getPublicMenu
+);
+router.get(
+  '/public/appetizers',
+  protectTableSession,
+  menuController.getAppetizers,
+  menuController.getPublicMenu
+);
+router.get(
+  '/public/specials',
+  protectTableSession,
+  menuController.getSpecials,
+  menuController.getPublicMenu
+);
+router.get(
+  '/public/search',
+  protectTableSession,
+  menuController.searchMenu,
+  menuController.getPublicMenu
+);
 
 // ── 2. Staff (JWT + RBAC) ─────────────────────────────────────────────────────
 router.use(protect);
@@ -37,13 +67,11 @@ router.use(restrictTo());
 
 router.get('/staff', menuController.getStaffMenu);
 
-router.route('/')
-  .get(menuController.getAllMenu)
-  .post(
-  menuController.uploadMenuPhoto,     // Single or multiple images
+router.route('/').get(menuController.getAllMenu).post(
+  menuController.uploadMenuPhoto, // Single or multiple images
   menuController.resizeAndProcessImages, // Saves as FileAsset (ObjectId)
   menuController.createNewMenu
-  );
+);
 
 router.patch('/:id/toggle-availability', menuController.toggleMenuItemAvailability);
 
@@ -66,13 +94,10 @@ router.get(
   menuMgmtController.getBranchPublications
 );
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(menuController.getMenu)
-  .patch(
-    menuController.uploadMenuPhoto,
-    menuController.resizeMenuPhoto,
-    menuController.updateMenu
-  )
+  .patch(menuController.uploadMenuPhoto, menuController.resizeMenuPhoto, menuController.updateMenu)
   .delete(menuController.deleteMenu);
 
 module.exports = router;

@@ -68,9 +68,9 @@ describe('OrderTransactionService', () => {
     });
 
     test('matches ingredient not found message', () => {
-      expect(
-        OrderTransactionService.isInventoryError(new Error('Ingredient not found: xyz'))
-      ).toBe(true);
+      expect(OrderTransactionService.isInventoryError(new Error('Ingredient not found: xyz'))).toBe(
+        true
+      );
     });
 
     test('matches missing recipe / No active recipe', () => {

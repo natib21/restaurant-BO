@@ -54,17 +54,17 @@ class SystemIntegrityService {
     const started = Date.now();
     const scope = { merchantId: merchantId || null };
     const allDomains = ['structure', 'branch', 'menu', 'table', 'rbac', 'notifications', 'data'];
-    const selected =
-      domains && domains.length > 0
-        ? domains.map(d => d.toLowerCase())
-        : allDomains;
+    const selected = domains && domains.length > 0 ? domains.map(d => d.toLowerCase()) : allDomains;
 
     const run = async name => {
       switch (name) {
         case 'structure':
           return { domain: name, issues: await SystemIntegrityService.auditFileStructure() };
         case 'branch':
-          return { domain: name, issues: await SystemIntegrityService.auditBranches({ merchantId }) };
+          return {
+            domain: name,
+            issues: await SystemIntegrityService.auditBranches({ merchantId }),
+          };
         case 'menu':
           return { domain: name, issues: await SystemIntegrityService.auditMenus({ merchantId }) };
         case 'table':

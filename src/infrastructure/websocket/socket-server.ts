@@ -13,10 +13,7 @@ const verifyJwt = promisify(jwt.verify) as unknown as (
 
 let io: SocketServer | null = null;
 
-async function authenticateSocket(
-  socket: import('socket.io').Socket,
-  next: (err?: Error) => void
-) {
+async function authenticateSocket(socket: import('socket.io').Socket, next: (err?: Error) => void) {
   try {
     const token =
       socket.handshake.auth?.token ||
@@ -29,7 +26,6 @@ async function authenticateSocket(
     const env = loadEnv();
     const decoded = await verifyJwt(token, env.JWT_SECRET);
 
-   
     const user = await User.findById(decoded.id)
       .populate({
         path: 'role',
@@ -43,7 +39,9 @@ async function authenticateSocket(
     }
 
     socket.data.user = user;
-    socket.data.permissions = (user.role?.tasks || []).map((t: { name?: string }) => t.name).filter(Boolean);
+    socket.data.permissions = (user.role?.tasks || [])
+      .map((t: { name?: string }) => t.name)
+      .filter(Boolean);
     next();
   } catch {
     next(new Error('Invalid or expired token'));

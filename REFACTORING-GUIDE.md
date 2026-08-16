@@ -3,6 +3,7 @@
 ## 🎯 What Was Done
 
 This document explains the **Orders module refactoring** that serves as the reference implementation for all other modules. It covers:
+
 1. Response format standardization
 2. Request validation middleware
 3. Module routes restructuring
@@ -17,6 +18,7 @@ This document explains the **Orders module refactoring** that serves as the refe
 ### Backend Orders Module
 
 **BEFORE (Monolithic/Inconsistent):**
+
 ```
 controllers/orderController.js
   - HTTP handlers mixed with business logic
@@ -35,6 +37,7 @@ models/orderModel.js
 ```
 
 **AFTER (Clean/Modular):**
+
 ```
 src/modules/orders/
 ├── orders.routes.js ✨ NEW
@@ -70,14 +73,17 @@ src/modules/orders/
 ### 1. Response Middleware (`src/common/middleware/response.middleware.js`)
 
 **What it does:**
+
 - Provides 3 helper methods: `res.sendSuccess()`, `res.sendError()`, `res.sendList()`
 - Ensures ALL responses follow standard format
 - Works globally (added once in app.js)
 
 **Files Created:**
+
 - ✅ `src/common/middleware/response.middleware.js`
 
 **Usage:**
+
 ```javascript
 // Success
 res.sendSuccess(order, 201, 'Order placed!', { orderId: order._id });
@@ -97,28 +103,31 @@ res.sendList(orders, 'orders', 200, { count: 5 });
 ### 2. Validation Middleware (`src/common/middleware/validate.middleware.js`)
 
 **What it does:**
+
 - Centralizes Zod validation
 - Catches validation errors automatically
 - Returns standard error format
 - Attaches validated data to request
 
 **Files Created:**
+
 - ✅ `src/common/middleware/validate.middleware.js`
 
 **Usage in routes:**
+
 ```javascript
 const validate = require('../../../common/middleware/validate.middleware');
 const { placeOrderStaffSchema } = require('../validators/order.validators');
 
 router.post(
   '/staff',
-  validate(placeOrderStaffSchema, 'body'),  // ← Validation middleware
-  placeOrder  // ← Controller only handles HTTP
+  validate(placeOrderStaffSchema, 'body'), // ← Validation middleware
+  placeOrder // ← Controller only handles HTTP
 );
 
 // In controller:
 exports.placeOrder = (req, res, next) => {
-  const validatedData = req.validatedBody;  // ← Already validated!
+  const validatedData = req.validatedBody; // ← Already validated!
   // ... rest of logic
 };
 ```
@@ -128,27 +137,32 @@ exports.placeOrder = (req, res, next) => {
 ### 3. Zod Validators (`src/modules/orders/validators/order.validators.js`)
 
 **What it does:**
+
 - Defines schemas for all order operations
 - Uses Zod for type-safe validation
 - Includes composition and conditional logic
 - Maintains backward compatibility
 
 **Files Updated:**
+
 - ✅ `src/modules/orders/validators/order.validators.js`
 
 **Schema Examples:**
+
 ```javascript
-const placeOrderStaffSchema = z.object({
-  branchId: z.string().min(1, 'Branch ID is required'),
-  orderType: z.enum(['dine_in', 'takeaway', 'delivery']),
-  tableId: z.string().optional(),
-  customerName: z.string().min(1).max(100),
-  items: z.array(orderItemSchema).min(1),
-  subtotal: z.number().positive(),
-}).refine(
-  data => data.orderType !== 'dine_in' || data.tableId,
-  { message: 'tableId is required for dine-in orders', path: ['tableId'] }
-);
+const placeOrderStaffSchema = z
+  .object({
+    branchId: z.string().min(1, 'Branch ID is required'),
+    orderType: z.enum(['dine_in', 'takeaway', 'delivery']),
+    tableId: z.string().optional(),
+    customerName: z.string().min(1).max(100),
+    items: z.array(orderItemSchema).min(1),
+    subtotal: z.number().positive(),
+  })
+  .refine(data => data.orderType !== 'dine_in' || data.tableId, {
+    message: 'tableId is required for dine-in orders',
+    path: ['tableId'],
+  });
 ```
 
 ---
@@ -156,15 +170,18 @@ const placeOrderStaffSchema = z.object({
 ### 4. Clean Routes File (`src/modules/orders/orders.routes.js`)
 
 **What it does:**
+
 - Single source of truth for all order routes
 - Validation middleware on each route
 - Clear separation of customer vs staff routes
 - Well-documented with JSDoc
 
 **Files Created:**
+
 - ✅ `src/modules/orders/orders.routes.js`
 
 **Structure:**
+
 ```javascript
 // Customer routes (no auth required, table session protected)
 router.post('/', protectTableSession, validate(...), placeOrder);
@@ -180,6 +197,7 @@ router.patch('/:id/status', validate(...), updateOrderStatus);
 ### 5. Thin Controller (`src/modules/orders/controller/order.controller.js`)
 
 **What it does:**
+
 - HTTP request/response only
 - NO business logic
 - NO database queries
@@ -187,20 +205,22 @@ router.patch('/:id/status', validate(...), updateOrderStatus);
 - Uses response helpers
 
 **Files Updated:**
+
 - ✅ `src/modules/orders/controller/order.controller.js`
 
 **Before (70 lines of logic):**
+
 ```javascript
 exports.placeOrder = catchAsync(async (req, res, next) => {
   const { items } = req.body;
   const { tableId, customerId } = req;
-  
+
   // Validation
   if (!branchId) { ... }
-  
+
   // Business logic
   const { order, replayed } = await OrderTransactionService...
-  
+
   // Multiple response formats
   res.status(201).json({
     status: 'success',
@@ -211,20 +231,22 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
 ```
 
 **After (20 lines):**
+
 ```javascript
 exports.placeOrder = catchAsync(async (req, res, next) => {
   // Data already validated ✓
   const items = req.validatedBody?.items;
-  
+
   // Delegate to service ✓
   const { order, replayed } = await OrderTransactionService.executePlaceOrder({...});
-  
+
   // Use response helper ✓
   res.sendSuccess(order, 201, `Order ${order.orderNumber} sent to kitchen!`);
 });
 ```
 
 **Benefits:**
+
 - 70% smaller
 - Easy to test
 - Easy to understand
@@ -235,26 +257,29 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
 ### 6. Integration Tests (`tests/orders-integration.test.js`)
 
 **What it does:**
+
 - Tests full request → response flow
 - Tests validation errors
 - Tests business logic
 - Tests response format compliance
 
 **Files Created:**
+
 - ✅ `tests/orders-integration.test.js`
 
 **Test Structure:**
+
 ```javascript
 describe('POST /api/v1/orders/staff - Staff Place Order', () => {
   it('should create order with valid data', async () => {
     const response = await request(app)
       .post('/api/v1/orders/staff')
       .send({...});
-    
+
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
   });
-  
+
   it('should reject invalid order type', async () => {
     // ...
   });
@@ -268,15 +293,18 @@ describe('POST /api/v1/orders/staff - Staff Place Order', () => {
 ### 1. Error Boundary Component (`src/components/ErrorBoundary.tsx`)
 
 **What it does:**
+
 - Catches React component errors
 - Shows user-friendly error message
 - Provides retry button
 - Prevents white screen of death
 
 **Files Created:**
+
 - ✅ `src/components/ErrorBoundary.tsx`
 
 **Usage:**
+
 ```typescript
 <ErrorBoundary>
   <YourComponent />
@@ -288,6 +316,7 @@ describe('POST /api/v1/orders/staff - Staff Place Order', () => {
 ### 2. Improved Query Hooks (`src/api/Queries/orderQuery-refactored.ts`)
 
 **What it does:**
+
 - Smart retry logic (doesn't retry validation errors)
 - Proper error handling
 - Loading states with `isLoading`
@@ -295,6 +324,7 @@ describe('POST /api/v1/orders/staff - Staff Place Order', () => {
 - Query invalidation
 
 **Files Created:**
+
 - ✅ `src/api/Queries/orderQuery-refactored.ts`
 
 **Hook Examples:**
@@ -312,15 +342,18 @@ const { mutate, isPending, error } = usePlaceOrderStaff();
 ### 3. Reference Component (`src/features/Order/pages/ActiveOrders-refactored.tsx`)
 
 **What it does:**
+
 - Shows proper loading state (skeleton loaders)
 - Shows error state (with retry)
 - Shows empty state
 - Shows success state with real data
 
 **Files Created:**
+
 - ✅ `src/features/Order/pages/ActiveOrders-refactored.tsx`
 
 **State Handling:**
+
 ```typescript
 if (isLoading) return <OrdersLoadingState />;
 if (error) return <OrdersErrorState error={error} refetch={refetch} />;
@@ -335,19 +368,21 @@ return <OrdersList orders={orders} />;
 ### App Setup (`src/app/create-app.js`)
 
 **Changes Made:**
+
 1. ✅ Added response middleware import
 2. ✅ Registered response middleware (after enrichBranchContext)
 3. ✅ Registered new orders routes at `/api/v1/orders`
 4. ✅ Kept legacy routes at `/api/v1/order` (backward compatibility)
 
 **Code:**
+
 ```javascript
 // Middleware
 app.use(responseMiddleware);
 
 // Routes
-app.use('/api/v1/orders', ordersRoutes);      // ← NEW (preferred)
-app.use('/api/v1/order', orderRouter);        // ← LEGACY (deprecated)
+app.use('/api/v1/orders', ordersRoutes); // ← NEW (preferred)
+app.use('/api/v1/order', orderRouter); // ← LEGACY (deprecated)
 ```
 
 ---
@@ -357,6 +392,7 @@ app.use('/api/v1/order', orderRouter);        // ← LEGACY (deprecated)
 ### Place Order (Staff)
 
 **Request:**
+
 ```json
 POST /api/v1/orders/staff
 
@@ -379,6 +415,7 @@ POST /api/v1/orders/staff
 ```
 
 **Success Response (201):**
+
 ```json
 {
   "success": true,
@@ -398,6 +435,7 @@ POST /api/v1/orders/staff
 ```
 
 **Validation Error (400):**
+
 ```json
 {
   "success": false,
@@ -445,11 +483,13 @@ POST /api/v1/orders/staff
 ## ✅ Backward Compatibility
 
 **Legacy Routes Still Work:**
+
 - `/api/v1/order` → still maps to old routes
 - Old controllers still export via shim
 - No breaking changes to existing clients
 
 **Migration Path:**
+
 1. New clients use `/api/v1/orders` (preferred)
 2. Old clients continue using `/api/v1/order`
 3. Eventually deprecate legacy routes
@@ -459,16 +499,16 @@ POST /api/v1/orders/staff
 
 ## 📈 Benefits Summary
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| Response Consistency | ❌ Inconsistent | ✅ Standardized |
-| Validation | ❌ Inside controller | ✅ Middleware + Zod |
-| Controller Size | ❌ 100+ lines | ✅ 20-30 lines |
-| Error Handling | ❌ Scattered | ✅ Centralized |
-| Frontend Error Handling | ❌ No error states | ✅ Full state handling |
-| Testing | ⚠️ Difficult | ✅ Easy (thin controller) |
-| Documentation | ❌ Sparse | ✅ Comprehensive |
-| Maintainability | ❌ Hard | ✅ Easy |
+| Aspect                  | Before               | After                     |
+| ----------------------- | -------------------- | ------------------------- |
+| Response Consistency    | ❌ Inconsistent      | ✅ Standardized           |
+| Validation              | ❌ Inside controller | ✅ Middleware + Zod       |
+| Controller Size         | ❌ 100+ lines        | ✅ 20-30 lines            |
+| Error Handling          | ❌ Scattered         | ✅ Centralized            |
+| Frontend Error Handling | ❌ No error states   | ✅ Full state handling    |
+| Testing                 | ⚠️ Difficult         | ✅ Easy (thin controller) |
+| Documentation           | ❌ Sparse            | ✅ Comprehensive          |
+| Maintainability         | ❌ Hard              | ✅ Easy                   |
 
 ---
 
@@ -516,6 +556,7 @@ npm test -- --coverage
 ## 📚 Files Changed/Created
 
 ### Backend
+
 - ✅ `src/common/middleware/response.middleware.js` (NEW)
 - ✅ `src/common/middleware/validate.middleware.js` (NEW)
 - ✅ `src/modules/orders/orders.routes.js` (NEW)
@@ -526,6 +567,7 @@ npm test -- --coverage
 - ✅ `tests/orders-integration.test.js` (NEW)
 
 ### Frontend
+
 - ✅ `src/components/ErrorBoundary.tsx` (NEW)
 - ✅ `src/api/Queries/orderQuery-refactored.ts` (NEW)
 - ✅ `src/features/Order/pages/ActiveOrders-refactored.tsx` (NEW)

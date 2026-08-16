@@ -1,10 +1,9 @@
-
 /**
  * Orders Controller (Modular Architecture)
- * 
+ *
  * Aggregator that re-exports handlers from the handlers/ directory.
  * Each handler is organized by concern (placement, status, mutations, retrieval, customer).
- * 
+ *
  * Structure:
  * ├── handlers/
  * │   ├── placement.handler.js  — Order creation (customer + staff)

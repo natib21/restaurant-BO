@@ -9,8 +9,8 @@
  */
 
 const express = require('express');
-const { protect }    = require('../../common/guards/auth.guard');
-const AppError       = require('../../../utils/appError');
+const { protect } = require('../../common/guards/auth.guard');
+const AppError = require('../../../utils/appError');
 const roleController = require('./role.controller');
 
 const router = express.Router();
@@ -25,11 +25,10 @@ router.use((req, res, next) => {
   next();
 });
 
-router.route('/')
-  .get(roleController.getAllRoles)
-  .post(roleController.createRole);
+router.route('/').get(roleController.getAllRoles).post(roleController.createRole);
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(roleController.getRole)
   .patch(roleController.updateRole)
   .delete(roleController.deleteRole);

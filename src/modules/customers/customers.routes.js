@@ -15,6 +15,8 @@
 
 const express = require('express');
 const { protect, restrictTo } = require('../../common/guards/auth.guard');
+const { requireFeature } = require('../../common/guards/feature.guard');
+
 const {
   protectTableSession,
   protectCustomer,
@@ -29,22 +31,35 @@ const router = express.Router();
 router.post('/login', protectTableSession, customerAuthController.loginOrCreate);
 
 // ── 2. Table-session self-service (must be linked customer) ───────────────────
-router.post('/gift/claim',  protectTableSession, protectCustomer, customerSelfController.claimGift);
-router.get('/me',           protectTableSession, protectCustomer, customerSelfController.getMe);
-router.patch('/me',         protectTableSession, protectCustomer, customerSelfController.updateMe);
-router.get('/my-orders',    protectTableSession, protectCustomer, customerSelfController.getMyOrders);
+router.post(
+  '/gift/claim',
+  protectTableSession,
+  protectCustomer,
+  requireFeature('customerManagement'), // ← claiming a gift is a CRM capability
+  customerSelfController.claimGift
+);
+router.get('/me', protectTableSession, protectCustomer, customerSelfController.getMe);
+router.patch('/me', protectTableSession, protectCustomer, customerSelfController.updateMe);
+router.get(
+  '/my-orders',
+  protectTableSession,
+  protectCustomer,
+  requireFeature('orders'), // ← order history belongs to the Orders module
+  customerSelfController.getMyOrders
+);
 
 // ── 3. Staff CRM (JWT + RBAC) ─────────────────────────────────────────────────
 router.use(protect);
 router.use(restrictTo());
+router.use(requireFeature('customerManagement'));
 
-router.get('/',           customerStaffController.getAllCustomers);
-router.get('/crm',        customerStaffController.getAllCustomers);
-router.get('/:id',        customerStaffController.getCustomer);
-router.get('/:id/crm',    customerStaffController.getCustomer);
-router.post('/:id/gift',  customerStaffController.giveGift);
-router.patch('/:id/tag',  customerStaffController.addTagOrNote);
-router.patch('/:id',      customerStaffController.updateCustomer);
-router.delete('/:id',     customerStaffController.deleteCustomer);
+router.get('/', customerStaffController.getAllCustomers);
+router.get('/crm', customerStaffController.getAllCustomers);
+router.get('/:id', customerStaffController.getCustomer);
+router.get('/:id/crm', customerStaffController.getCustomer);
+router.post('/:id/gift', customerStaffController.giveGift);
+router.patch('/:id/tag', customerStaffController.addTagOrNote);
+router.patch('/:id', customerStaffController.updateCustomer);
+router.delete('/:id', customerStaffController.deleteCustomer);
 
 module.exports = router;

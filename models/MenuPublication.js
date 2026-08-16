@@ -58,9 +58,6 @@ const menuPublicationSchema = new Schema(
 );
 
 menuPublicationSchema.index({ merchant: 1, branch: 1, status: 1, version: -1 });
-menuPublicationSchema.index(
-  { merchant: 1, branch: 1, menuGroup: 1, version: 1 },
-  { unique: true }
-);
+menuPublicationSchema.index({ merchant: 1, branch: 1, menuGroup: 1, version: 1 }, { unique: true });
 
 module.exports = mongoose.model('MenuPublication', menuPublicationSchema);

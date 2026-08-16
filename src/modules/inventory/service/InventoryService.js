@@ -17,7 +17,16 @@ class InventoryService {
     };
   }
 
-  static async adjustStock(merchantId, ingredientId, quantity, type, reason, reference, performedBy, cost = 0) {
+  static async adjustStock(
+    merchantId,
+    ingredientId,
+    quantity,
+    type,
+    reason,
+    reference,
+    performedBy,
+    cost = 0
+  ) {
     const session = await InventoryRepository.startIngredientSession();
     session.startTransaction();
 

@@ -101,8 +101,8 @@ exports.resizeComboPhoto = catchAsync(async (req, res, next) => {
 // 1. CREATE COMBO
 // ============================================
 exports.createCombo = catchAsync(async (req, res) => {
-  console.log("👤 user=>", req.user);
-  console.log("📦 req.body=>", req.body);
+  console.log('👤 user=>', req.user);
+  console.log('📦 req.body=>', req.body);
 
   const merchantId = getMerchantId(req);
   const userId = req.user._id;
@@ -278,9 +278,9 @@ exports.incrementComboSold = catchAsync(async (req, res) => {
   const { comboId, quantity = 1 } = req.body;
   await MenuService.incrementComboSold({ comboId, quantity });
 
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'success',
-    data: null 
+    data: null,
   });
 });
 

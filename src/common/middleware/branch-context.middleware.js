@@ -6,10 +6,7 @@ const { BranchService } = require('../../modules/branch');
  */
 function enrichBranchContext(req, res, next) {
   const branchId =
-    req.body?.branchId ||
-    req.query?.branchId ||
-    req.params?.branchId ||
-    req.ctx?.branchId;
+    req.body?.branchId || req.query?.branchId || req.params?.branchId || req.ctx?.branchId;
 
   if (branchId && req.ctx) {
     req.ctx.branchId = branchId;

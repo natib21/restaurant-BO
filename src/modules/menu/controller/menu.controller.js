@@ -8,10 +8,7 @@ const { getMerchantId } = require('../../../common/utils/tenant-scope');
 const { MenuService } = require('../service/MenuService');
 const { FileManagementService } = require('../../files/file-management.service');
 const FileAsset = require('../../../../models/FileAsset');
-const {
-  resolveSingleImageData,
-  resolveImageCollectionData,
-} = require('../utils/image-response');
+const { resolveSingleImageData, resolveImageCollectionData } = require('../utils/image-response');
 
 const multerStorage = multer.memoryStorage();
 
@@ -172,8 +169,8 @@ exports.getFoodOnly = (req, res, next) => {
 // 1. CREATE NEW MENU
 // ============================================
 exports.createNewMenu = catchAsync(async (req, res) => {
-  console.log("👤 user=>", req.user);
-  console.log("📦 req.body=>", req.body);
+  console.log('👤 user=>', req.user);
+  console.log('📦 req.body=>', req.body);
 
   const merchantId = getMerchantId(req);
   const userId = req.user._id;
@@ -222,10 +219,7 @@ exports.createNewMenu = catchAsync(async (req, res) => {
   if (menu.images && menu.images.length > 0) {
     const objectIds = menu.images.filter(id => typeof id !== 'string');
     if (objectIds.length > 0) {
-      await FileAsset.updateMany(
-        { _id: { $in: objectIds } },
-        { entityId: menu._id }
-      );
+      await FileAsset.updateMany({ _id: { $in: objectIds } }, { entityId: menu._id });
     }
   }
 
@@ -253,14 +247,14 @@ exports.createNewMenu = catchAsync(async (req, res) => {
 // ============================================
 exports.getMenu = catchAsync(async (req, res, next) => {
   console.log('🔍 getMenu called for ID:', req.params.id);
-  
+
   // ✅ Get menu - now returns Mongoose document
   const menu = await MenuService.getMenu(req);
-  
+
   if (!menu) {
     throw new AppError('Menu not found', 404);
   }
-  
+
   // ✅ Populate image references (works because menu is a Mongoose document)
   await menu.populate([
     { path: 'image', match: { isDeleted: false } },
@@ -290,7 +284,7 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
 
   // ✅ Populate and format each menu
   const formattedMenus = await Promise.all(
-    menuItems.map(async (menu) => {
+    menuItems.map(async menu => {
       await menu.populate([
         { path: 'image', match: { isDeleted: false } },
         { path: 'images', match: { isDeleted: false } },

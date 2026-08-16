@@ -4,8 +4,8 @@
  */
 
 const CustomerSession = require('../../../models/customerSessionModule');
-const catchAsync      = require('../../../utils/catchAsync');
-const AppError        = require('../../../utils/appError');
+const catchAsync = require('../../../utils/catchAsync');
+const AppError = require('../../../utils/appError');
 const { getMerchantId, resolveStaffBranchId } = require('../../common/utils/tenant-scope');
 const { BranchService } = require('../branch/service/BranchService');
 
@@ -32,7 +32,9 @@ exports.linkAccount = catchAsync(async (req, res, next) => {
   session.customer = customer._id;
   await session.save();
 
-  res.status(200).json({ status: 'success', message: 'Account linked!', data: { fullName: customer.fullName } });
+  res
+    .status(200)
+    .json({ status: 'success', message: 'Account linked!', data: { fullName: customer.fullName } });
 });
 
 // PATCH /api/v1/sessions/:id/free  — staff frees a table
@@ -56,8 +58,8 @@ exports.getAllSessions = catchAsync(async (req, res, next) => {
   if (branchId) filter.branch = branchId;
 
   const sessions = await CustomerSession.find(filter)
-    .populate('table',    'tableNumber status')
-    .populate('branch',   'name')
+    .populate('table', 'tableNumber status')
+    .populate('branch', 'name')
     .populate('customer', 'fullName phone');
 
   res.status(200).json({ status: 'success', results: sessions.length, data: { sessions } });
@@ -79,8 +81,8 @@ exports.getSessionByTable = catchAsync(async (req, res, next) => {
 
   const session = await CustomerSession.findOne(filter)
     .populate('customer', 'fullName phone')
-    .populate('table',    'tableNumber status')
-    .populate('branch',   'name');
+    .populate('table', 'tableNumber status')
+    .populate('branch', 'name');
 
   if (!session) return next(new AppError('No active session for this table', 404));
   res.status(200).json({ status: 'success', data: { session } });

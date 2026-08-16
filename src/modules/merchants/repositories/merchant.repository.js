@@ -25,11 +25,7 @@ class MerchantRepository {
 
   async findByUniqueFields(phone, taxId, businessName) {
     return await Merchant.findOne({
-      $or: [
-        { phone },
-        { taxId },
-        { businessName },
-      ].filter(Boolean),
+      $or: [{ phone }, { taxId }, { businessName }].filter(Boolean),
     });
   }
 

@@ -1,6 +1,6 @@
 /**
  * Inventory Service
- * 
+ *
  * Pure business logic layer — NO Express dependencies (req, res).
  * Safe to import by OrderService for transactional operations.
  * All methods accept optional `session` parameter for MongoDB ACID transactions.
@@ -11,7 +11,7 @@ const { InventoryRepository } = require('../repository/inventory.repository');
 class InventoryService {
   /**
    * Get inventory valuation for merchant
-   * 
+   *
    * Total value of all active inventory, low stock count, etc.
    */
   static async getInventoryValuation(merchantId, options = {}) {
@@ -21,7 +21,7 @@ class InventoryService {
 
   /**
    * Adjust stock for single ingredient
-   * 
+   *
    * @param {string} merchantId - Merchant ID (tenant context)
    * @param {string} ingredientId - Ingredient to adjust
    * @param {number} quantity - Quantity to adjust (+ or -)
@@ -112,10 +112,10 @@ class InventoryService {
 
   /**
    * Deduct stock items for order placement
-   * 
+   *
    * CRITICAL: This is the method called from OrderService during order creation.
    * Accepts session for ACID transaction guarantees.
-   * 
+   *
    * @param {string} merchantId - Merchant context
    * @param {Array} items - [{ ingredientId, quantity }, ...]
    * @param {string} orderId - Reference to order being placed
@@ -123,13 +123,7 @@ class InventoryService {
    * @param {Object} options - { session } for transaction
    * @returns {Object} { success, deducted: [...], shortages: [...] }
    */
-  static async deductStockItems(
-    merchantId,
-    items,
-    orderId,
-    performedBy,
-    options = {}
-  ) {
+  static async deductStockItems(merchantId, items, orderId, performedBy, options = {}) {
     const { session } = options;
 
     if (!items || items.length === 0) {
@@ -192,7 +186,7 @@ class InventoryService {
 
   /**
    * Check stock availability before order processing
-   * 
+   *
    * @param {Array} items - [{ ingredientId, quantity }, ...]
    * @param {Object} options - { session }
    * @returns {Object} { available, shortages }
@@ -203,7 +197,7 @@ class InventoryService {
 
   /**
    * Get stock movement history
-   * 
+   *
    * @param {string} merchantId
    * @param {Object} filters - { ingredientId?, type?, startDate?, endDate? }
    * @param {Object} pagination - { limit, offset }
@@ -227,7 +221,7 @@ class InventoryService {
 
   /**
    * Set stock thresholds (min/max)
-   * 
+   *
    * @param {string} merchantId
    * @param {string} ingredientId
    * @param {number} minStock
@@ -252,7 +246,7 @@ class InventoryService {
 
   /**
    * Get low stock items
-   * 
+   *
    * Items where currentStock <= minStock
    */
   static async getLowStockItems(merchantId) {
@@ -261,7 +255,7 @@ class InventoryService {
 
   /**
    * Batch adjust stock (multiple items in one call)
-   * 
+   *
    * Useful for receipt of goods, waste reporting, etc.
    */
   static async batchAdjustStock(merchantId, adjustments, performedBy, options = {}) {

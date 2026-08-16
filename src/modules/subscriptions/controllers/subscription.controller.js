@@ -1,6 +1,6 @@
 /**
  * Subscriptions Controller
- * 
+ *
  * HTTP request/response handling only.
  * All business logic delegated to SubscriptionService.
  * All data validation via Zod schemas in middleware.
@@ -13,9 +13,9 @@ const { SubscriptionService } = require('../services/subscription.service');
 
 /**
  * POST /api/v1/subscriptions/initiate
- * 
+ *
  * Initiate subscription payment via configured provider
- * 
+ *
  * Body: { plan, durationMonths, phone? }
  * Response: { checkout_url, tx_ref }
  */
@@ -54,9 +54,9 @@ exports.initiateSubscription = catchAsync(async (req, res, next) => {
 
 /**
  * POST /api/v1/subscriptions/verify
- * 
+ *
  * Verify payment completion after redirect
- * 
+ *
  * Body: { tx_ref }
  * Response: { message, subscription }
  */
@@ -87,9 +87,9 @@ exports.verifySubscription = catchAsync(async (req, res, next) => {
 
 /**
  * POST /api/v1/subscriptions/trial
- * 
+ *
  * Create a 3-month free trial with full feature access
- * 
+ *
  * Response: { subscription }
  */
 exports.createTrialSubscription = catchAsync(async (req, res, next) => {
@@ -118,9 +118,9 @@ exports.createTrialSubscription = catchAsync(async (req, res, next) => {
 
 /**
  * GET /api/v1/subscriptions/status
- * 
+ *
  * Get current subscription status for merchant
- * 
+ *
  * Response: { plan, status, endDate, isActive, daysRemaining }
  */
 exports.getSubscriptionStatus = catchAsync(async (req, res, next) => {
@@ -142,9 +142,9 @@ exports.getSubscriptionStatus = catchAsync(async (req, res, next) => {
 
 /**
  * POST /api/v1/subscriptions/check-feature
- * 
+ *
  * Check if merchant has access to a feature
- * 
+ *
  * Body: { feature }
  * Response: { hasAccess, reason? }
  */
@@ -166,9 +166,9 @@ exports.checkFeatureAccess = catchAsync(async (req, res) => {
 
 /**
  * POST /api/v1/subscriptions/webhook/:provider
- * 
+ *
  * Handle payment provider webhook notifications
- * 
+ *
  * Headers: x-<provider>-signature, x-<provider>-event-id
  * Body: provider-specific webhook payload
  */
@@ -186,7 +186,9 @@ exports.handlePaymentWebhook = catchAsync(async (req, res, next) => {
   }
 
   if (!Buffer.isBuffer(req.body)) {
-    return res.status(400).json({ error: 'Raw request body is required for signature verification' });
+    return res
+      .status(400)
+      .json({ error: 'Raw request body is required for signature verification' });
   }
 
   // Verify webhook signature
@@ -238,9 +240,9 @@ exports.handlePaymentWebhook = catchAsync(async (req, res, next) => {
 
 /**
  * GET /api/v1/subscriptions/expiring-soon
- * 
+ *
  * Get subscriptions expiring in next 7 days (admin/monitoring)
- * 
+ *
  * Response: { subscriptions: [...] }
  */
 exports.getExpiringSubscriptions = catchAsync(async (req, res) => {
@@ -265,9 +267,9 @@ exports.getExpiringSubscriptions = catchAsync(async (req, res) => {
 
 /**
  * POST /api/v1/subscriptions/renew
- * 
+ *
  * Renew an existing subscription
- * 
+ *
  * Body: { durationMonths }
  * Response: { subscription }
  */
@@ -296,9 +298,9 @@ exports.renewSubscription = catchAsync(async (req, res, next) => {
 
 /**
  * GET /api/v1/subscriptions/stats (admin only)
- * 
+ *
  * Get subscription statistics
- * 
+ *
  * Response: { stats: [...] }
  */
 exports.getSubscriptionStats = catchAsync(async (req, res) => {
@@ -310,4 +312,9 @@ exports.getSubscriptionStats = catchAsync(async (req, res) => {
       stats,
     },
   });
+});
+
+exports.getFeatureCatalog = catchAsync(async (req, res) => {
+  const catalog = SubscriptionService.getFeatureCatalog();
+  res.status(200).json({ status: 'success', data: { catalog } });
 });

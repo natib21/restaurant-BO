@@ -89,7 +89,10 @@ const protect = catchAsync(async (req, res, next) => {
       select: 'name tasks isSystemRole',
       populate: { path: 'tasks', select: 'name endpoint method description isMerchant' },
     },
-    { path: 'merchant', select: 'businessName status mode' },
+    {
+      path: 'merchant',
+      select: 'businessName status mode isActive trialExpiresAt isSubscriptionActive features',
+    },
     { path: 'branch', select: 'name branchCode shortCode isMain isActive' },
   ]);
 
@@ -98,9 +101,94 @@ const protect = catchAsync(async (req, res, next) => {
   next();
 });
 
+/**
+ * Converts a URL path into a comparable pattern by normalizing dynamic
+ * segments. Currently only MongoDB ObjectIds (24-char hex) are auto-detected
+ * and replaced with `:id`.
+ *
+ * IMPORTANT: this does NOT normalize other dynamic segment types (numeric
+ * IDs, slugs, UUIDs, etc). If a route has a non-ObjectId dynamic segment,
+ * the corresponding `task.endpoint` stored in the DB must use an explicit
+ * `:param` wildcard (see compileEndpointPattern below) rather than relying
+ * on auto-detection here.
+ */
 function convertUrlToPattern(url) {
   if (!url) return '';
   return url.replace(/\/$/, '').replace(/[a-fA-F0-9]{24}/g, ':id');
+}
+
+/**
+ * Safely compiles a stored task.endpoint pattern (e.g. "/api/v1/session/:id"
+ * or "/api/v1/reports/*") into a RegExp.
+ *
+ * task.endpoint is admin-controlled data from the DB, not hardcoded in
+ * source — so we must NOT pass it into `new RegExp()` after only a partial
+ * replace. Doing that would let any regex metacharacter the admin UI allows
+ * through (parens, +, |, nested quantifiers, etc.) be interpreted as regex
+ * syntax, which is both a correctness risk (patterns matching unintended
+ * routes) and a ReDoS risk (a malformed/malicious pattern hanging the event
+ * loop).
+ *
+ * Fix: replace our two supported wildcard tokens (`:param`, `*`) with
+ * placeholder markers FIRST, escape every remaining regex metacharacter,
+ * then substitute the placeholders for their regex equivalents. This
+ * guarantees only `:param` and `*` ever become regex syntax — everything
+ * else in the stored string is treated as a literal character.
+ */
+function compileEndpointPattern(cleanTaskEndpoint) {
+  const PARAM_TOKEN = '\u0000PARAM\u0000';
+  const WILD_TOKEN = '\u0000WILD\u0000';
+
+  const withTokens = cleanTaskEndpoint
+    .replace(/:[^/]+/g, PARAM_TOKEN)
+    .replace(/\*/g, WILD_TOKEN);
+
+  const escaped = withTokens.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const finalPattern = escaped.split(PARAM_TOKEN).join('[^/]+').split(WILD_TOKEN).join('.*');
+
+  return new RegExp('^' + finalPattern + '$');
+}
+
+/**
+ * Per-role cache of compiled task matchers, so regex compilation happens
+ * once per role update rather than once per request. Invalidated whenever
+ * role.updatedAt changes (requires { timestamps: true } on the Role model).
+ *
+ * Note: this is an in-memory, per-instance cache. In a multi-instance
+ * deployment there can be a brief staleness window right after a role is
+ * updated on a different instance — acceptable here since permissions
+ * changes aren't security-time-critical to the millisecond, but swap this
+ * for a shared cache (Redis) if you need instant cross-instance invalidation.
+ */
+const roleTaskMatcherCache = new Map();
+
+function getCompiledMatchers(role) {
+  const roleId = role._id?.toString();
+  const updatedAt = role.updatedAt?.getTime?.() ?? null;
+
+  const cached = roleId ? roleTaskMatcherCache.get(roleId) : null;
+  if (cached && cached.updatedAt === updatedAt) {
+    return cached.matchers;
+  }
+
+  const matchers = (role.tasks || [])
+    .filter(task => (task.endpoint || '').trim())
+    .map(task => {
+      const cleanEndpoint = task.endpoint.trim().replace(/\/$/, '');
+      const isDynamic = cleanEndpoint.includes(':') || cleanEndpoint.includes('*');
+      return {
+        method: task.method,
+        endpoint: cleanEndpoint,
+        test: isDynamic ? compileEndpointPattern(cleanEndpoint) : null,
+      };
+    });
+
+  if (roleId) {
+    roleTaskMatcherCache.set(roleId, { updatedAt, matchers });
+  }
+
+  return matchers;
 }
 
 const PUBLIC_ROUTES = [
@@ -121,7 +209,11 @@ const PUBLIC_ROUTES = [
 
 const restrictTo = () =>
   catchAsync(async (req, res, next) => {
-    const fullUrl = req.originalUrl.replace(/\/$/, '');
+    // Strip query string before pattern matching — req.originalUrl includes
+    // ?query=params, which would otherwise never match a stored endpoint
+    // pattern or the PUBLIC_ROUTES regexes. req.query is untouched by this;
+    // your route handlers still receive query params normally.
+    const fullUrl = req.originalUrl.split('?')[0].replace(/\/$/, '');
     const httpMethod = req.method.toUpperCase();
     const user = req.user;
 
@@ -139,34 +231,23 @@ const restrictTo = () =>
     }
 
     if (!Array.isArray(role?.tasks) || role.tasks.length === 0) {
-      return next(new AppError('No permissions assigned to your role', 403));
+      return next(
+        new AppError(
+          'This role has no permissions configured yet. Contact your administrator.',
+          403
+        )
+      );
     }
 
     const requestPattern = convertUrlToPattern(fullUrl);
+    const matchers = getCompiledMatchers(role);
 
-    const hasAccess = role.tasks.some(task => {
-      const taskEndpoint = (task.endpoint || '').trim();
-      if (!taskEndpoint) return false;
-
-      const methodMatch =
-        !task.method || task.method === '*' || task.method.toUpperCase() === httpMethod;
+    const hasAccess = matchers.some(m => {
+      const methodMatch = !m.method || m.method === '*' || m.method.toUpperCase() === httpMethod;
       if (!methodMatch) return false;
 
-      const cleanTaskEndpoint = taskEndpoint.replace(/\/$/, '');
-      if (requestPattern === cleanTaskEndpoint) return true;
-
-      if (cleanTaskEndpoint.includes(':') || cleanTaskEndpoint.includes('*')) {
-        const taskRegex = new RegExp(
-          '^' +
-            cleanTaskEndpoint
-              .replace(/:[^\/]+/g, '[^/]+')
-              .replace(/\*/g, '.*')
-              .replace(/\//g, '\\/') +
-            '$'
-        );
-        return taskRegex.test(requestPattern);
-      }
-      return false;
+      if (!m.test) return requestPattern === m.endpoint;
+      return m.test.test(requestPattern);
     });
 
     if (!hasAccess) {

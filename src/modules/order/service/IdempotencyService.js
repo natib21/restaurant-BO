@@ -240,10 +240,7 @@ class IdempotencyService {
       }
 
       if (gate.action === 'hash_mismatch') {
-        throw new AppError(
-          'Idempotency-Key was already used with a different order payload',
-          422
-        );
+        throw new AppError('Idempotency-Key was already used with a different order payload', 422);
       }
 
       if (gate.action === 'claimed') {
@@ -261,10 +258,7 @@ class IdempotencyService {
       }
 
       if (wait.action === 'hash_mismatch') {
-        throw new AppError(
-          'Idempotency-Key was already used with a different order payload',
-          422
-        );
+        throw new AppError('Idempotency-Key was already used with a different order payload', 422);
       }
 
       if (wait.action === 'timeout') {

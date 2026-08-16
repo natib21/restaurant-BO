@@ -2,9 +2,37 @@
 const Customer = require('../../../../models/customerModule');
 const Merchant = require('../../../../models/merchantModel');
 const Campaign = require('../../../../models/CampaignModal');
+const {
+  sendMessage,
+  sendPhotoMessage,
+  buildMiniAppUrl,
+} = require('../../telegram/service/telegramService');
 
 const TELEGRAM_API = 'https://api.telegram.org/bot';
 
+function buildAudienceQuery(merchantId, audience = {}) {
+  const query = {
+    merchant: merchantId,
+    'telegram.linked': true,
+    'telegram.optIn': true,
+    'telegram.chatId': { $exists: true, $ne: null },
+  };
+
+  if (audience.tags?.length) {
+    query['tags.value'] = { $in: audience.tags };
+  }
+  if (audience.loyaltyTier?.length) {
+    query['loyalty.tier'] = { $in: audience.loyaltyTier };
+  }
+  if (audience.minTotalOrders) {
+    query['stats.totalOrders'] = { $gte: audience.minTotalOrders };
+  }
+
+  return query;
+}
+async function resolveAudience(merchantId, audience = {}) {
+  return Customer.find(buildAudienceQuery(merchantId, audience)).select('telegram.chatId fullName');
+}
 // Telegram allows roughly 30 messages/second overall — this delay keeps a
 // broadcast well under that without needing a queue system yet. Fine for a
 // few hundred/thousand customers; if your audience grows into the tens of
@@ -17,24 +45,24 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
    filter — only customers with a linked Telegram id can
    receive anything, so that's always required.
 ------------------------------------------------------ */
-async function resolveAudience(merchantId, audience = {}) {
-  const filter = {
-    merchant: merchantId,
-    'telegram.id': { $exists: true, $ne: null },
-  };
+// async function resolveAudience(merchantId, audience = {}) {
+//   const filter = {
+//     merchant: merchantId,
+//     'telegram.id': { $exists: true, $ne: null },
+//   };
 
-  if (audience.tags?.length) {
-    filter['tags.value'] = { $in: audience.tags };
-  }
-  if (audience.loyaltyTier?.length) {
-    filter['loyalty.tier'] = { $in: audience.loyaltyTier };
-  }
-  if (audience.minTotalOrders) {
-    filter['stats.totalOrders'] = { $gte: audience.minTotalOrders };
-  }
+//   if (audience.tags?.length) {
+//     filter['tags.value'] = { $in: audience.tags };
+//   }
+//   if (audience.loyaltyTier?.length) {
+//     filter['loyalty.tier'] = { $in: audience.loyaltyTier };
+//   }
+//   if (audience.minTotalOrders) {
+//     filter['stats.totalOrders'] = { $gte: audience.minTotalOrders };
+//   }
 
-  return Customer.find(filter).select('telegram.id fullName');
-}
+//   return Customer.find(filter).select('telegram.id fullName');
+// }
 
 /* -----------------------------------------------------
    Send one message via the Telegram Bot API
@@ -62,43 +90,62 @@ async function sendTelegramMessage(botToken, chatId, text, imageUrl) {
    Main entry point: send a campaign to its resolved audience
 ------------------------------------------------------ */
 async function sendCampaign(campaignId) {
-  const campaign = await Campaign.findById(campaignId);
-  if (!campaign) throw new Error('Campaign not found');
-  if (campaign.status === 'sending' || campaign.status === 'sent') {
-    throw new Error(`Campaign is already ${campaign.status}`);
+  // Atomically claim the send — prevents a double-click or retry from
+  // triggering two concurrent sends of the same campaign.
+  const campaign = await Campaign.findOneAndUpdate(
+    { _id: campaignId, status: { $in: ['draft', 'failed'] } },
+    { $set: { status: 'sending' } },
+    { new: true }
+  );
+  if (!campaign) {
+    const existing = await Campaign.findById(campaignId);
+    throw new Error(existing ? `Campaign is already ${existing.status}` : 'Campaign not found');
   }
 
-  // Need the bot token, which is select:false on Merchant
   const merchant = await Merchant.findById(campaign.merchant).select('+telegramBotToken');
   if (!merchant?.telegramBotToken) {
+    campaign.status = 'failed';
+    await campaign.save();
     throw new Error('This merchant has no Telegram bot connected yet');
+  }
+  if (!merchant.telegram?.marketingEnabled) {
+    campaign.status = 'failed';
+    await campaign.save();
+    throw new Error('Marketing messages are disabled for this merchant');
   }
 
   const audience = await resolveAudience(campaign.merchant, campaign.audience);
-
-  campaign.status = 'sending';
   campaign.stats.audienceSize = audience.length;
   await campaign.save();
+
+  const miniAppUrl = buildMiniAppUrl(merchant.slug);
+  const replyMarkup = {
+    reply_markup: { inline_keyboard: [[{ text: '🎉 Order Now', web_app: { url: miniAppUrl } }]] },
+  };
 
   let sentCount = 0;
   let failedCount = 0;
 
   for (const customer of audience) {
-    try {
-      await sendTelegramMessage(
-        merchant.telegramBotToken,
-        customer.telegram.id,
-        campaign.message,
-        campaign.imageUrl
-      );
-      sentCount++;
-    } catch (err) {
-      // Common cause: customer blocked the bot — not worth failing the whole
-      // campaign over, just log and move on.
-      failedCount++;
-      console.error(`Campaign ${campaignId} failed for customer ${customer._id}:`, err.message);
-    }
-    await sleep(SEND_DELAY_MS);
+    const result = campaign.imageUrl
+      ? await sendPhotoMessage(
+          merchant,
+          customer._id,
+          customer.telegram.chatId,
+          campaign.imageUrl,
+          campaign.message,
+          miniAppUrl
+        )
+      : await sendMessage(
+          merchant,
+          customer._id,
+          customer.telegram.chatId,
+          campaign.message,
+          replyMarkup
+        );
+
+    result?.status === 'sent' ? sentCount++ : failedCount++;
+    await new Promise(r => setTimeout(r, SEND_DELAY_MS));
   }
 
   campaign.status = failedCount === audience.length && audience.length > 0 ? 'failed' : 'sent';
@@ -110,4 +157,4 @@ async function sendCampaign(campaignId) {
   return campaign;
 }
 
-module.exports = { resolveAudience, sendCampaign };
+module.exports = { resolveAudience, buildAudienceQuery, sendCampaign };

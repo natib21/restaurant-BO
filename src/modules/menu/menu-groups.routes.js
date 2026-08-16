@@ -10,7 +10,7 @@
 
 const express = require('express');
 const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const menuGroupController     = require('./controller/menu-group.controller');
+const menuGroupController = require('./controller/menu-group.controller');
 
 const router = express.Router();
 
@@ -19,17 +19,19 @@ router.use(restrictTo());
 
 router.get('/light', menuGroupController.getAllMenuGroupsLight);
 
-router.route('/')
+router
+  .route('/')
   .get(menuGroupController.getAllMenuGroups)
   .post(menuGroupController.createMenuGroup);
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(menuGroupController.getMenuGroup)
   .patch(menuGroupController.updateMenuGroup)
   .delete(menuGroupController.deleteMenuGroup);
 
-router.patch('/:id/add-item',    menuGroupController.addItemToGroup);
+router.patch('/:id/add-item', menuGroupController.addItemToGroup);
 router.patch('/:id/remove-item', menuGroupController.removeItemFromGroup);
-router.patch('/:id/reorder',     menuGroupController.reorderItems);
+router.patch('/:id/reorder', menuGroupController.reorderItems);
 
 module.exports = router;

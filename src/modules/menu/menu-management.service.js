@@ -19,9 +19,7 @@ class MenuManagementService {
     const group = await MenuGroup.findOne({ _id: menuGroupId, merchant: merchantId });
     if (!group) throw new AppError('Menu group not found', 404);
 
-    const menuIds = (group.items || [])
-      .filter(item => !item.isHidden)
-      .map(item => item.menu);
+    const menuIds = (group.items || []).filter(item => !item.isHidden).map(item => item.menu);
 
     const menus = await Menu.find({
       _id: { $in: menuIds },
@@ -54,10 +52,7 @@ class MenuManagementService {
     );
 
     if (missing.length > 0) {
-      throw new AppError(
-        `Cannot publish: ${missing.length} item(s) missing active recipes`,
-        400
-      );
+      throw new AppError(`Cannot publish: ${missing.length} item(s) missing active recipes`, 400);
     }
 
     if (!group.branches.map(b => b.toString()).includes(String(branchId))) {

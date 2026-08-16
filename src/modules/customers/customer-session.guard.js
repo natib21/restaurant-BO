@@ -40,7 +40,8 @@ const protectTableSession = catchAsync(async (req, res, next) => {
   req.customerId = session.customer;
   req.isAnonymous = !session.customer;
 
-  if (!req.ctx) req.ctx = { requestId: req.requestId, requestTime: req.requestTime, actorType: 'anonymous' };
+  if (!req.ctx)
+    req.ctx = { requestId: req.requestId, requestTime: req.requestTime, actorType: 'anonymous' };
   req.ctx.merchantId = session.merchant;
   req.ctx.branchId = session.branch;
   req.ctx.tableId = session.table;

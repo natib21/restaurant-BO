@@ -18,55 +18,56 @@
 const express = require('express');
 
 // ── Infrastructure / System ──────────────────────────────────────────────────
-const healthRoutes        = require('../modules/health/health.routes');
-const integrityRoutes     = require('../modules/integrity/integrity.routes');
-const fileRoutes          = require('../modules/files/file.routes');
+const healthRoutes = require('../modules/health/health.routes');
+const integrityRoutes = require('../modules/integrity/integrity.routes');
+const fileRoutes = require('../modules/files/file.routes');
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
-const authRoutes          = require('../modules/auth/auth.routes');
-const legacyAuthRoutes    = require('../modules/auth/legacy-auth.routes');
+const authRoutes = require('../modules/auth/auth.routes');
+const legacyAuthRoutes = require('../modules/auth/legacy-auth.routes');
 
 // ── Core Domain ──────────────────────────────────────────────────────────────
-const merchantRoutes      = require('../modules/merchants/merchants.routes');
-const userRoutes          = require('../modules/users/users.routes');
-const branchRoutes        = require('../modules/branches/branches.routes');
-const tableRoutes         = require('../modules/tables/tables.routes');
-const customerRoutes      = require('../modules/customers/customers.routes');
-const sessionRoutes       = require('../modules/sessions/sessions.routes');
+const merchantRoutes = require('../modules/merchants/merchants.routes');
+const userRoutes = require('../modules/users/users.routes');
+const branchRoutes = require('../modules/branches/branches.routes');
+const tableRoutes = require('../modules/tables/tables.routes');
+const customerRoutes = require('../modules/customers/customers.routes');
+const sessionRoutes = require('../modules/sessions/sessions.routes');
 
 // ── Menu Domain ───────────────────────────────────────────────────────────────
-const menuRoutes          = require('../modules/menu/menus.routes');
-const menuGroupRoutes     = require('../modules/menu/menu-groups.routes');
+const menuRoutes = require('../modules/menu/menus.routes');
+const menuGroupRoutes = require('../modules/menu/menu-groups.routes');
 const branchMenuGroupRoutes = require('../modules/menu/branch-menu-groups.routes');
-const comboRoutes         = require('../modules/menu/combos.routes');
+const comboRoutes = require('../modules/menu/combos.routes');
 
 // ── Order Domain ──────────────────────────────────────────────────────────────
-const orderRoutes         = require('../modules/orders/orders.routes');
+const orderRoutes = require('../modules/orders/orders.routes');
 
 // ── Inventory Domain ──────────────────────────────────────────────────────────
-const ingredientRoutes    = require('../modules/inventory/ingredients.routes');
-const inventoryRoutes     = require('../modules/inventory/inventory.routes');
-const recipeRoutes        = require('../modules/inventory/recipes.routes');
-const supplierRoutes      = require('../modules/inventory/suppliers.routes');
+const ingredientRoutes = require('../modules/inventory/ingredients.routes');
+const inventoryRoutes = require('../modules/inventory/inventory.routes');
+const recipeRoutes = require('../modules/inventory/recipes.routes');
+const supplierRoutes = require('../modules/inventory/suppliers.routes');
 const purchaseOrderRoutes = require('../modules/inventory/purchase-orders.routes');
 
 // ── Staff / RBAC ──────────────────────────────────────────────────────────────
 const staffAssignmentRoutes = require('../modules/branches/staff-assignments.routes');
-const roleRoutes          = require('../modules/roles/roles.routes');
-const taskRoutes          = require('../modules/roles/tasks.routes');
+const roleRoutes = require('../modules/roles/roles.routes');
+const taskRoutes = require('../modules/roles/tasks.routes');
 
 // ── Feedback / Campaigns ───────────────────────────────────────────────────────
-const subscriptionRoutes  = require('../modules/subscriptions/subscriptions.routes');
-const feedbackRoutes      = require('../modules/feedback/feedback.routes');
-const campaignRoutes      = require('../modules/campaign/campaignRoutes');
+const subscriptionRoutes = require('../modules/subscriptions/subscriptions.routes');
+const feedbackRoutes = require('../modules/feedback/feedback.routes');
+const campaignRoutes = require('../modules/campaign/campaignRoutes');
 
-// ── Analytics ─────────────────────────────────────────────────────────────────
-const analyticsRoutes       = require('../modules/analytics/analytics.routes');
+// ── Analytics & Reports ───────────────────────────────────────────────────────
+const analyticsRoutes = require('../modules/analytics/analytics.routes');
+const reportRoutes = require('../modules/reports/reports.routes');
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
 const telegramWebhookRoutes = require('../modules/telegram/routes/telegramWebhookRoute'); // public
-const telegramAdminRoutes   = require('../modules/telegram/routes/telegramAdminRoute');   // authenticated
-
+const telegramAdminRoutes = require('../modules/telegram/routes/telegramAdminRoute'); // authenticated
+const telegramminiappRoutes = require('../modules/telegram/routes/telegramMiniAppRoute');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const router = express.Router();
@@ -96,7 +97,7 @@ router.use('/api/v1/users', userRoutes);
 // ── 7. Merchants ──────────────────────────────────────────────────────────────
 router.use('/api/v1/merchant', merchantRoutes);
 router.use('/api/v1/merchant', telegramAdminRoutes); // POST /api/v1/merchant/:merchantId/telegram/connect
-
+router.use('/api/v1/telegram', telegramminiappRoutes); // POST /api/v1/telegram/miniapp/verify
 // ── 8. Branches ───────────────────────────────────────────────────────────────
 router.use('/api/v1/branch', branchRoutes);
 
@@ -107,7 +108,7 @@ router.use('/api/v1/table', tableRoutes);
 router.use('/api/v1/customer', customerRoutes);
 
 // ── 11. Sessions (QR table sessions) ─────────────────────────────────────────
-router.use('/api/v1/session', sessionRoutes);
+router.use('/api/v1/sessions', sessionRoutes);
 
 // ── 12. Menu ──────────────────────────────────────────────────────────────────
 router.use('/api/v1/menu', menuRoutes);
@@ -143,5 +144,8 @@ router.use('/api/v1/campaigns', campaignRoutes);
 
 // ── 20. Analytics ─────────────────────────────────────────────────────────────
 router.use('/api/v1/analytics', analyticsRoutes);
+
+// ── 21. Reports ───────────────────────────────────────────────────────────────
+router.use('/api/v1/reports', reportRoutes);
 
 module.exports = router;

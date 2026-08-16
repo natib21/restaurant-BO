@@ -75,11 +75,11 @@ const comboSchema = new mongoose.Schema(
       min: [0.01, 'Combo price must be greater than zero'],
     },
 
-     image: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'FileAsset',
-          default: null,
-        },
+    image: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
     isActive: { type: Boolean, default: true },
     branches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
 

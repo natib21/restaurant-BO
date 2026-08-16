@@ -6,10 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
-const FE_QUERIES = path.resolve(
-  __dirname,
-  '../../restaurant-merchant-app/src/api/Queries'
-);
+const FE_QUERIES = path.resolve(__dirname, '../../restaurant-merchant-app/src/api/Queries');
 
 const checks = [
   {
@@ -62,10 +59,10 @@ const liveChecks = [
 ];
 
 function request(method, urlPath) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const req = http.request(
       { hostname: 'localhost', port: 8000, path: urlPath, method, timeout: 3000 },
-      (res) => {
+      res => {
         res.resume();
         resolve(res.statusCode);
       }

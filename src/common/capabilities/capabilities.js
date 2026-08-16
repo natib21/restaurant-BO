@@ -15,7 +15,10 @@ const CAPABILITIES = {
 /** Fallback inference from legacy role names (backward compatible). */
 const ROLE_NAME_CAPABILITY_MAP = [
   { pattern: /KITCHEN/i, capabilities: [CAPABILITIES.ORDER_UPDATE, CAPABILITIES.INVENTORY_VIEW] },
-  { pattern: /WAITER/i, capabilities: [CAPABILITIES.ORDER_CREATE, CAPABILITIES.ORDER_UPDATE, CAPABILITIES.TABLE_MANAGE] },
+  {
+    pattern: /WAITER/i,
+    capabilities: [CAPABILITIES.ORDER_CREATE, CAPABILITIES.ORDER_UPDATE, CAPABILITIES.TABLE_MANAGE],
+  },
   { pattern: /ADMIN/i, capabilities: Object.values(CAPABILITIES) },
 ];
 

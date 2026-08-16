@@ -1,6 +1,6 @@
 const AppError = require('../../../../utils/appError');
 
-const validate = (schema) => (req, res, next) => {
+const validate = schema => (req, res, next) => {
   try {
     schema.parse({
       body: req.body,

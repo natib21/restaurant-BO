@@ -1,4 +1,8 @@
-const { createIssue, buildReport, capIssues } = require('../src/modules/integrity/integrity-report');
+const {
+  createIssue,
+  buildReport,
+  capIssues,
+} = require('../src/modules/integrity/integrity-report');
 const { auditFileStructure } = require('../src/modules/integrity/auditors/file-structure.auditor');
 
 describe('integrity-report', () => {
@@ -36,9 +40,7 @@ describe('integrity-report', () => {
 describe('auditFileStructure', () => {
   it('passes when core modules exist', () => {
     const issues = auditFileStructure();
-    const missingCritical = issues.filter(
-      i => i.severity === 'critical' && i.type === 'missing'
-    );
+    const missingCritical = issues.filter(i => i.severity === 'critical' && i.type === 'missing');
     expect(missingCritical).toHaveLength(0);
   });
 });

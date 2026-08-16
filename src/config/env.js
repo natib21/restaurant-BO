@@ -3,7 +3,7 @@ const path = require('path');
 
 dotenv.config({ path: path.resolve(process.cwd(), 'config.env') });
 
-PUBLIC_API_URL= 'http://localhost:8000';
+PUBLIC_API_URL = 'http://localhost:8000';
 function loadEnv() {
   const env = process.env;
   if (!env.JWT_SECRET || env.JWT_SECRET.length < 16) {
@@ -34,9 +34,17 @@ function getCorsOrigins() {
     'http://localhost:5174',
     'http://127.0.0.1:5174',
     'https://restaurant-bo.onrender.com',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://restaurant-management-platform-three.vercel.app'
   ];
   if (!env.CORS_ORIGINS) return defaults;
-  return [...defaults, ...env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)];
+  return [
+    ...defaults,
+    ...env.CORS_ORIGINS.split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+  ];
 }
 
 module.exports = { loadEnv, getMongoUri, getCorsOrigins };

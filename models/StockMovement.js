@@ -35,7 +35,15 @@ const stockMovementSchema = new Schema(
     },
     reason: {
       type: String,
-      enum: ['purchase', 'order_consumption', 'manual_adjustment', 'spoilage', 'theft', 'return_to_supplier', 'other'],
+      enum: [
+        'purchase',
+        'order_consumption',
+        'manual_adjustment',
+        'spoilage',
+        'theft',
+        'return_to_supplier',
+        'other',
+      ],
       default: 'other',
     },
     reference: {

@@ -1,7 +1,7 @@
-
 const request = require('supertest');
 const mongoose = require('mongoose');
 const { createApp } = require('../src/app/create-app');
+const { connectDatabase, disconnectDatabase } = require('../src/common/database/connection');
 const Merchant = require('../models/merchantModel');
 const Branch = require('../models/branchModel');
 const Ingredient = require('../models/Ingredient');
@@ -16,13 +16,20 @@ let testIngredientId;
 let testSupplierId;
 
 beforeAll(async () => {
+  // Connect to test database
+  await connectDatabase();
+  
   app = createApp();
 
   // Seed test data
   const merchant = await Merchant.create({
+    businessName: 'Test Restaurant',
+    slug: 'test-restaurant-inv',
     name: 'Test Restaurant',
     email: 'test@restaurant.com',
     phone: '+251911111111',
+    status: 'approved',
+    isActive: true
   });
   merchantId = merchant._id;
 
@@ -30,6 +37,12 @@ beforeAll(async () => {
     merchant: merchantId,
     name: 'Test Branch',
     phone: '+251911111111',
+    location: {
+      type: 'Point',
+      coordinates: [38.7578, 9.025],
+      city: 'Addis Ababa',
+      formattedAddress: 'Test Branch, Addis Ababa, Ethiopia'
+    }
   });
   branchId = branch._id;
 
@@ -60,9 +73,9 @@ afterAll(async () => {
   await Ingredient.deleteMany({ merchant: merchantId });
   await Supplier.deleteMany({ merchant: merchantId });
   await PurchaseOrder.deleteMany({ merchant: merchantId });
-  await Merchant.deleteOne({ _id: merchantId });
   await Branch.deleteOne({ _id: branchId });
-  await mongoose.connection.close();
+  await Merchant.deleteOne({ _id: merchantId });
+  await disconnectDatabase();
 });
 
 describe('Inventory Module - Integration Tests', () => {

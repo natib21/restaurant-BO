@@ -9,7 +9,7 @@
  */
 
 const express = require('express');
-const { protect, restrictTo }   = require('../../common/guards/auth.guard');
+const { protect, restrictTo } = require('../../common/guards/auth.guard');
 const branchMenuGroupController = require('./controller/branch-menu-group.controller');
 
 const router = express.Router();
@@ -17,17 +17,19 @@ const router = express.Router();
 router.use(protect);
 router.use(restrictTo());
 
-router.route('/')
+router
+  .route('/')
   .get(branchMenuGroupController.getAllBranchMenuGroups)
   .post(branchMenuGroupController.createBranchMenuGroup);
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(branchMenuGroupController.getBranchMenuGroup)
   .patch(branchMenuGroupController.updateBranchMenuGroup)
   .delete(branchMenuGroupController.deleteBranchMenuGroup);
 
-router.patch('/:id/add-item',    branchMenuGroupController.addItemToGroup);
+router.patch('/:id/add-item', branchMenuGroupController.addItemToGroup);
 router.patch('/:id/remove-item', branchMenuGroupController.removeItemFromGroup);
-router.patch('/:id/reorder',     branchMenuGroupController.reorderBranchMenuGroupItems);
+router.patch('/:id/reorder', branchMenuGroupController.reorderBranchMenuGroupItems);
 
 module.exports = router;

@@ -8,6 +8,7 @@ Two critical modules have been refactored into clean, layered, production-ready 
 2. **Subscriptions Module** (`src/modules/subscriptions/`) - SaaS billing & feature gating
 
 Both modules follow **NestJS-inspired layered architecture** with:
+
 - **Controllers** — HTTP request/response handling only
 - **Services** — Pure business logic (no Express dependencies)
 - **Repositories** — Direct MongoDB access (thin wrappers)
@@ -18,6 +19,7 @@ Both modules follow **NestJS-inspired layered architecture** with:
 ## Inventory Module
 
 ### Purpose
+
 Manages restaurant inventory stock, movements (adjustments, sales, waste), and provides transactional support for order fulfillment.
 
 ### File Structure
@@ -38,6 +40,7 @@ src/modules/inventory/
 ### Key Features
 
 #### 1. **Stock Adjustment (`POST /adjust`)**
+
 ```javascript
 const { InventoryService } = require('src/modules/inventory');
 
@@ -45,15 +48,16 @@ await InventoryService.adjustStock(
   merchantId,
   ingredientId,
   quantity,
-  'in',           // type: 'in', 'out', 'waste', 'adjustment'
-  'Purchase from supplier',  // reason
-  'PO-2024-001',  // reference
+  'in', // type: 'in', 'out', 'waste', 'adjustment'
+  'Purchase from supplier', // reason
+  'PO-2024-001', // reference
   performedBy,
-  5000            // cost
+  5000 // cost
 );
 ```
 
 #### 2. **Stock Deduction for Orders (CRITICAL)**
+
 ```javascript
 // Called from OrderService during order creation
 const result = await InventoryService.deductStockItems(
@@ -74,6 +78,7 @@ if (!result.success) {
 ```
 
 #### 3. **Pre-Order Validation**
+
 ```javascript
 const validation = await InventoryService.validateStockAvailability(
   [{ ingredientId, quantity }, ...],
@@ -86,12 +91,13 @@ if (!validation.available) {
 ```
 
 #### 4. **Batch Operations**
+
 ```javascript
 const results = await InventoryService.batchAdjustStock(
   merchantId,
   [
     { ingredientId: '...', quantity: 5, type: 'in', cost: 1000 },
-    { ingredientId: '...', quantity: 2, type: 'waste', reason: 'Spoiled' }
+    { ingredientId: '...', quantity: 2, type: 'waste', reason: 'Spoiled' },
   ],
   performedBy
 );
@@ -105,7 +111,7 @@ const {
   batchAdjustStockSchema,
   deductStockSchema,
   getStockMovementsSchema,
-  setStockThresholdsSchema
+  setStockThresholdsSchema,
 } = require('src/modules/inventory/validators/inventory.validator');
 ```
 
@@ -154,6 +160,7 @@ try {
 ## Subscriptions Module
 
 ### Purpose
+
 Manages merchant subscription tiers (basic, pro, enterprise), payment processing via configurable payment providers, and feature access gating.
 
 ### File Structure
@@ -177,26 +184,29 @@ src/modules/subscriptions/
 #### 1. **Subscription Lifecycle**
 
 **Initiate Payment:**
+
 ```javascript
 const { SubscriptionService } = require('src/modules/subscriptions');
 
 const result = await SubscriptionService.initiateSubscription(
   merchantId,
-  'pro',           // plan: 'basic' | 'pro' | 'enterprise'
-  3,               // durationMonths
-  merchantData     // { email, phone, businessName }
+  'pro', // plan: 'basic' | 'pro' | 'enterprise'
+  3, // durationMonths
+  merchantData // { email, phone, businessName }
 );
 
 // Returns: { tx_ref, checkout_url, session }
 ```
 
 **Verify Payment:**
+
 ```javascript
 const subscription = await SubscriptionService.verifySubscription(tx_ref);
 // Updates subscription to 'active' and activates merchant
 ```
 
 **Get Status:**
+
 ```javascript
 const status = await SubscriptionService.getSubscriptionStatus(merchantId);
 // Returns: { plan, status, endDate, isActive, daysRemaining }
@@ -208,7 +218,7 @@ const status = await SubscriptionService.getSubscriptionStatus(merchantId);
 // Check if merchant has access to feature
 const { hasAccess, reason } = await SubscriptionService.checkFeatureAccess(
   merchantId,
-  'inventory'  // feature name
+  'inventory' // feature name
 );
 
 if (!hasAccess) {
@@ -265,7 +275,7 @@ Headers:
 ```javascript
 const renewal = await SubscriptionService.renewSubscription(
   merchantId,
-  3  // durationMonths
+  3 // durationMonths
 );
 ```
 
@@ -277,7 +287,7 @@ const {
   verifySubscriptionSchema,
   checkFeatureAccessSchema,
   featureAccessMatrix,
-  planPricingConfig
+  planPricingConfig,
 } = require('src/modules/subscriptions/dto/subscription.dto');
 ```
 
@@ -316,7 +326,7 @@ try {
     orderItems,
     orderId,
     userId,
-    { session: orderSession }  // Pass session
+    { session: orderSession } // Pass session
   );
 
   if (!stockResult.success) {
@@ -328,7 +338,7 @@ try {
 
   // 3. Commit transaction (all-or-nothing)
   await orderSession.commitTransaction();
-  
+
   return order[0];
 } catch (error) {
   await orderSession.abortTransaction();
@@ -345,13 +355,10 @@ try {
 
 async function placeOrder(merchantId, orderData) {
   const Subscription = require('src/modules/subscriptions').SubscriptionService;
-  
+
   // Check if merchant's plan supports orders
-  const { hasAccess } = await Subscription.checkFeatureAccess(
-    merchantId,
-    'orders'
-  );
-  
+  const { hasAccess } = await Subscription.checkFeatureAccess(merchantId, 'orders');
+
   if (!hasAccess) {
     throw new Error('Your subscription plan does not support orders');
   }
@@ -365,6 +372,7 @@ async function placeOrder(merchantId, orderData) {
 ## Migration Checklist
 
 ### Inventory Module
+
 - [x] Create Repository with session support
 - [x] Create Service with ACID-friendly methods
 - [x] Create Zod validators for all operations
@@ -374,6 +382,7 @@ async function placeOrder(merchantId, orderData) {
 - [x] Module index with exports
 
 ### Subscriptions Module
+
 - [x] Create Repository with merchant linking
 - [x] Create Service with payment flow
 - [x] Create DTOs + feature matrix
@@ -384,6 +393,7 @@ async function placeOrder(merchantId, orderData) {
 - [x] Module index with exports
 
 ### Integration
+
 - [ ] Update OrderService to use Inventory.deductStockItems()
 - [ ] Add feature gating to order endpoints
 - [ ] Update subscriptions router in app.js
@@ -414,6 +424,7 @@ PLAN_ENTERPRISE_PRICE=1
 ## Testing Strategy
 
 ### Inventory Unit Tests
+
 ```javascript
 describe('InventoryService', () => {
   test('deductStockItems succeeds with available stock', async () => {
@@ -432,6 +443,7 @@ describe('InventoryService', () => {
 ```
 
 ### Subscriptions Integration Tests
+
 ```javascript
 describe('SubscriptionService Webhook', () => {
   test('processes PAYMENT_COMPLETED event', async () => {
@@ -453,11 +465,13 @@ describe('SubscriptionService Webhook', () => {
 ## Error Handling
 
 ### Inventory Errors
+
 - `Insufficient stock` — Can't fulfill order
 - `Ingredient not found` — Invalid ingredient ID
 - `Failed to update stock` — Database error
 
 ### Subscription Errors
+
 - `Invalid plan` — Unknown plan tier
 - `Payment not completed` — Still pending
 - `No active subscription` — Required for feature access
@@ -468,11 +482,13 @@ describe('SubscriptionService Webhook', () => {
 ## Backward Compatibility
 
 ✅ **Inventory Module:**
+
 - Legacy `controllers/inventoryController.js` → deleted
 - Legacy `services/InventoryService.js` → shim remains for compatibility
 - New module at `src/modules/inventory/`
 
 ✅ **Subscriptions Module:**
+
 - Legacy `controllers/subscriptionController.js` → delete after migration
 - New module at `src/modules/subscriptions/`
 
@@ -498,6 +514,7 @@ describe('SubscriptionService Webhook', () => {
 ## Next Steps
 
 1. **Update app.js:**
+
    ```javascript
    const { subscriptionRoutes } = require('src/modules/subscriptions');
    app.use('/api/v1/subscriptions', subscriptionRoutes);
@@ -524,4 +541,3 @@ describe('SubscriptionService Webhook', () => {
 ---
 
 **Refactoring Status:** ✅ Complete | Modules Ready for Integration
-

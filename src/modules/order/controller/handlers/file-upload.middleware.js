@@ -1,7 +1,6 @@
-
 /**
  * Order File Upload Middleware
- * 
+ *
  * Handles file uploads for order operations (e.g., payment photos).
  */
 
@@ -9,10 +8,10 @@ const catchAsync = require('../../../../../utils/catchAsync');
 
 /**
  * Middleware: Upload order payment photo
- * 
+ *
  * Note: Requires multer integration.
  * Should be applied before body validation middleware.
- * 
+ *
  * Usage:
  * router.post(
  *   '/:id/pay',
@@ -28,17 +27,17 @@ exports.uploadOrderPaymentPhoto = catchAsync(async (req, res, next) => {
   // - Extract file from 'payment-photo' field
   // - Store file reference in req.file
   // - Pass to next middleware
-  
+
   // For now, pass through if no file handling is needed
   next();
 });
 
 /**
  * Middleware: Resize order payment photo
- * 
+ *
  * Note: Requires image processing library (e.g., Sharp).
  * Should be applied after uploadOrderPaymentPhoto.
- * 
+ *
  * Usage:
  * router.post(
  *   '/:id/pay',
@@ -56,7 +55,7 @@ exports.resizeOrderPaymentPhoto = catchAsync(async (req, res, next) => {
   // - Optimize file size
   // - Save to storage
   // - Store path in req.file.filename or req.body.paymentPhotoPath
-  
+
   // For now, pass through
   next();
 });

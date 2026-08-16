@@ -24,7 +24,9 @@ async function auditDataReferences({ merchantId } = {}) {
     .limit(INTEGRITY_SAMPLE_LIMIT)
     .lean();
 
-  const customerIds = [...new Set(ordersWithCustomer.map(o => o.customer?.toString()).filter(Boolean))];
+  const customerIds = [
+    ...new Set(ordersWithCustomer.map(o => o.customer?.toString()).filter(Boolean)),
+  ];
   const customers = await Customer.find({ _id: { $in: customerIds } })
     .select('_id merchant')
     .lean();
@@ -68,7 +70,9 @@ async function auditDataReferences({ merchantId } = {}) {
     .lean();
 
   const menuIds = [...new Set(recipes.map(r => r.menuItem?.toString()).filter(Boolean))];
-  const menus = await Menu.find({ _id: { $in: menuIds } }).select('_id merchant').lean();
+  const menus = await Menu.find({ _id: { $in: menuIds } })
+    .select('_id merchant')
+    .lean();
   const menuMap = new Map(menus.map(m => [m._id.toString(), m]));
 
   for (const recipe of recipes) {

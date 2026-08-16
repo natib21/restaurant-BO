@@ -26,6 +26,29 @@ const variantSchema = new mongoose.Schema({
   isDefault: { type: Boolean, default: false },
 });
 
+const menuIngredientSchema = new mongoose.Schema(
+  {
+    ingredient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Ingredient',
+      required: true,
+    },
+
+    quantity: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    unit: {
+      type: String,
+      enum: ['kg', 'g', 'liter', 'ml', 'pieces', 'boxes', 'cans'],
+      required: true,
+    },
+  },
+  { _id: false }
+);
+
 const menuSchema = new mongoose.Schema(
   {
     merchant: {
@@ -95,10 +118,12 @@ const menuSchema = new mongoose.Schema(
       ref: 'FileAsset',
       default: null,
     },
-    images: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'FileAsset',
-    }],
+    images: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'FileAsset',
+      },
+    ],
     imageUrl: {
       type: String,
       default: null,
@@ -109,7 +134,12 @@ const menuSchema = new mongoose.Schema(
     },
     prepTime: { type: String, default: '15-25 min' },
 
-    ingredients: [String],
+    recipe: {
+      ingredients: {
+        type: [menuIngredientSchema],
+        default: [],
+      },
+    },
     allergens: [String],
 
     available: { type: Boolean, default: true },

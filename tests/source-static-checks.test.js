@@ -53,9 +53,7 @@ describe('static source-file sanity checks', () => {
   });
 
   test('uuid dependency is pinned to v9.x (CommonJS compatible with Jest)', () => {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
-    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     expect(typeof pkg.dependencies.uuid).toBe('string');
     expect(/^\^9|^9/.test(pkg.dependencies.uuid)).toBe(true);
   });
@@ -66,9 +64,7 @@ describe('static source-file sanity checks', () => {
   });
 
   test('package.json has lint, test, verify scripts', () => {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
-    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
     expect(typeof pkg.scripts.test).toBe('string');
     expect(typeof pkg.scripts.lint).toBe('string');
     expect(typeof pkg.scripts['verify:pre-commit']).toBe('string');

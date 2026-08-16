@@ -15,10 +15,12 @@ Content-Type: application/json
 ```
 
 Reference:
+
 - [auth.routes.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/auth/auth.routes.js)
 - Global router mount in [routes/index.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/routes/index.js#L130-L137)
 
 Error shape:
+
 ```json
 {
   "status": "error",
@@ -35,17 +37,18 @@ Route declarations: [suppliers.routes.js](file:///c:/Users/HP/Dev/projects/Resta
 Controller (payload/response shape): [supplier.controller.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/inventory/controller/supplier.controller.js)
 Database schema: [Supplier.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/models/Supplier.js)
 
-| Method | Path                  | Purpose                          |
-|--------|-----------------------|----------------------------------|
-| GET    | `/`                   | List all active suppliers        |
-| POST   | `/`                   | Create a supplier                |
-| GET    | `/:id`                | Get single supplier              |
-| PATCH  | `/:id`                | Update supplier                  |
-| DELETE | `/:id`                | Soft-deactivate supplier (204)   |
+| Method | Path   | Purpose                        |
+| ------ | ------ | ------------------------------ |
+| GET    | `/`    | List all active suppliers      |
+| POST   | `/`    | Create a supplier              |
+| GET    | `/:id` | Get single supplier            |
+| PATCH  | `/:id` | Update supplier                |
+| DELETE | `/:id` | Soft-deactivate supplier (204) |
 
 ### 2.1 POST /api/v1/suppliers — Create supplier
 
 **Request body**
+
 ```json
 {
   "name": "Green Farm Co.",
@@ -64,10 +67,12 @@ Database schema: [Supplier.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/r
 ```
 
 **Notes**
+
 - `paymentTerms` enum (Supplier.js L38–L42): `cash | net_7 | net_15 | net_30 | net_60`
 - `rating` is 1–5 (defaults to 3)
 
 **Response (201)**
+
 ```json
 {
   "status": "success",
@@ -78,13 +83,20 @@ Database schema: [Supplier.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/r
 ### 2.2 GET /api/v1/suppliers — List
 
 **Response**
+
 ```json
 {
   "status": "success",
   "results": 3,
   "data": {
     "suppliers": [
-      { "_id": "…", "name": "Green Farm Co.", "phone": "…", "paymentTerms": "net_15", "isActive": true }
+      {
+        "_id": "…",
+        "name": "Green Farm Co.",
+        "phone": "…",
+        "paymentTerms": "net_15",
+        "isActive": true
+      }
     ]
   }
 }
@@ -98,17 +110,18 @@ Routes: [ingredients.routes.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/
 Controller: [ingredient.controller.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/inventory/controller/ingredient.controller.js)
 Schema (enums/units): [Ingredient.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/models/Ingredient.js)
 
-| Method | Path                  | Purpose                          |
-|--------|-----------------------|----------------------------------|
-| GET    | `/`                   | List ingredients (populates supplier.name) |
-| POST   | `/`                   | Create ingredient                |
-| GET    | `/:id`                | Get ingredient                   |
-| PATCH  | `/:id`                | Update ingredient                |
-| DELETE | `/:id`                | Soft-deactivate (204)            |
+| Method | Path   | Purpose                                    |
+| ------ | ------ | ------------------------------------------ |
+| GET    | `/`    | List ingredients (populates supplier.name) |
+| POST   | `/`    | Create ingredient                          |
+| GET    | `/:id` | Get ingredient                             |
+| PATCH  | `/:id` | Update ingredient                          |
+| DELETE | `/:id` | Soft-deactivate (204)                      |
 
 ### 3.1 POST /api/v1/ingredients — Create
 
 **Request body**
+
 ```json
 {
   "name": "Tomato (local)",
@@ -124,6 +137,7 @@ Schema (enums/units): [Ingredient.js](file:///c:/Users/HP/Dev/projects/Restauran
 ```
 
 **Enums**
+
 - `category` (Ingredient.js L19–L22): `vegetables | meat | dairy | grains | spices | beverages | other`
 - `unit` (Ingredient.js L24–L26): `kg | g | liter | ml | pieces | boxes | cans`
 
@@ -160,17 +174,18 @@ Routes: [recipes.routes.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/rest
 Controller: [recipe.controller.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/inventory/controller/recipe.controller.js)
 Schema: [Recipe.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/models/Recipe.js)
 
-| Method | Path                  | Purpose                                          |
-|--------|-----------------------|--------------------------------------------------|
-| GET    | `/`                   | List recipes (populates menuItem, ingredient)    |
-| POST   | `/`                   | Create recipe (one per menuItem; enforced)       |
-| GET    | `/:id`                | Get recipe with ingredient current stock         |
-| PATCH  | `/:id`                | Update recipe                                    |
-| DELETE | `/:id`                | Soft-deactivate (204)                            |
+| Method | Path   | Purpose                                       |
+| ------ | ------ | --------------------------------------------- |
+| GET    | `/`    | List recipes (populates menuItem, ingredient) |
+| POST   | `/`    | Create recipe (one per menuItem; enforced)    |
+| GET    | `/:id` | Get recipe with ingredient current stock      |
+| PATCH  | `/:id` | Update recipe                                 |
+| DELETE | `/:id` | Soft-deactivate (204)                         |
 
 ### 4.1 POST /api/v1/recipes — Create
 
 **Request body**
+
 ```json
 {
   "menuItem": "6a421b0c03d39206c382def0",
@@ -183,7 +198,7 @@ Schema: [Recipe.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-B
 }
 ```
 
-- `menuItem` references a `Menu` _id. Unique-constraint with merchant (Recipe.js L65).
+- `menuItem` references a `Menu` \_id. Unique-constraint with merchant (Recipe.js L65).
 - `yield` = how many servings the item list produces (cost divides by yield automatically).
 - Response (201) inside `data.recipe`. `totalCost` is auto-calculated pre-save.
 
@@ -199,15 +214,15 @@ Routes: [inventory.routes.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/re
 Controller (100% delegated to InventoryService): [inventory.controller.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/inventory/controller/inventory.controller.js)
 Validation schemas (Zod — hard source of truth for payloads): [inventory.validator.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/inventory/validators/inventory.validator.js)
 
-| Method | Path                                    | Purpose                                           |
-|--------|-----------------------------------------|---------------------------------------------------|
-| POST   | `/adjust`                               | Single-item stock adjustment                      |
-| POST   | `/batch-adjust`                         | Multi-item batch adjustments                      |
-| GET    | `/movements`                            | Audit log of stock movements                      |
-| GET    | `/valuation`                            | Inventory value + counts                          |
-| GET    | `/low-stock`                            | Items where currentStock ≤ minStock               |
-| PATCH  | `/:ingredientId/thresholds`             | Set min/max thresholds                            |
-| POST   | `/validate-order`                       | Pre-order stock check (returns shortages)         |
+| Method | Path                        | Purpose                                   |
+| ------ | --------------------------- | ----------------------------------------- |
+| POST   | `/adjust`                   | Single-item stock adjustment              |
+| POST   | `/batch-adjust`             | Multi-item batch adjustments              |
+| GET    | `/movements`                | Audit log of stock movements              |
+| GET    | `/valuation`                | Inventory value + counts                  |
+| GET    | `/low-stock`                | Items where currentStock ≤ minStock       |
+| PATCH  | `/:ingredientId/thresholds` | Set min/max thresholds                    |
+| POST   | `/validate-order`           | Pre-order stock check (returns shortages) |
 
 ### 5.1 POST /api/v1/inventory/adjust
 
@@ -218,6 +233,7 @@ Authorization: Bearer <token>
 ```
 
 **Payload**
+
 ```json
 {
   "ingredientId": "6a421b0c03d39206c382def0",
@@ -230,10 +246,12 @@ Authorization: Bearer <token>
 ```
 
 **Enums** (inventory.validator.js L28–L34)
+
 - `type`: `in | out | waste | adjustment`
 - `cost` is per-unit; stored with movement so valuation stays accurate.
 
 **Response (200)**
+
 ```json
 {
   "status": "success",
@@ -254,7 +272,7 @@ Authorization: Bearer <token>
 ```json
 {
   "adjustments": [
-    { "ingredientId": "6a421…A", "quantity": 5,  "type": "out",   "reason": "Kitchen prep" },
+    { "ingredientId": "6a421…A", "quantity": 5, "type": "out", "reason": "Kitchen prep" },
     { "ingredientId": "6a421…B", "quantity": 10, "type": "waste", "reason": "Spoilage" }
   ]
 }
@@ -285,14 +303,13 @@ Response includes per-row success/fail in `data.results`.
 ```
 
 Response:
+
 ```json
 {
   "status": "success",
   "data": {
     "available": false,
-    "shortages": [
-      { "ingredientId": "6a421…A", "required": 1.2, "available": 0.7 }
-    ]
+    "shortages": [{ "ingredientId": "6a421…A", "required": 1.2, "available": 0.7 }]
   }
 }
 ```
@@ -305,14 +322,14 @@ Routes: [purchase-orders.routes.js](file:///c:/Users/HP/Dev/projects/Restaurant_
 Controller (receipt triggers stock adj): [purchase-order.controller.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/src/modules/inventory/controller/purchase-order.controller.js)
 Schema: [PurchaseOrder.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/restaurant-BO/models/PurchaseOrder.js)
 
-| Method | Path                  | Purpose                                          |
-|--------|-----------------------|--------------------------------------------------|
-| GET    | `/`                   | List POs (populates supplier, createdBy)         |
-| POST   | `/`                   | Create PO (auto-generates poNumber, totals)      |
-| GET    | `/:id`                | PO detail (populates approvedBy, items.ingredient)|
-| PATCH  | `/:id`                | Update PO                                        |
-| DELETE | `/:id`                | Hard-delete PO                                   |
-| POST   | `/:id/receive`        | Mark PO received AND stock-in each line          |
+| Method | Path           | Purpose                                            |
+| ------ | -------------- | -------------------------------------------------- |
+| GET    | `/`            | List POs (populates supplier, createdBy)           |
+| POST   | `/`            | Create PO (auto-generates poNumber, totals)        |
+| GET    | `/:id`         | PO detail (populates approvedBy, items.ingredient) |
+| PATCH  | `/:id`         | Update PO                                          |
+| DELETE | `/:id`         | Hard-delete PO                                     |
+| POST   | `/:id/receive` | Mark PO received AND stock-in each line            |
 
 ### 6.1 POST /api/v1/purchase-orders — Create
 
@@ -331,6 +348,7 @@ Schema: [PurchaseOrder.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/resta
 ```
 
 **Behaviors (auto-filled, safe to omit from payload)**
+
 - `poNumber` auto-generated (PurchaseOrder.js L92–L99): `PO-YYYYMMDD-NNN`
 - `subtotal` = Σ items.totalPrice; `totalAmount` = subtotal + taxAmount
 - `status` enum (PurchaseOrder.js L48–L51): `draft | sent | confirmed | partially_received | received | cancelled`
@@ -349,9 +367,11 @@ Schema: [PurchaseOrder.js](file:///c:/Users/HP/Dev/projects/Restaurant_App/resta
 ```
 
 For each received item, the controller (purchase-order.controller.js L69–L83) calls:
+
 ```
 InventoryService.adjustStock(merchantId, ingredientId, qty, 'in', 'purchase', poNumber, user, unitPrice)
 ```
+
 then transitions the PO to `status: 'received'` and sets `actualDeliveryDate = now`.
 
 ---

@@ -21,6 +21,8 @@ const auditLogSchema = new mongoose.Schema(
         'PASSWORD_CHANGE',
         'TASK_CREATE',
         'ROLE_ASSIGN',
+        'REPORT_ACCESS',
+        'REPORT_EXPORT',
       ],
     },
     resource: {

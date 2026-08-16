@@ -1,6 +1,6 @@
 /**
  * Subscriptions Module Routes
- * 
+ *
  * Routing for subscription management:
  * - Initiate payment
  * - Verify payment
@@ -36,6 +36,7 @@ router.post(
   subscriptionController.handlePaymentWebhook
 );
 
+router.get('/catalog', subscriptionController.getFeatureCatalog);
 // ============================================================
 // AUTHENTICATED ROUTES (require JWT)
 // ============================================================
@@ -72,10 +73,7 @@ router.post('/trial', subscriptionController.createTrialSubscription);
  * GET /api/v1/subscriptions/status
  * Get current subscription status
  */
-router.get(
-  '/status',
-  subscriptionController.getSubscriptionStatus
-);
+router.get('/status', subscriptionController.getSubscriptionStatus);
 
 /**
  * POST /api/v1/subscriptions/check-feature
@@ -91,10 +89,7 @@ router.post(
  * POST /api/v1/subscriptions/renew
  * Renew existing subscription
  */
-router.post(
-  '/renew',
-  subscriptionController.renewSubscription
-);
+router.post('/renew', subscriptionController.renewSubscription);
 
 // ============================================================
 // ADMIN ROUTES (require admin role)

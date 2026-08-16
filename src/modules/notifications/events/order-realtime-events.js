@@ -25,7 +25,14 @@ function broadcastEvent(eventType, aggregateType, aggregateId, merchant, branch,
 /**
  * Customer place-order realtime events (same shapes as prior PostCommitEventQueue).
  */
-function buildCustomerPlaceOrderEvents({ order, table, orderItems, branchId, merchantId, ingredients }) {
+function buildCustomerPlaceOrderEvents({
+  order,
+  table,
+  orderItems,
+  branchId,
+  merchantId,
+  ingredients,
+}) {
   const branchIdStr = branchId.toString();
   const merchantIdStr = merchantId.toString();
   const aggregateId = order._id;
@@ -131,20 +138,28 @@ function buildStaffPlaceOrderEvents({ order, branchId, merchantId, tableNumber, 
   const aggregateId = order._id;
 
   return [
-    roomEvent('order:create', 'order', aggregateId, merchantId, branchId, `branch:${branchIdStr}:perm:ORDER_VIEW`, {
-      orderId: order._id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      tableNumber: order.tableNumber,
-      location: order.location,
-      totalAmount: order.totalAmount,
-      branch: branchId,
-      placedAt: order.placedAt,
-      items: order.items,
-      orderType: order.orderType,
-      customerName: order.customerName,
-      placedBy: placedByName,
-    }),
+    roomEvent(
+      'order:create',
+      'order',
+      aggregateId,
+      merchantId,
+      branchId,
+      `branch:${branchIdStr}:perm:ORDER_VIEW`,
+      {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        tableNumber: order.tableNumber,
+        location: order.location,
+        totalAmount: order.totalAmount,
+        branch: branchId,
+        placedAt: order.placedAt,
+        items: order.items,
+        orderType: order.orderType,
+        customerName: order.customerName,
+        placedBy: placedByName,
+      }
+    ),
     roomEvent(
       'notification',
       'notification',
@@ -210,10 +225,18 @@ function buildOrderStatusUpdatedEvents({ order, previousStatus }) {
       `branch:${branchIdStr}:perm:ORDER_MANAGE`,
       payload
     ),
-    roomEvent('order:status-updated', 'order', aggregateId, merchantId, branchId, `branch:${branchIdStr}`, {
-      ...payload,
-      itemsCount: order.items.reduce((sum, i) => sum + i.quantity, 0),
-    }),
+    roomEvent(
+      'order:status-updated',
+      'order',
+      aggregateId,
+      merchantId,
+      branchId,
+      `branch:${branchIdStr}`,
+      {
+        ...payload,
+        itemsCount: order.items.reduce((sum, i) => sum + i.quantity, 0),
+      }
+    ),
   ];
 
   if (['preparing', 'ready'].includes(order.status)) {
@@ -279,7 +302,15 @@ function buildOrderPaidEvents({ order, paymentMethod, bankName, image }) {
   };
 
   return [
-    roomEvent('order-paid', 'order', aggregateId, merchantId, branchId, `branch:${branchIdStr}`, paidPayload),
+    roomEvent(
+      'order-paid',
+      'order',
+      aggregateId,
+      merchantId,
+      branchId,
+      `branch:${branchIdStr}`,
+      paidPayload
+    ),
     roomEvent(
       'order-paid',
       'order',

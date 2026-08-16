@@ -1,6 +1,6 @@
 function attachMenuItemImage(item, req) {
   return {
-    ...item.toObject ? item.toObject() : item,
+    ...(item.toObject ? item.toObject() : item),
     image: item.image ? `${req.protocol}s://${req.get('host')}/img/menu/${item.image}` : null,
   };
 }

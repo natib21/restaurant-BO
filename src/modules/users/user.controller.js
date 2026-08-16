@@ -73,9 +73,7 @@ exports.getUser = catchAsync(async (req, res, next) => {
     if (!merchantId) return next(new AppError('Merchant context is required', 403));
     filter.merchant = merchantId;
   }
-  const user = await User.findOne(filter).select(
-    '-password -passwordConfirm -passwordResetToken'
-  );
+  const user = await User.findOne(filter).select('-password -passwordConfirm -passwordResetToken');
   if (!user) return next(new AppError('User not found', 404));
   res.status(200).json({ status: 'success', data: { user } });
 });

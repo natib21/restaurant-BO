@@ -27,8 +27,6 @@ async function authenticateSocket(socket, next) {
 
     if (!token) return next(new Error('Authentication required'));
 
-    
-
     const env = loadEnv();
     const decoded = await verifyJwt(token, env.JWT_SECRET);
 
@@ -46,9 +44,7 @@ async function authenticateSocket(socket, next) {
     }
 
     socket.data.user = user;
-    socket.data.permissions = (user.role?.tasks || [])
-      .map(t => t.name)
-      .filter(Boolean);
+    socket.data.permissions = (user.role?.tasks || []).map(t => t.name).filter(Boolean);
     next();
   } catch {
     next(new Error('Invalid or expired token'));

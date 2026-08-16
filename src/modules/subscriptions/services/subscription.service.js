@@ -1,6 +1,6 @@
 /**
  * Subscriptions Service
- * 
+ *
  * Pure business logic layer — NO Express dependencies (req, res).
  * Handles:
  * - Subscription lifecycle (initiate, verify, expire, renew)
@@ -11,26 +11,18 @@
 
 const axios = require('axios');
 const { SubscriptionRepository } = require('../repositories/subscription.repository');
-const { getPaymentProvider } = require('../../../infrastructure/payments/payment-provider.interface');
 const {
-  featureCatalog,
-  trialFeatureSet,
-  trialDurationMonths,
-} = require('../dto/subscription.dto');
+  getPaymentProvider,
+} = require('../../../infrastructure/payments/payment-provider.interface');
+const { featureCatalog, trialFeatureSet, trialDurationMonths } = require('../dto/subscription.dto');
 
 class SubscriptionService {
-  /**
-   * Calculate subscription end date
-   */
   static calculateEndDate(months = 1) {
     const date = new Date();
     date.setMonth(date.getMonth() + months);
     return date;
   }
 
-  /**
-   * Calculate days remaining in subscription
-   */
   static calculateDaysRemaining(endDate) {
     const now = new Date();
     const timeRemaining = endDate - now;
@@ -38,9 +30,6 @@ class SubscriptionService {
     return Math.max(0, daysRemaining);
   }
 
-  /**
-   * Validate requested feature list
-   */
   static validateFeatures(features) {
     if (!Array.isArray(features) || features.length === 0) {
       throw new Error('At least one feature must be selected');
@@ -54,9 +43,6 @@ class SubscriptionService {
     return Array.from(new Set(features));
   }
 
-  /**
-   * Calculate total amount for chosen features
-   */
   static calculateSubscriptionAmount(features, durationMonths) {
     const normalized = this.validateFeatures(features);
     return normalized.reduce((sum, feature) => {
@@ -65,30 +51,39 @@ class SubscriptionService {
     }, 0);
   }
 
-  /**
-   * Find the latest active subscription for merchant
-   */
   static async getActiveSubscription(merchantId) {
     return SubscriptionRepository.findByMerchant(merchantId);
   }
 
-  /**
-   * Check if subscription is currently active
-   */
   static isSubscriptionCurrentlyActive(subscription) {
     if (!subscription) return false;
     return subscription.status === 'active' && new Date() < subscription.endDate;
   }
 
   /**
-   * Initiate subscription payment
-   * 
-   * @param {string} merchantId - Merchant requesting subscription
-   * @param {string[]} features - Feature keys to purchase
-   * @param {number} durationMonths - Duration in months
-   * @param {Object} merchantData - Merchant object with email, phone, businessName
-   * @returns {Object} { tx_ref, checkout_url, session, subscription }
+   * Build a Merchant.features.optional.<key>.enabled patch from a list of
+   * granted feature keys.
+   *
+   * This is the ONLY place that writes to Merchant.features.optional — every
+   * call site below must route through it so Merchant (current operational
+   * state) and Subscription (entitlement record) never drift apart.
+   *
+   * Every known optional feature key is included in the result — keys in
+   * `activeFeatureKeys` are set true, everything else is explicitly set
+   * false. This makes the patch a full re-derivation, not an incremental
+   * toggle, so a merchant's features always reflect exactly what their
+   * current active subscription(s) grant — no leftover flags from an
+   * earlier plan.
    */
+  static buildFeatureUpdateFields(activeFeatureKeys = []) {
+    const allKeys = Object.keys(featureCatalog);
+    const fields = {};
+    allKeys.forEach(key => {
+      fields[`features.optional.${key}.enabled`] = activeFeatureKeys.includes(key);
+    });
+    return fields;
+  }
+
   static async initiateSubscription(merchantId, features, durationMonths, merchantData) {
     const normalizedFeatures = this.validateFeatures(features);
     const amount = this.calculateSubscriptionAmount(normalizedFeatures, durationMonths);
@@ -103,7 +98,9 @@ class SubscriptionService {
       amount,
       currency: 'ETB',
       transactionReference: tx_ref,
-      status: 'pending',
+      status: 'pending', // NOTE: features are NOT enabled yet — this is
+      // intentional, subscription is pending until verifySubscription/
+      // handleWebhookEvent confirms payment succeeded.
       paymentProvider: provider,
       startDate: new Date(),
       endDate: this.calculateEndDate(durationMonths),
@@ -133,11 +130,6 @@ class SubscriptionService {
     };
   }
 
-  /**
-   * Verify subscription payment completion
-   * 
-   * Called after customer returns from payment gateway
-   */
   static async verifySubscription(tx_ref) {
     const provider = process.env.PAYMENT_PROVIDER || 'manual';
     const paymentProvider = getPaymentProvider(provider);
@@ -161,35 +153,27 @@ class SubscriptionService {
       throw new Error('Subscription record not found');
     }
 
-    const updated = await SubscriptionRepository.updateSubscriptionById(
-      subscription._id,
-      {
-        status: 'active',
-        verifiedAt: new Date(),
-        gatewayResponse: paymentData,
-      }
-    );
+    const updated = await SubscriptionRepository.updateSubscriptionById(subscription._id, {
+      status: 'active',
+      verifiedAt: new Date(),
+      gatewayResponse: paymentData,
+    });
 
     const merchantUpdate = {
       currentSubscription: subscription._id,
       isSubscriptionActive: true,
       status: 'approved',
       mode: 'Live',
+      subscriptionPlan: subscription.plan || 'feature',
+      // FIX: actually enable the purchased features on the merchant —
+      // previously only status/plan fields were updated here.
+      ...this.buildFeatureUpdateFields(subscription.features),
     };
-
-    if (subscription.plan) {
-      merchantUpdate.subscriptionPlan = subscription.plan;
-    } else {
-      merchantUpdate.subscriptionPlan = 'feature';
-    }
 
     await SubscriptionRepository.updateMerchantSubscription(subscription.merchant, merchantUpdate);
     return updated;
   }
 
-  /**
-   * Get current active subscription for merchant
-   */
   static async getSubscriptionStatus(merchantId) {
     const subscription = await SubscriptionRepository.findByMerchant(merchantId);
 
@@ -210,11 +194,6 @@ class SubscriptionService {
     };
   }
 
-  /**
-   * Check if merchant has feature access
-   * 
-   * Validates if merchant's subscription includes requested feature
-   */
   static async checkFeatureAccess(merchantId, feature) {
     const subscription = await this.getActiveSubscription(merchantId);
 
@@ -234,11 +213,6 @@ class SubscriptionService {
     return { hasAccess: true };
   }
 
-  /**
-   * Verify webhook signature from the configured payment provider
-   * 
-   * Ensures webhook events are authentic for the given provider
-   */
   static verifyWebhookSignature(provider, rawBody, signatureHeader) {
     if (!signatureHeader) {
       throw new Error(`Missing x-${provider}-signature header`);
@@ -252,13 +226,7 @@ class SubscriptionService {
     return paymentProvider.verifyWebhookSignature(rawBody, signatureHeader);
   }
 
-  /**
-   * Handle webhook event from a payment provider
-   * 
-   * Processes provider-specific payment events and updates subscription state
-   */
   static async handleWebhookEvent(provider, payload, eventId) {
-    // Check for duplicate (idempotency)
     if (eventId) {
       const alreadyProcessed = await SubscriptionRepository.isWebhookProcessed(eventId);
       if (alreadyProcessed) {
@@ -274,14 +242,13 @@ class SubscriptionService {
       return { status: 'ignored', reason: 'No transaction reference' };
     }
 
-    // Find subscription
-    const subscription = await SubscriptionRepository.findByTransactionReference(transactionReference);
+    const subscription =
+      await SubscriptionRepository.findByTransactionReference(transactionReference);
 
     if (!subscription) {
       return { status: 'ignored', reason: 'Subscription not found' };
     }
 
-    // Determine new status based on event
     let newStatus = subscription.status;
     let shouldActivateMerchant = false;
 
@@ -292,7 +259,6 @@ class SubscriptionService {
       newStatus = 'canceled';
     }
 
-    // Update subscription
     const updateFields = {
       status: newStatus,
       verifiedAt: new Date(),
@@ -309,13 +275,15 @@ class SubscriptionService {
       updateFields
     );
 
-    // Activate merchant if payment succeeded
     if (shouldActivateMerchant) {
       await SubscriptionRepository.updateMerchantSubscription(subscription.merchant, {
         subscriptionPlan: subscription.plan,
         isSubscriptionActive: true,
         status: 'approved',
         mode: 'Live',
+        // FIX: same gap as verifySubscription — webhook-driven activation
+        // never enabled the merchant's features either.
+        ...this.buildFeatureUpdateFields(subscription.features),
       });
     }
 
@@ -326,11 +294,6 @@ class SubscriptionService {
     };
   }
 
-  /**
-   * Check and expire old subscriptions
-   * 
-   * Called periodically to update expired subscriptions
-   */
   static async expireOldSubscriptions() {
     const expired = await SubscriptionRepository.getExpiredSubscriptions();
 
@@ -341,24 +304,28 @@ class SubscriptionService {
 
       await SubscriptionRepository.updateMerchantSubscription(sub.merchant, {
         isSubscriptionActive: false,
+        // FIX: previously left every features.optional.*.enabled flag
+        // untouched, so a merchant whose subscription expired kept
+        // hasFeature() access indefinitely. buildFeatureUpdateFields([])
+        // sets every optional feature to false.
+        //
+        // NOTE: this assumes one active subscription per merchant at a
+        // time (matches findByMerchant's single-doc lookup elsewhere in
+        // this service). If you later allow multiple concurrent
+        // subscriptions per merchant (e.g. stacked add-ons), this needs
+        // to re-derive from all remaining active subscriptions instead
+        // of zeroing everything out.
+        ...this.buildFeatureUpdateFields([]),
       });
     }
 
     return { expired: expired.length };
   }
 
-  /**
-   * Get subscriptions expiring soon (for notifications)
-   */
   static async getExpiringSubscriptions(daysAhead = 7) {
     return SubscriptionRepository.getExpiringSubscriptions(daysAhead);
   }
 
-  /**
-   * Renew subscription
-   * 
-   * Called to extend an existing subscription
-   */
   static async renewSubscription(merchantId, durationMonths = 1) {
     const currentSub = await SubscriptionRepository.findByMerchant(merchantId);
 
@@ -393,14 +360,14 @@ class SubscriptionService {
       status: 'approved',
       mode: 'Live',
       subscriptionPlan: renewal.plan,
+      // FIX: renewal carries the same features forward but nothing wrote
+      // them onto the merchant.
+      ...this.buildFeatureUpdateFields(activeFeatures),
     });
 
     return renewal;
   }
 
-  /**
-   * Get subscription statistics
-   */
   static async createTrialSubscription(merchantId) {
     const existing = await this.getActiveSubscription(merchantId);
     if (existing && this.isSubscriptionCurrentlyActive(existing)) {
@@ -433,6 +400,10 @@ class SubscriptionService {
       status: 'approved',
       mode: 'Trial',
       subscriptionPlan: 'trial',
+      // FIX: this was the exact bug confirmed in the live merchant
+      // record — trial active, hasActiveAccess true, but every
+      // features.optional.*.enabled flag stuck at false.
+      ...this.buildFeatureUpdateFields(trialFeatureSet),
     });
 
     return subscription;
@@ -440,6 +411,15 @@ class SubscriptionService {
 
   static async getSubscriptionStats() {
     return SubscriptionRepository.getSubscriptionStats();
+  }
+
+  static getFeatureCatalog() {
+    return Object.fromEntries(
+      Object.entries(featureCatalog).map(([key, value]) => [
+        key,
+        { pricePerMonth: value.pricePerMonth },
+      ])
+    );
   }
 }
 

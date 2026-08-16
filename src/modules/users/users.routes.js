@@ -18,18 +18,17 @@ const router = express.Router();
 router.use(protect);
 
 // ── Self-service (any authenticated user) ─────────────────────────────────────
-router.get('/me',     userController.getMe);
-router.patch('/me',   userController.updateMe);
-router.delete('/me',  userController.deleteMe);
+router.get('/me', userController.getMe);
+router.patch('/me', userController.updateMe);
+router.delete('/me', userController.deleteMe);
 
 // ── Admin user management (task RBAC) ─────────────────────────────────────────
 router.use(restrictTo());
 
-router.route('/')
-  .get(userController.getAllUsers)
-  .post(userController.createUser);
+router.route('/').get(userController.getAllUsers).post(userController.createUser);
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(userController.getUser)
   .patch(userController.updateUser)
   .delete(userController.deleteUser);

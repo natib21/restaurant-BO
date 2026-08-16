@@ -10,7 +10,7 @@
 const express = require('express');
 const { protect, restrictTo } = require('../../common/guards/auth.guard');
 const { protectTableSession } = require('../customers/customer-session.guard');
-const sessionController       = require('./session.controller');
+const sessionController = require('./session.controller');
 
 const router = express.Router();
 
@@ -24,8 +24,8 @@ router.post('/link', protectTableSession, sessionController.linkAccount);
 router.use(protect);
 router.use(restrictTo());
 
-router.patch('/:id/free',     sessionController.freeTable);
-router.get('/',               sessionController.getAllSessions);
+router.patch('/:id/free', sessionController.freeTable);
+router.get('/', sessionController.getAllSessions);
 router.get('/table/:tableId', sessionController.getSessionByTable);
 
 module.exports = router;

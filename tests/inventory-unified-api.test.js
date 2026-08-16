@@ -32,10 +32,7 @@ describe('inventory unified public API', () => {
         'scheduleInventoryRealtimeEvents',
       ];
       expected.forEach(m => {
-        expect(typeof mod.InventoryService[m]).toBe(
-          'function',
-          `InventoryService.${m} missing`
-        );
+        expect(typeof mod.InventoryService[m]).toBe('function', `InventoryService.${m} missing`);
       });
     });
   });

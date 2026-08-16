@@ -1,6 +1,6 @@
 /**
  * Orders Module Integration Tests
- * 
+ *
  * Tests:
  * 1. Place order (customer)
  * 2. Place order (staff)
@@ -13,6 +13,7 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const { createApp } = require('../src/app/create-app');
+const { connectDatabase, disconnectDatabase } = require('../src/common/database/connection');
 const Order = require('../models/orderModel');
 const Merchant = require('../models/merchantModel');
 const Branch = require('../models/branchModel');
@@ -25,13 +26,20 @@ let menuItemId;
 let authToken;
 
 beforeAll(async () => {
+  // Connect to test database
+  await connectDatabase();
+  
   app = createApp();
 
   // Seed test data
   const merchant = await Merchant.create({
+    businessName: 'Test Restaurant',
+    slug: 'test-restaurant',
     name: 'Test Restaurant',
     email: 'test@restaurant.com',
     phone: '+251911111111',
+    status: 'approved',
+    isActive: true
   });
   merchantId = merchant._id;
 
@@ -39,6 +47,12 @@ beforeAll(async () => {
     merchant: merchantId,
     name: 'Test Branch',
     phone: '+251911111111',
+    location: {
+      type: 'Point',
+      coordinates: [38.7578, 9.025],
+      city: 'Addis Ababa',
+      formattedAddress: 'Test Branch, Addis Ababa, Ethiopia'
+    }
   });
   branchId = branch._id;
 
@@ -46,6 +60,7 @@ beforeAll(async () => {
     merchant: merchantId,
     branch: branchId,
     name: 'Test Pizza',
+    category: 'Main Course',
     price: 250,
     publishStatus: 'published',
   });
@@ -58,15 +73,17 @@ beforeAll(async () => {
 afterAll(async () => {
   // Cleanup
   await Order.deleteMany({ merchant: merchantId });
+  await Menu.deleteOne({ _id: menuItemId });
+  await Branch.deleteOne({ _id: branchId });
   await Merchant.deleteOne({ _id: merchantId });
-  await mongoose.connection.close();
+  await disconnectDatabase();
 });
 
 describe('Orders Module - Integration Tests', () => {
-  describe('POST /api/v1/orders/staff - Staff Place Order', () => {
+  describe('POST /api/v1/order/staff - Staff Place Order', () => {
     it('should create order with valid data', async () => {
       const response = await request(app)
-        .post('/api/v1/orders/staff')
+        .post('/api/v1/order/staff')
         .set('Authorization', authToken)
         .send({
           branchId: branchId.toString(),
@@ -94,7 +111,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should reject invalid order type', async () => {
       const response = await request(app)
-        .post('/api/v1/orders/staff')
+        .post('/api/v1/order/staff')
         .set('Authorization', authToken)
         .send({
           branchId: branchId.toString(),
@@ -118,7 +135,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should reject dine_in without tableId', async () => {
       const response = await request(app)
-        .post('/api/v1/orders/staff')
+        .post('/api/v1/order/staff')
         .set('Authorization', authToken)
         .send({
           branchId: branchId.toString(),
@@ -141,7 +158,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should reject empty items', async () => {
       const response = await request(app)
-        .post('/api/v1/orders/staff')
+        .post('/api/v1/order/staff')
         .set('Authorization', authToken)
         .send({
           branchId: branchId.toString(),
@@ -157,7 +174,7 @@ describe('Orders Module - Integration Tests', () => {
     });
   });
 
-  describe('PATCH /api/v1/orders/:id/status - Update Order Status', () => {
+  describe('PATCH /api/v1/order/:id/status - Update Order Status', () => {
     let orderId;
 
     beforeEach(async () => {
@@ -166,7 +183,7 @@ describe('Orders Module - Integration Tests', () => {
         merchant: merchantId,
         branch: branchId,
         customerName: 'Test Customer',
-        orderType: 'dine_in',
+        orderType: 'takeaway',
         status: 'pending',
         items: [
           {
@@ -176,6 +193,7 @@ describe('Orders Module - Integration Tests', () => {
             totalPrice: 250,
           },
         ],
+        subtotal: 250,
         totalAmount: 250,
         orderNumber: `#T${Date.now()}`,
       });
@@ -184,7 +202,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should update status to accepted', async () => {
       const response = await request(app)
-        .patch(`/api/v1/orders/${orderId}/status`)
+        .patch(`/api/v1/order/${orderId}/status`)
         .set('Authorization', authToken)
         .send({
           status: 'accepted',
@@ -200,7 +218,7 @@ describe('Orders Module - Integration Tests', () => {
     it('should validate status transition', async () => {
       // Try invalid transition
       const response = await request(app)
-        .patch(`/api/v1/orders/${orderId}/status`)
+        .patch(`/api/v1/order/${orderId}/status`)
         .set('Authorization', authToken)
         .send({
           status: 'invalid_status',
@@ -213,7 +231,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should reject invalid order ID', async () => {
       const response = await request(app)
-        .patch(`/api/v1/orders/invalid_id/status`)
+        .patch(`/api/v1/order/invalid_id/status`)
         .set('Authorization', authToken)
         .send({
           status: 'accepted',
@@ -224,7 +242,7 @@ describe('Orders Module - Integration Tests', () => {
     });
   });
 
-  describe('PATCH /api/v1/orders/:id/add-items - Add Items', () => {
+  describe('PATCH /api/v1/order/:id/add-items - Add Items', () => {
     let orderId;
 
     beforeEach(async () => {
@@ -232,7 +250,7 @@ describe('Orders Module - Integration Tests', () => {
         merchant: merchantId,
         branch: branchId,
         customerName: 'Test Customer',
-        orderType: 'dine_in',
+        orderType: 'takeaway',
         status: 'pending',
         items: [
           {
@@ -242,6 +260,7 @@ describe('Orders Module - Integration Tests', () => {
             totalPrice: 250,
           },
         ],
+        subtotal: 250,
         totalAmount: 250,
         orderNumber: `#T${Date.now()}`,
       });
@@ -250,7 +269,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should add items to order', async () => {
       const response = await request(app)
-        .patch(`/api/v1/orders/${orderId}/add-items`)
+        .patch(`/api/v1/order/${orderId}/add-items`)
         .set('Authorization', authToken)
         .send({
           items: [
@@ -269,7 +288,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should reject empty items array', async () => {
       const response = await request(app)
-        .patch(`/api/v1/orders/${orderId}/add-items`)
+        .patch(`/api/v1/order/${orderId}/add-items`)
         .set('Authorization', authToken)
         .send({
           items: [],
@@ -280,7 +299,7 @@ describe('Orders Module - Integration Tests', () => {
     });
   });
 
-  describe('GET /api/v1/orders/active - Get Active Orders', () => {
+  describe('GET /api/v1/order/active - Get Active Orders', () => {
     it('should return active orders', async () => {
       // Create test order
       await Order.create({
@@ -302,7 +321,7 @@ describe('Orders Module - Integration Tests', () => {
       });
 
       const response = await request(app)
-        .get('/api/v1/orders/active')
+        .get('/api/v1/order/active')
         .set('Authorization', authToken);
 
       expect(response.status).toBe(200);
@@ -313,7 +332,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('should filter by status', async () => {
       const response = await request(app)
-        .get('/api/v1/orders/active?status=pending')
+        .get('/api/v1/order/active?status=pending')
         .set('Authorization', authToken);
 
       expect(response.status).toBe(200);
@@ -327,7 +346,7 @@ describe('Orders Module - Integration Tests', () => {
   describe('Response Format Validation', () => {
     it('all success responses should have correct format', async () => {
       const response = await request(app)
-        .get('/api/v1/orders/active')
+        .get('/api/v1/order/active')
         .set('Authorization', authToken);
 
       expect(response.body).toHaveProperty('success');
@@ -339,7 +358,7 @@ describe('Orders Module - Integration Tests', () => {
 
     it('all error responses should have correct format', async () => {
       const response = await request(app)
-        .post('/api/v1/orders/staff')
+        .post('/api/v1/order/staff')
         .set('Authorization', authToken)
         .send({
           // Invalid/empty body

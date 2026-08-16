@@ -10,18 +10,19 @@
 
 const express = require('express');
 const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const { requireFeature } = require('../subscriptions/middleware/feature-access.middleware');
-const analyticsController     = require('./analytics.controller');
+const { requireFeature } = require('../../common/guards/feature.guard'); // ← was subscriptions/middleware/feature-access.middleware
 
-// In development allow bypassing feature gating for easier testing
-const featureMiddleware = process.env.NODE_ENV === 'development' ? (req, res, next) => next() : requireFeature('analytics');
+const analyticsController = require('./analytics.controller');
+
+const featureMiddleware =
+  process.env.NODE_ENV === 'development' ? (req, res, next) => next() : requireFeature('reports');
 
 const router = express.Router();
 
 router.use(protect);
 router.use(restrictTo());
 
-router.get('/dashboard',   featureMiddleware, analyticsController.getDashboard);
-router.post('/messages',   featureMiddleware, analyticsController.sendDirectMessage);
+router.get('/dashboard', featureMiddleware, analyticsController.getDashboard);
+router.post('/messages', featureMiddleware, analyticsController.sendDirectMessage);
 
 module.exports = router;

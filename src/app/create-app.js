@@ -21,23 +21,26 @@
  * 16. Global error handler
  */
 
-const express      = require('express');
-const cors         = require('cors');
-const morgan       = require('morgan');
-const rateLimit    = require('express-rate-limit');
-const helmet       = require('helmet');
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
-const hpp          = require('hpp');
-const path         = require('path');
+const hpp = require('hpp');
+const path = require('path');
 const cookieParser = require('cookie-parser');
 
-const { loadEnv, getCorsOrigins }       = require('../config/env');
-const { morganStream }                  = require('../../utils/logger');
-const { initRequestContext, syncRequestContext } = require('../common/middleware/request-context.middleware');
-const { enrichBranchContext }           = require('../common/middleware/branch-context.middleware');
-const responseMiddleware                = require('../common/middleware/response.middleware');
-const AppError                          = require('../../utils/appError');
-const GlobalErrorHandler                = require('../../utils/globalErrorHandler');
+const { loadEnv, getCorsOrigins } = require('../config/env');
+const { morganStream } = require('../../utils/logger');
+const {
+  initRequestContext,
+  syncRequestContext,
+} = require('../common/middleware/request-context.middleware');
+const { enrichBranchContext } = require('../common/middleware/branch-context.middleware');
+const responseMiddleware = require('../common/middleware/response.middleware');
+const AppError = require('../../utils/appError');
+const GlobalErrorHandler = require('../../utils/globalErrorHandler');
 
 // ── Single aggregated router (all domains) ────────────────────────────────────
 const apiRoutes = require('../routes/index');
@@ -86,16 +89,19 @@ function createApp() {
     legacyHeaders: false,
   });
 
-  app.use('/api/v1/auth/login',           authLimiter);
-  app.use('/api/v1/auth/signup',          authLimiter);
+  app.use('/api/v1/auth/login', authLimiter);
+  app.use('/api/v1/auth/signup', authLimiter);
   app.use('/api/v1/auth/forgot-password', authLimiter);
-  app.use('/api',                         apiLimiter);
+  app.use('/api', apiLimiter);
 
   // ── 5. Static files ───────────────────────────────────────────────────────
-  app.use('/img/menu',         express.static(path.join(process.cwd(), 'uploads/img/menu')));
-  app.use('/img/combo',        express.static(path.join(process.cwd(), 'uploads/img/combo')));
-  app.use('/img/orderPayment', express.static(path.join(process.cwd(), 'uploads/img/orderPayment')));
-  app.use('/img/merchants',    express.static(path.join(process.cwd(), 'uploads/img/merchants')));
+  app.use('/img/menu', express.static(path.join(process.cwd(), 'uploads/img/menu')));
+  app.use('/img/combo', express.static(path.join(process.cwd(), 'uploads/img/combo')));
+  app.use(
+    '/img/orderPayment',
+    express.static(path.join(process.cwd(), 'uploads/img/orderPayment'))
+  );
+  app.use('/img/merchants', express.static(path.join(process.cwd(), 'uploads/img/merchants')));
 
   // ── 6. Body parser ────────────────────────────────────────────────────────
   app.use(express.json({ limit: '10mb' }));
@@ -118,17 +124,20 @@ function createApp() {
   app.use(responseMiddleware);
 
   // ── 13. Logging ───────────────────────────────────────────────────────────
-  morgan.token('reqId',      req => req.ctx?.requestId || '-');
-  morgan.token('userId',     req => req.user?._id?.toString() || req.ctx?.actorId?.toString() || '-');
+  morgan.token('reqId', req => req.ctx?.requestId || '-');
+  morgan.token('userId', req => req.user?._id?.toString() || req.ctx?.actorId?.toString() || '-');
   morgan.token('merchantId', req => {
     const mid = req.ctx?.merchantId || req.user?.merchant?._id || req.merchantId;
     return mid ? String(mid) : '-';
   });
 
   app.use(
-    morgan(':method :url :status :res[content-length] - :response-time ms :reqId :userId :merchantId', {
-      stream: { write: msg => morganStream.write(msg.trim()) },
-    })
+    morgan(
+      ':method :url :status :res[content-length] - :response-time ms :reqId :userId :merchantId',
+      {
+        stream: { write: msg => morganStream.write(msg.trim()) },
+      }
+    )
   );
 
   if (env.NODE_ENV === 'development') {

@@ -13,7 +13,23 @@ const subscriptionSchema = new mongoose.Schema(
       default: 'feature',
     },
     features: {
-      type: [String],
+      type: [
+        {
+          type: String,
+          enum: [
+            'orders',
+            'inventory',
+            'multiBranch',
+            'telegram',
+            'sales',
+            'reports',
+            'customerManagement',
+            'deliveryManagement',
+            'paymentIntegration',
+            'restaurantWebsite',
+          ],
+        },
+      ],
       default: [],
     },
     isTrial: {

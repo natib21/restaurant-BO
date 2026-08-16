@@ -1,6 +1,6 @@
 /**
  * Inventory Repository
- * 
+ *
  * Pure MongoDB data access layer.
  * No business logic, no service calls, no Express dependencies.
  * All methods accept optional `session` for transaction support.
@@ -42,15 +42,12 @@ class InventoryRepository {
    * Find all active ingredients for merchant
    */
   static findActiveIngredientsByMerchant(merchantId, options = {}) {
-    return this.findIngredients(
-      { merchant: merchantId, isActive: true },
-      options
-    );
+    return this.findIngredients({ merchant: merchantId, isActive: true }, options);
   }
 
   /**
    * Update ingredient stock (for stock adjustments)
-   * 
+   *
    * @param {Object} filter - MongoDB query filter
    * @param {Object} update - MongoDB update operators
    * @param {Object} options - { session }
@@ -92,7 +89,7 @@ class InventoryRepository {
 
   /**
    * Create stock movement records
-   * 
+   *
    * Critical: Accepts session for ACID transactions
    */
   static createStockMovements(docs, options = {}) {
@@ -150,7 +147,7 @@ class InventoryRepository {
   /**
    * Atomically update ingredient stock
    * Used by deductStockItems for order processing
-   * 
+   *
    * @param {string} ingredientId
    * @param {number} quantity - Amount to deduct (positive number)
    * @param {Object} options - { session }
@@ -171,17 +168,14 @@ class InventoryRepository {
   /**
    * Validate stock availability (before deduction)
    * Used to check if order can be fulfilled
-   * 
+   *
    * @param {string} ingredientId
    * @param {number} requiredQuantity
    * @param {Object} options - { session }
    * @returns {boolean} true if stock available
    */
   static async hasEnoughStock(ingredientId, requiredQuantity, options = {}) {
-    const ingredient = await this.findIngredient(
-      { _id: ingredientId },
-      options
-    );
+    const ingredient = await this.findIngredient({ _id: ingredientId }, options);
 
     if (!ingredient) return false;
     return ingredient.currentStock >= requiredQuantity;
@@ -190,7 +184,7 @@ class InventoryRepository {
   /**
    * Bulk check stock availability
    * Used for order validation before placement
-   * 
+   *
    * @param {Array} items - [{ ingredientId, quantity }, ...]
    * @param {Object} options - { session }
    * @returns {Object} { available: bool, shortages: [{ ingredientId, required, available }] }
@@ -199,17 +193,10 @@ class InventoryRepository {
     const shortages = [];
 
     for (const item of items) {
-      const hasStock = await this.hasEnoughStock(
-        item.ingredientId,
-        item.quantity,
-        options
-      );
+      const hasStock = await this.hasEnoughStock(item.ingredientId, item.quantity, options);
 
       if (!hasStock) {
-        const ingredient = await this.findIngredient(
-          { _id: item.ingredientId },
-          options
-        );
+        const ingredient = await this.findIngredient({ _id: item.ingredientId }, options);
         shortages.push({
           ingredientId: item.ingredientId,
           required: item.quantity,
@@ -258,7 +245,7 @@ class InventoryRepository {
     const { session } = options;
     // Assuming you have an AuditLog model
     const AuditLog = require('../../../../models/auditLogModel');
-    
+
     if (session) {
       return AuditLog.create([data], { session });
     }

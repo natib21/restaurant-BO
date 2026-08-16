@@ -65,12 +65,33 @@ const orderSchema = new Schema(
       default: 'dine_in',
       required: true,
     },
-    status: {
+    source: {
       type: String,
-      enum: ['pending', 'accepted', 'preparing', 'ready', 'served', 'completed', 'canceled'],
-      default: 'pending',
+      enum: ['web', 'telegram', 'admin', 'waiter'],
+      default: 'web',
+      required: true,
       index: true,
     },
+    deliveryNotes: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+    },
+    deliveryFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+   status: {
+  type: String,
+  enum: [
+    'pending', 'accepted', 'preparing', 'ready', 'served',
+    'out_for_delivery', 'delivered',
+    'completed', 'canceled',
+  ],
+  default: 'pending',
+  index: true,
+},
     statusHistory: [
       {
         fromStatus: { type: String, required: true },
@@ -168,6 +189,8 @@ const orderSchema = new Schema(
     readyAt: Date,
     servedAt: Date,
     completedAt: Date,
+    outForDeliveryAt: Date,
+deliveredAt: Date,
 
     // Users assigned by merchant (dynamic roles)
     assignedWaiter: { type: Schema.Types.ObjectId, ref: 'User', index: true },
@@ -203,6 +226,7 @@ orderSchema.pre('validate', async function (next) {
       prefix = this.tableNumber.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'POS';
     } else if (this.orderType === 'delivery') prefix = 'DEL';
     else if (this.orderType === 'takeaway') prefix = 'TAKE';
+    
 
     const counter = await Counter.findOneAndUpdate(
       { merchantId: this.merchant, branchId: this.branch, date: today, prefix },

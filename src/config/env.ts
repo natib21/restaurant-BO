@@ -30,7 +30,6 @@ const envSchema = z.object({
   APP_URL: z.string().url().optional(),
   PUBLIC_API_BASE_URL: z.string().url().optional(),
 
-
   PAYMENT_PROVIDER: z.enum(['manual', 'chapa', 'telebirr']).default('manual'),
   CHAPA_API_KEY: z.string().optional(),
   CHAPA_API_BASE_URL: z.string().url().default('https://api.chapa.co'),
@@ -62,7 +61,7 @@ export function loadEnv(): Env {
 export function getMongoUri(): string {
   const env = loadEnv();
   const isProd = env.NODE_ENV === 'production';
-  console.log('Loading MongoDB URI for env',env.NODE_ENV)
+  console.log('Loading MongoDB URI for env', env.NODE_ENV);
   if (isProd && env.DATABASE_SECOND && env.DATABASE_PASSWORD_SECOND) {
     console.log(process.env.MONGO_URI);
     return env.DATABASE_SECOND.replace('<PASSWORD>', env.DATABASE_PASSWORD_SECOND);
@@ -82,7 +81,14 @@ export function getCorsOrigins(): string[] {
     'http://127.0.0.1:5173',
     'http://localhost:5174',
     'http://127.0.0.1:5174',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
   ];
   if (!env.CORS_ORIGINS) return defaults;
-  return [...defaults, ...env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)];
+  return [
+    ...defaults,
+    ...env.CORS_ORIGINS.split(',')
+      .map(s => s.trim())
+      .filter(Boolean),
+  ];
 }

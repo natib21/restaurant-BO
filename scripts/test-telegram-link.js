@@ -6,7 +6,10 @@
 // Usage: node scripts/test-telegram-link.js <merchantId> <customerId>
 require('dotenv').config({ path: 'config.env' });
 const mongoose = require('mongoose');
-const { createLinkToken, buildDeepLink } = require('../src/modules/telegram/service/telegramService');
+const {
+  createLinkToken,
+  buildDeepLink,
+} = require('../src/modules/telegram/service/telegramService');
 const Merchant = require('../models/merchantModel');
 
 async function main() {
@@ -20,7 +23,8 @@ async function main() {
 
   const merchant = await Merchant.findById(merchantId);
   if (!merchant) throw new Error('Merchant not found');
-  if (!merchant.telegramBotUsername) throw new Error('Merchant has no connected Telegram bot yet — run /telegram/connect first');
+  if (!merchant.telegramBotUsername)
+    throw new Error('Merchant has no connected Telegram bot yet — run /telegram/connect first');
 
   const token = await createLinkToken({ merchantId, customerId });
   const deepLink = buildDeepLink(merchant.telegramBotUsername, token);

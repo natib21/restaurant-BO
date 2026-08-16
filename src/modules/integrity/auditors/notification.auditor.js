@@ -54,8 +54,7 @@ function auditNotifications({ merchantId } = {}) {
 
       const content = fs.readFileSync(file, 'utf8');
       const hasDirectEmit =
-        /\bgetIo\s*\(/.test(content) ||
-        (/\bio\s*\./.test(content) && /\.emit\s*\(/.test(content));
+        /\bgetIo\s*\(/.test(content) || (/\bio\s*\./.test(content) && /\.emit\s*\(/.test(content));
 
       if (hasDirectEmit) {
         issues.push(
@@ -126,7 +125,8 @@ async function auditNotificationsAsync({ merchantId } = {}) {
         severity: 'critical',
         entityId: 'outbox',
         message: `${failedCount} outbox event(s) in failed (dead-letter) state`,
-        suggestion: 'Inspect logs for outbox.event.dead_letter and replay or fix Socket.IO connectivity.',
+        suggestion:
+          'Inspect logs for outbox.event.dead_letter and replay or fix Socket.IO connectivity.',
         production_best_practice:
           'Alert on dead-letter queue depth; provide admin replay tooling with idempotent consumers.',
       })

@@ -2,7 +2,11 @@ const path = require('path');
 const FileAsset = require('../../../models/FileAsset');
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
-const { storeLocal, readLocal, deleteLocal } = require('../../infrastructure/storage/local-storage.adapter');
+const {
+  storeLocal,
+  readLocal,
+  deleteLocal,
+} = require('../../infrastructure/storage/local-storage.adapter');
 
 class FileManagementService {
   /**

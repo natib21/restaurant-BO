@@ -8,9 +8,7 @@ function collectMountedPathsFromRouter(router, prefix = '') {
       const p = prefix + layer.route.path;
       if (p && !paths.includes(p)) paths.push(p);
     } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
-      const mountPath = layer.regexp
-        ? layerRegexpToPath(layer.regexp, layer.keys)
-        : '';
+      const mountPath = layer.regexp ? layerRegexpToPath(layer.regexp, layer.keys) : '';
       const nested = collectMountedPathsFromRouter(layer.handle, prefix + mountPath);
       nested.forEach(p => {
         if (!paths.includes(p)) paths.push(p);
@@ -93,12 +91,7 @@ describe('global route integrity (src/routes/index.js)', () => {
   });
 
   test('every v1 mount path starts with /api/v1 or known legacy aliases (/api/auth, /health)', () => {
-    const allowedPrefixes = [
-      '/api/v1/',
-      '/api/auth',
-      '/health',
-      '/ready',
-    ];
+    const allowedPrefixes = ['/api/v1/', '/api/auth', '/health', '/ready'];
     mounts.forEach(p => {
       const ok = allowedPrefixes.some(prefix => p.startsWith(prefix));
       if (!ok) {

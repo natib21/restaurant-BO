@@ -4,10 +4,10 @@
  * No legacy dependency.
  */
 
-const Task       = require('../../../models/taskModel');
-const Role       = require('../../../models/roleModel');
+const Task = require('../../../models/taskModel');
+const Role = require('../../../models/roleModel');
 const catchAsync = require('../../../utils/catchAsync');
-const AppError   = require('../../../utils/appError');
+const AppError = require('../../../utils/appError');
 
 exports.getAllTasks = catchAsync(async (req, res) => {
   const tasks = await Task.find().select('name endpoint method description isMerchant');
@@ -15,7 +15,9 @@ exports.getAllTasks = catchAsync(async (req, res) => {
 });
 
 exports.getMerchantTasks = catchAsync(async (req, res) => {
-  const tasks = await Task.find({ isMerchant: true }).select('name endpoint method description isMerchant');
+  const tasks = await Task.find({ isMerchant: true }).select(
+    'name endpoint method description isMerchant'
+  );
   res.status(200).json({ status: 'success', results: tasks.length, data: { tasks } });
 });
 
@@ -51,7 +53,8 @@ exports.deleteTask = catchAsync(async (req, res, next) => {
   if (!task) return next(new AppError('Task not found', 404));
 
   const rolesInUse = await Role.find({ tasks: req.params.id });
-  if (rolesInUse.length > 0) return next(new AppError('Cannot delete a task assigned to roles', 400));
+  if (rolesInUse.length > 0)
+    return next(new AppError('Cannot delete a task assigned to roles', 400));
 
   await Task.findByIdAndDelete(req.params.id);
   res.status(204).json({ status: 'success', data: null });
@@ -99,5 +102,7 @@ exports.syncTasks = catchAsync(async (req, res) => {
 
 exports.deleteAllTasks = catchAsync(async (req, res) => {
   const result = await Task.deleteMany({});
-  res.status(200).json({ status: 'success', message: 'All tasks deleted', deletedCount: result.deletedCount });
+  res
+    .status(200)
+    .json({ status: 'success', message: 'All tasks deleted', deletedCount: result.deletedCount });
 });

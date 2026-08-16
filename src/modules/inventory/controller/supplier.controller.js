@@ -3,9 +3,9 @@
  * @description Supplier CRUD — no legacy dependency.
  */
 
-const Supplier   = require('../../../../models/Supplier');
+const Supplier = require('../../../../models/Supplier');
 const catchAsync = require('../../../../utils/catchAsync');
-const AppError   = require('../../../../utils/appError');
+const AppError = require('../../../../utils/appError');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
 
 exports.getAllSuppliers = catchAsync(async (req, res) => {

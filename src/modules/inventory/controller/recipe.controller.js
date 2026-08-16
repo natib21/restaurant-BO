@@ -3,9 +3,9 @@
  * @description Recipe CRUD — maps menu items to ingredient quantities.
  */
 
-const Recipe   = require('../../../../models/Recipe');
+const Recipe = require('../../../../models/Recipe');
 const catchAsync = require('../../../../utils/catchAsync');
-const AppError   = require('../../../../utils/appError');
+const AppError = require('../../../../utils/appError');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
 
 exports.getAllRecipes = catchAsync(async (req, res) => {

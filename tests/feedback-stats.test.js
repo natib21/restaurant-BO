@@ -44,11 +44,7 @@ describe('feedback repository & menu image response helpers', () => {
 
     it('maps mixed image collections to usable URLs', () => {
       const imagesData = resolveImageCollectionData(
-        [
-          '6a421b0c03d39206c382def0',
-          { _id: '6a421b0c03d39206c382def1' },
-          'legacy-menu.jpeg',
-        ],
+        ['6a421b0c03d39206c382def0', { _id: '6a421b0c03d39206c382def1' }, 'legacy-menu.jpeg'],
         { legacyBasePath: '/img/menu' }
       );
       expect(imagesData).toHaveLength(3);

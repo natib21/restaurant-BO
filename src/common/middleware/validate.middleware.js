@@ -1,9 +1,9 @@
 /**
  * Zod-based Request Validation Middleware
- * 
+ *
  * Validates request body, query, or params against a Zod schema
  * Automatically catches validation errors and returns standard error response
- * 
+ *
  * Usage in routes:
  * router.post('/orders', validate(orderCreateSchema, 'body'), controller.create)
  * router.get('/orders', validate(orderFiltersSchema, 'query'), controller.list)
@@ -14,7 +14,7 @@ const AppError = require('../../../utils/appError');
 
 /**
  * Factory function to create validation middleware
- * 
+ *
  * @param {z.ZodSchema} schema - Zod schema to validate against
  * @param {string} source - Request source to validate ('body', 'query', 'params')
  * @returns {function} Express middleware
@@ -51,11 +51,7 @@ module.exports = (schema, source = 'body') => {
         }));
 
         // Return standard error response
-        return res.sendError(
-          `Validation error in ${source}`,
-          400,
-          errors
-        );
+        return res.sendError(`Validation error in ${source}`, 400, errors);
       }
 
       // Unknown error - pass to error handler

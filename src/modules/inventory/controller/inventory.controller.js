@@ -1,6 +1,6 @@
 /**
  * Inventory Controller
- * 
+ *
  * HTTP request/response handling only.
  * All business logic delegated to InventoryService.
  * All data validation via Zod schemas in middleware.
@@ -13,7 +13,7 @@ const { InventoryService } = require('../service/inventory.service');
 
 /**
  * GET /api/v1/inventory/valuation
- * 
+ *
  * Get total inventory value and statistics
  */
 exports.getInventoryValuation = catchAsync(async (req, res) => {
@@ -35,9 +35,9 @@ exports.getInventoryValuation = catchAsync(async (req, res) => {
 
 /**
  * POST /api/v1/inventory/adjust
- * 
+ *
  * Adjust stock for a single ingredient
- * 
+ *
  * Body: { ingredientId, quantity, type, reason, reference, cost }
  */
 exports.adjustStock = catchAsync(async (req, res) => {
@@ -72,9 +72,9 @@ exports.adjustStock = catchAsync(async (req, res) => {
 
 /**
  * POST /api/v1/inventory/batch-adjust
- * 
+ *
  * Batch adjust stock for multiple ingredients
- * 
+ *
  * Body: { adjustments: [{ ingredientId, quantity, type, reason, cost }, ...] }
  */
 exports.batchAdjustStock = catchAsync(async (req, res) => {
@@ -82,11 +82,7 @@ exports.batchAdjustStock = catchAsync(async (req, res) => {
   const { adjustments } = req.body;
   const performedBy = req.user._id;
 
-  const results = await InventoryService.batchAdjustStock(
-    merchantId,
-    adjustments,
-    performedBy
-  );
+  const results = await InventoryService.batchAdjustStock(merchantId, adjustments, performedBy);
 
   const successful = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
@@ -102,7 +98,7 @@ exports.batchAdjustStock = catchAsync(async (req, res) => {
 
 /**
  * GET /api/v1/inventory/low-stock
- * 
+ *
  * Get all items with low stock (currentStock <= minStock)
  */
 exports.getLowStockItems = catchAsync(async (req, res) => {
@@ -128,9 +124,9 @@ exports.getLowStockItems = catchAsync(async (req, res) => {
 
 /**
  * GET /api/v1/inventory/stock-movements
- * 
+ *
  * Get stock movement history (audit log)
- * 
+ *
  * Query: { ingredientId?, type?, startDate?, endDate?, limit, offset }
  */
 exports.getStockMovements = catchAsync(async (req, res) => {
@@ -165,9 +161,9 @@ exports.getStockMovements = catchAsync(async (req, res) => {
 
 /**
  * PATCH /api/v1/inventory/:ingredientId/thresholds
- * 
+ *
  * Set min/max stock thresholds
- * 
+ *
  * Body: { minStock, maxStock }
  */
 exports.setStockThresholds = catchAsync(async (req, res) => {
@@ -197,9 +193,9 @@ exports.setStockThresholds = catchAsync(async (req, res) => {
 
 /**
  * POST /api/v1/inventory/validate-order
- * 
+ *
  * Validate stock availability for order items BEFORE placement
- * 
+ *
  * Body: { items: [{ ingredientId, quantity }, ...] }
  * Response: { available, shortages: [...] }
  */

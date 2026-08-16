@@ -1,14 +1,8 @@
 # Modular Architecture (`refactor/modular-architecture`)
 
-
-
 NestJS-inspired layout on Express. Legacy `controllers/`, `routes/`, `models/` remain until each domain is migrated.
 
-
-
 ## Directory map
-
-
 
 ```text
 
@@ -56,11 +50,7 @@ src/
 
 ```
 
-
-
 ## Request context (`req.ctx`)
-
-
 
 | Field | Staff JWT | Table session |
 
@@ -72,15 +62,9 @@ src/
 
 | `actorType` | `staff` | `customer` / `anonymous` |
 
-
-
 Use `src/common/utils/tenant-scope.js` — never assume `req.user` on customer routes.
 
-
-
 ## Module migration status
-
-
 
 | Module | Status |
 
@@ -98,11 +82,7 @@ Use `src/common/utils/tenant-scope.js` — never assume `req.user` on customer r
 
 | merchant / menu | **Planned** — split god controllers |
 
-
-
 ## Running
-
-
 
 ```bash
 
@@ -118,11 +98,7 @@ npm test
 
 ```
 
-
-
 ## API compatibility
-
-
 
 - Paths unchanged under `/api/v1/*`
 
@@ -132,11 +108,7 @@ npm test
 
 - Socket.IO: pass JWT as `auth: { token: '<jwt>' }`
 
-
-
 ## Security defaults
-
-
 
 - Helmet + rate limits enabled
 
@@ -145,8 +117,6 @@ npm test
 - Payment provider keys from env only (`PAYMENT_PROVIDER`, `CHAPA_API_KEY`, `CHAPA_WEBHOOK_SECRET`)
 
 - Password change invalidates old JWTs via `passwordChangedAt`
-
-
 
 ## Phase 1 (tenant safety) — applied
 
@@ -167,5 +137,3 @@ npm test
 4. Single Mongo session for order + inventory deduction
 
 5. Integration tests with test DB
-
-

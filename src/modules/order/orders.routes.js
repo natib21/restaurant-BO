@@ -1,7 +1,6 @@
-
 /**
  * Orders Module Routes
- * 
+ *
  * Clean routing with:
  * - Centralized validation (Zod middleware)
  * - Consistent response format (via middleware)
@@ -31,6 +30,7 @@ const {
   getCompletedOrders,
 } = require('./controller/order.controller');
 const { protect } = require('../../common/guards/auth.guard');
+const { requireFeature } = require('../../common/guards/feature.guard');
 const { protectTableSession } = require('../customers/customer-session.guard');
 const validate = require('../../common/middleware/validate.middleware');
 
@@ -51,6 +51,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.post(
   '/',
   protectTableSession,
+  requireFeature('orders'),
   validate(placeOrderCustomerSchema, 'body'),
   placeOrder
 );
@@ -60,18 +61,11 @@ router.post(
 // ============================================================
 
 router.use(protect);
+router.use(requireFeature('orders'));
 
-router.post(
-  '/staff',
-  validate(placeOrderStaffSchema, 'body'),
-  staffPlaceOrder
-);
+router.post('/staff', validate(placeOrderStaffSchema, 'body'), staffPlaceOrder);
 
-router.get(
-  '/active',
-  validate(orderFiltersSchema, 'query'),
-  getActiveOrders
-);
+router.get('/active', validate(orderFiltersSchema, 'query'), getActiveOrders);
 
 // Status-specific lists (must be registered before /:id)
 router.get('/completed', getCompletedOrders);
@@ -86,17 +80,9 @@ router.get('/number/:orderNumber', getOrderByNumber);
 
 router.post('/:id/pay', upload.single('image'), markAsPaid);
 
-router.patch(
-  '/:id/status',
-  validate(updateOrderStatusSchema, 'body'),
-  updateOrderStatus
-);
+router.patch('/:id/status', validate(updateOrderStatusSchema, 'body'), updateOrderStatus);
 
-router.patch(
-  '/:id/add-items',
-  validate(addItemToOrderSchema, 'body'),
-  addItemToOrder
-);
+router.patch('/:id/add-items', validate(addItemToOrderSchema, 'body'), addItemToOrder);
 
 router.get('/:id', getOrderById);
 

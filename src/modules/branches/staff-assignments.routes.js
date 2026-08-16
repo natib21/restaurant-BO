@@ -17,7 +17,8 @@ const router = express.Router();
 router.use(protect);
 router.use(restrictTo());
 
-router.route('/')
+router
+  .route('/')
   .post(staffAssignmentController.assignTablesToStaff)
   .get(staffAssignmentController.getAllAssignments);
 

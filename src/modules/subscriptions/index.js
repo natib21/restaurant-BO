@@ -1,6 +1,6 @@
 /**
  * Subscriptions Module Index
- * 
+ *
  * Central export point for the subscriptions module
  */
 

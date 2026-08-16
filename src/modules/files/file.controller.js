@@ -61,14 +61,14 @@ exports.uploadFile = catchAsync(async (req, res) => {
 // ✅ FIXED: Handle both authenticated and public access
 exports.getFileContent = catchAsync(async (req, res) => {
   const { id } = req.params;
-  
+
   // Check if user is authenticated
   const isAuthenticated = req.user && req.user._id;
   const merchantId = isAuthenticated ? getMerchantId(req) : null;
-  
+
   let file;
   let buffer;
-  
+
   if (isAuthenticated && merchantId) {
     // ✅ Authenticated user - full access to their files
     try {
@@ -83,15 +83,15 @@ exports.getFileContent = catchAsync(async (req, res) => {
     file = await FileAsset.findOne({
       _id: id,
       isDeleted: false,
-      entityType: { 
-        $in: ['menu', 'combo', 'branch', 'table', 'qr']
-      }
+      entityType: {
+        $in: ['menu', 'combo', 'branch', 'table', 'qr'],
+      },
     });
-    
+
     if (!file) {
       throw new AppError('File not found or access denied', 404);
     }
-    
+
     // Read file from storage
     try {
       buffer = await readLocal(file.storageKey);
@@ -99,7 +99,7 @@ exports.getFileContent = catchAsync(async (req, res) => {
       throw new AppError('File content not found', 404);
     }
   }
-  
+
   // Set content type and send
   res.set('Content-Type', file.mimeType || 'application/octet-stream');
   res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours

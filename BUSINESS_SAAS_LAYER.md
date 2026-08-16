@@ -6,26 +6,26 @@ Built on top of the production engine (transactions, outbox, state machine, idem
 
 ## New API routes (additive)
 
-| Prefix | Purpose |
-|--------|---------|
-| `POST /api/v1/files/upload` | Tenant-scoped file metadata + storage |
-| `GET /api/v1/files/:id/content` | Serve file bytes |
-| `POST /api/v1/menu-mgmt/publish` | Publish menu group snapshot per branch |
-| `PATCH /api/v1/branch-control/:id/suspend` | Branch lifecycle |
-| `POST /api/v1/table-system/:id/qr/regenerate` | Signed QR (HMAC) |
+| Prefix                                        | Purpose                                |
+| --------------------------------------------- | -------------------------------------- |
+| `POST /api/v1/files/upload`                   | Tenant-scoped file metadata + storage  |
+| `GET /api/v1/files/:id/content`               | Serve file bytes                       |
+| `POST /api/v1/menu-mgmt/publish`              | Publish menu group snapshot per branch |
+| `PATCH /api/v1/branch-control/:id/suspend`    | Branch lifecycle                       |
+| `POST /api/v1/table-system/:id/qr/regenerate` | Signed QR (HMAC)                       |
 
 All require staff JWT + existing `restrictTo()` task RBAC. Capability guard is **off** unless `CAPABILITY_ENFORCEMENT=true`.
 
 ## Modules
 
-| Module | Service | Models |
-|--------|---------|--------|
-| Files | `FileManagementService` | `FileAsset` |
-| Menu | `MenuManagementService` | `MenuPublication`, `Menu.publishStatus` |
-| Branch | `BranchControlService` | uses `Branch`, `MenuGroup` |
-| Tables/QR | `TableSystemService`, `QrTokenService` | uses `Table` |
-| Notifications | `NotificationService` | uses `OutboxEvent` (only path to sockets) |
-| Capabilities | `capabilities.js`, `requireCapability` | `Role.capabilities[]` |
+| Module        | Service                                | Models                                    |
+| ------------- | -------------------------------------- | ----------------------------------------- |
+| Files         | `FileManagementService`                | `FileAsset`                               |
+| Menu          | `MenuManagementService`                | `MenuPublication`, `Menu.publishStatus`   |
+| Branch        | `BranchControlService`                 | uses `Branch`, `MenuGroup`                |
+| Tables/QR     | `TableSystemService`, `QrTokenService` | uses `Table`                              |
+| Notifications | `NotificationService`                  | uses `OutboxEvent` (only path to sockets) |
+| Capabilities  | `capabilities.js`, `requireCapability` | `Role.capabilities[]`                     |
 
 ## Integration points
 

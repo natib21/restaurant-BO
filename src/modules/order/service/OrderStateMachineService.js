@@ -8,10 +8,14 @@ const { NotificationService } = require('../../notifications/notification.servic
 const TRANSITIONS = {
   pending: ['accepted', 'canceled'],
   accepted: ['preparing', 'canceled'],
-  preparing: ['ready'],
-  ready: ['completed'],
-  /** Legacy orders may still be in served — allow completion only. */
+  preparing: ['ready', 'canceled'],
+  // Branch by deliveryType at the call site (see updateOrderStatus below):
+  ready: ['served', 'out_for_delivery', 'canceled'],
+  out_for_delivery: ['delivered', 'canceled'], // NEW
   served: ['completed'],
+  delivered: ['completed'], // NEW
+  completed: [],
+  canceled: [],
 };
 
 const TERMINAL_STATUSES = new Set(['completed', 'canceled']);
@@ -30,6 +34,10 @@ const TRANSITION_ROLE_PERMISSIONS = {
   'preparing->ready': ['kitchen', 'admin', 'superAdmin'],
   'ready->completed': ['waiter', 'admin', 'superAdmin'],
   'served->completed': ['waiter', 'admin', 'superAdmin'],
+  'ready->out_for_delivery': ['waiter', 'admin', 'superAdmin'],
+'out_for_delivery->delivered': ['waiter', 'admin', 'superAdmin'],
+'out_for_delivery->canceled': ['waiter', 'admin', 'superAdmin'],
+'delivered->completed': ['waiter', 'admin', 'superAdmin'],
 };
 
 class OrderStateMachineService {
@@ -142,6 +150,8 @@ class OrderStateMachineService {
     if (toStatus === 'ready') order.readyAt = new Date();
     if (toStatus === 'served') order.servedAt = new Date();
     if (toStatus === 'completed') order.completedAt = new Date();
+    if (toStatus === 'out_for_delivery') order.outForDeliveryAt = new Date();
+if (toStatus === 'delivered') order.deliveredAt = new Date();
     if (toStatus === 'canceled') {
       order.canceledAt = new Date();
       if (!order.canceledBy && order.statusHistory?.length) {

@@ -13,12 +13,7 @@ export function sendSuccess<T>(
   });
 }
 
-export function sendSuccessList<T>(
-  res: Response,
-  key: string,
-  items: T[],
-  statusCode = 200
-) {
+export function sendSuccessList<T>(res: Response, key: string, items: T[], statusCode = 200) {
   res.status(statusCode).json({
     status: 'success',
     results: items.length,

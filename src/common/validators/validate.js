@@ -6,7 +6,7 @@ const AppError = require('../errors');
  */
 function validateBody(schema) {
   return (req, _res, next) => {
-      console.log('📋 Validator called with schema:', Object.keys(schema));
+    console.log('📋 Validator called with schema:', Object.keys(schema));
     console.log('Request body:', req.body);
     const errors = [];
     const body = req.body || {};
@@ -26,7 +26,8 @@ function validateBody(schema) {
       if (rules.type === 'number') {
         const n = Number(value);
         if (Number.isNaN(n)) errors.push(`${field} must be a number`);
-        else if (rules.min !== undefined && n < rules.min) errors.push(`${field} must be >= ${rules.min}`);
+        else if (rules.min !== undefined && n < rules.min)
+          errors.push(`${field} must be >= ${rules.min}`);
       }
       if (rules.email && typeof value === 'string' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         errors.push(`${field} must be a valid email`);

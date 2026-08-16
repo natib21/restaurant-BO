@@ -1,7 +1,6 @@
-
 /**
  * Order Handlers Index
- * 
+ *
  * Re-exports all handler modules for organized access.
  * This enables clean imports in the controller and router.
  */
@@ -24,16 +23,16 @@ const retrievalHandlers = require('./retrieval.handler');
 module.exports = {
   // Customer handlers
   ...customerHandlers,
-  
+
   // Placement handlers
   ...placementHandlers,
-  
+
   // Status handlers
   ...statusHandlers,
-  
+
   // Mutation handlers
   ...mutationHandlers,
-  
+
   // Retrieval handlers
   ...retrievalHandlers,
 };

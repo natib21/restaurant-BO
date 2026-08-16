@@ -6,13 +6,19 @@ const { QrTokenService } = require('../src/modules/branch/qr-token.service');
 describe('Capabilities (additive RBAC)', () => {
   it('grants super-admin all capabilities', () => {
     expect(
-      userHasCapability({ role: { name: 'SUPER-ADMIN', isSystemRole: true } }, CAPABILITIES.MENU_MANAGE)
+      userHasCapability(
+        { role: { name: 'SUPER-ADMIN', isSystemRole: true } },
+        CAPABILITIES.MENU_MANAGE
+      )
     ).toBe(true);
   });
 
   it('infers waiter capabilities from role name when capabilities array empty', () => {
     expect(
-      userHasCapability({ role: { name: 'WAITER-01', capabilities: [] } }, CAPABILITIES.ORDER_CREATE)
+      userHasCapability(
+        { role: { name: 'WAITER-01', capabilities: [] } },
+        CAPABILITIES.ORDER_CREATE
+      )
     ).toBe(true);
   });
 });

@@ -9,9 +9,21 @@ const router = express.Router();
 router.use(protect);
 router.use(restrictTo());
 
-router.patch('/:id/suspend', requireCapability(CAPABILITIES.BRANCH_MANAGE), branchController.suspendBranch);
-router.patch('/:id/activate', requireCapability(CAPABILITIES.BRANCH_MANAGE), branchController.activateBranch);
-router.patch('/:id/features', requireCapability(CAPABILITIES.BRANCH_MANAGE), branchController.setFeatures);
+router.patch(
+  '/:id/suspend',
+  requireCapability(CAPABILITIES.BRANCH_MANAGE),
+  branchController.suspendBranch
+);
+router.patch(
+  '/:id/activate',
+  requireCapability(CAPABILITIES.BRANCH_MANAGE),
+  branchController.activateBranch
+);
+router.patch(
+  '/:id/features',
+  requireCapability(CAPABILITIES.BRANCH_MANAGE),
+  branchController.setFeatures
+);
 router.post(
   '/:id/menu-groups',
   requireCapability(CAPABILITIES.MENU_MANAGE),

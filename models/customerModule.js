@@ -24,7 +24,6 @@ const customerSchema = new Schema(
       type: String,
       trim: true,
       sparse: true,
-      unique: true,
       validate: {
         validator: v => !v || /^\+?251[79]\d{8}$/.test(v.replace(/\s/g, '')),
         message: 'Invalid Ethiopian phone number',
@@ -34,16 +33,16 @@ const customerSchema = new Schema(
     // Social logins
     facebook: { id: String, username: String, profilePic: String },
     tiktok: { id: String, username: String, profilePic: String },
-   // models/Customer.js — replace the telegram block
-telegram: {
-      id: String,              // Telegram's global user id
-      chatId: String,          // chat id for 1:1 conversation with THIS merchant's bot
+    // models/Customer.js — replace the telegram block
+    telegram: {
+      id: String, // Telegram's global user id
+      chatId: String, // chat id for 1:1 conversation with THIS merchant's bot
       username: String,
       firstName: String,
       profilePic: String,
       linked: { type: Boolean, default: false },
       linkedAt: Date,
-      optIn: { type: Boolean, default: false },   // marketing consent, set true on /start
+      optIn: { type: Boolean, default: false }, // marketing consent, set true on /start
       optInAt: Date,
       lastInteractionAt: Date,
     },

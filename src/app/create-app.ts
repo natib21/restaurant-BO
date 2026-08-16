@@ -9,7 +9,10 @@ import path from 'path';
 import cookieParser from 'cookie-parser';
 import { loadEnv, getCorsOrigins } from '../config/env';
 import { logger, morganStream } from '../common/logger';
-import { initRequestContext, syncRequestContext } from '../common/middleware/request-context.middleware';
+import {
+  initRequestContext,
+  syncRequestContext,
+} from '../common/middleware/request-context.middleware';
 import healthRoutes from '../modules/health/health.routes';
 
 const AppError = require('../../utils/appError');
@@ -86,7 +89,10 @@ export function createApp(): Express {
 
   app.use('/img/menu', express.static(path.join(process.cwd(), 'uploads/img/menu')));
   app.use('/img/combo', express.static(path.join(process.cwd(), 'uploads/img/combo')));
-  app.use('/img/orderPayment', express.static(path.join(process.cwd(), 'uploads/img/orderPayment')));
+  app.use(
+    '/img/orderPayment',
+    express.static(path.join(process.cwd(), 'uploads/img/orderPayment'))
+  );
   app.use('/img/merchants', express.static(path.join(process.cwd(), 'uploads/img/merchants')));
 
   app.use(express.json({ limit: '10mb' }));
@@ -100,11 +106,7 @@ export function createApp(): Express {
   morgan.token('reqId', req => (req as express.Request).ctx?.requestId || '-');
   morgan.token('userId', req => {
     const r = req as express.Request;
-    return (
-      (r.user as { _id?: string })?._id?.toString() ||
-      r.ctx?.actorId?.toString() ||
-      '-'
-    );
+    return (r.user as { _id?: string })?._id?.toString() || r.ctx?.actorId?.toString() || '-';
   });
   morgan.token('merchantId', req => {
     const r = req as express.Request;
@@ -116,13 +118,16 @@ export function createApp(): Express {
   });
 
   app.use(
-    morgan(':method :url :status :res[content-length] - :response-time ms :reqId :userId :merchantId', {
-      stream: {
-        write: (message: string) => {
-          morganStream.write(message);
+    morgan(
+      ':method :url :status :res[content-length] - :response-time ms :reqId :userId :merchantId',
+      {
+        stream: {
+          write: (message: string) => {
+            morganStream.write(message);
+          },
         },
-      },
-    })
+      }
+    )
   );
 
   if (env.NODE_ENV === 'development') {

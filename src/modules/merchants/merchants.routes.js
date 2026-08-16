@@ -11,10 +11,10 @@
 
 const express = require('express');
 const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const merchantController   = require('./controllers/merchant.controller');
+const merchantController = require('./controllers/merchant.controller');
 const merchantUserController = require('./controllers/merchant-user.controller');
 const merchantRoleController = require('./controllers/merchant-role.controller');
-const { validate }         = require('./validators/merchant.validator');
+const { validate } = require('./validators/merchant.validator');
 const { createMerchantSchema } = require('./dto/create-merchant.dto');
 const { updateMerchantSchema } = require('./dto/update-merchant.dto');
 
@@ -33,32 +33,36 @@ router.post(
 );
 
 // ── Merchant-scoped Role Management ───────────────────────────────────────────
-router.route('/roles')
+router
+  .route('/roles')
   .post(restrictTo(), merchantRoleController.createMerchantRole)
-  .get(restrictTo(),  merchantRoleController.getAllMerchantRoles);
+  .get(restrictTo(), merchantRoleController.getAllMerchantRoles);
 
-router.route('/roles/:id')
-  .get(restrictTo(),    merchantRoleController.getMerchantRoleById)
-  .patch(restrictTo(),  merchantRoleController.updateMerchantRole)
+router
+  .route('/roles/:id')
+  .get(restrictTo(), merchantRoleController.getMerchantRoleById)
+  .patch(restrictTo(), merchantRoleController.updateMerchantRole)
   .delete(restrictTo(), merchantRoleController.deleteMerchantRole);
 
 router.patch('/roles/:id/activate', restrictTo(), merchantRoleController.activateMerchantRole);
 
 // ── Merchant-scoped User Management ───────────────────────────────────────────
-router.route('/users')
-  .get(restrictTo(),  merchantUserController.getMerchantUsers)
+router
+  .route('/users')
+  .get(restrictTo(), merchantUserController.getMerchantUsers)
   .post(restrictTo(), merchantUserController.createMerchantUser);
 
-router.route('/users/:id')
-  .get(restrictTo(),    merchantUserController.getMerchantUserById)
-  .patch(restrictTo(),  merchantUserController.updateMerchantUser)
+router
+  .route('/users/:id')
+  .get(restrictTo(), merchantUserController.getMerchantUserById)
+  .patch(restrictTo(), merchantUserController.updateMerchantUser)
   .delete(restrictTo(), merchantUserController.deleteMerchantUser);
 
 router.patch('/users/:id/activate', restrictTo(), merchantUserController.activateMerchantUser);
-router.get('/users/branch/:id',     restrictTo(), merchantUserController.getMerchantUsersByBranch);
+router.get('/users/branch/:id', restrictTo(), merchantUserController.getMerchantUsersByBranch);
 
 // ── Self (logged-in merchant) ──────────────────────────────────────────────────
-router.get('/me',   restrictTo(), merchantController.getMe);
+router.get('/me', restrictTo(), merchantController.getMe);
 router.patch(
   '/me',
   merchantController.uploadMerchantPhotos,
@@ -68,8 +72,9 @@ router.patch(
 );
 
 // ── CRUD (back-office / SUPER-ADMIN) ──────────────────────────────────────────
-router.route('/')
-  .get(restrictTo(),  merchantController.getAllMerchants)
+router
+  .route('/')
+  .get(restrictTo(), merchantController.getAllMerchants)
   .post(
     restrictTo(),
     merchantController.uploadMerchantPhotos,
@@ -78,8 +83,9 @@ router.route('/')
     merchantController.createNewMerchant
   );
 
-router.route('/:id')
-  .get(restrictTo(),  merchantController.getMerchant)
+router
+  .route('/:id')
+  .get(restrictTo(), merchantController.getMerchant)
   .patch(
     restrictTo(),
     merchantController.uploadMerchantPhotos,
@@ -90,9 +96,9 @@ router.route('/:id')
   .delete(restrictTo(), merchantController.deleteMerchant);
 
 // ── Workflow actions ───────────────────────────────────────────────────────────
-router.patch('/:id/approve',      restrictTo(), merchantController.approveMerchant);
-router.patch('/:id/suspend',      restrictTo(), merchantController.suspendMerchant);
-router.patch('/:id/activate',     restrictTo(), merchantController.activateMerchant);
+router.patch('/:id/approve', restrictTo(), merchantController.approveMerchant);
+router.patch('/:id/suspend', restrictTo(), merchantController.suspendMerchant);
+router.patch('/:id/activate', restrictTo(), merchantController.activateMerchant);
 router.patch('/:id/subscription', restrictTo(), merchantController.updateSubscription);
 
 // ── Stats ──────────────────────────────────────────────────────────────────────

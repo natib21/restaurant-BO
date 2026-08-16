@@ -20,13 +20,7 @@ function isObjectIdLike(value) {
   return typeof value === 'string' && OBJECT_ID_REGEX.test(value);
 }
 
-function resolveSingleImageData({
-  image,
-  imageFilename,
-  imageUrl,
-  legacyBasePath,
-  origin = '',
-}) {
+function resolveSingleImageData({ image, imageFilename, imageUrl, legacyBasePath, origin = '' }) {
   if (isPopulatedFileAsset(image)) {
     return {
       id: String(image._id),
@@ -73,7 +67,7 @@ function resolveImageCollectionData(images, { legacyBasePath, origin = '' }) {
     return [];
   }
 
-  return images.map((image) =>
+  return images.map(image =>
     resolveSingleImageData({
       image,
       legacyBasePath,

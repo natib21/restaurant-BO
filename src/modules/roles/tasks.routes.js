@@ -10,8 +10,8 @@
  */
 
 const express = require('express');
-const { protect }    = require('../../common/guards/auth.guard');
-const AppError       = require('../../../utils/appError');
+const { protect } = require('../../common/guards/auth.guard');
+const AppError = require('../../../utils/appError');
 const taskController = require('./task.controller');
 
 const router = express.Router();
@@ -29,15 +29,11 @@ router.use((req, res, next) => {
   next();
 });
 
-router.route('/')
-  .get(taskController.getAllTasks)
-  .post(taskController.createTask);
+router.route('/').get(taskController.getAllTasks).post(taskController.createTask);
 
-router.post('/sync',        taskController.syncTasks);
+router.post('/sync', taskController.syncTasks);
 router.delete('/delete-all', taskController.deleteAllTasks);
 
-router.route('/:id')
-  .patch(taskController.updateTask)
-  .delete(taskController.deleteTask);
+router.route('/:id').patch(taskController.updateTask).delete(taskController.deleteTask);
 
 module.exports = router;

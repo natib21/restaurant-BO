@@ -1,6 +1,23 @@
-// src/modules/telegram/controllers/telegram.controller.js
-const Merchant = require('../../../../models/merchantModel'); // adjust if your controller folder is singular ("controller" not "controllers")
-const { resolveStart, sendMessage, registerWebhook, getBotInfo } = require('../service/telegramService');
+// src/modules/telegram/controller/telegram.controller.js
+const mongoose = require('mongoose');
+const Merchant = require('../../../../models/merchantModel');
+const Customer = require('../../../../models/customerModule');
+const TelegramMessage = require('../../../../models/TelegramMessage');
+const {
+  resolveStart,
+  sendMessage,
+  sendBroadcast,
+  registerWebhook,
+  setMenuButton,
+  getBotInfo,
+  verifyInitData,
+  resolveMiniAppSession,
+  buildMiniAppUrl,
+} = require('../service/telegramService');
+
+// ─────────────────────────────────────────────────────────────
+// PUBLIC: TELEGRAM WEBHOOK
+// ─────────────────────────────────────────────────────────────
 
 /**
  * POST /api/v1/telegram/webhook/:merchantId
@@ -9,11 +26,14 @@ const { resolveStart, sendMessage, registerWebhook, getBotInfo } = require('../s
 async function handleWebhook(req, res) {
   const { merchantId } = req.params;
 
-  const merchant = await Merchant.findById(merchantId).select('+telegramWebhookSecret');
+  const merchant = await Merchant.findById(merchantId).select('+telegram.telegramWebhookSecret');
   if (!merchant) return res.sendStatus(404);
 
   const secretHeader = req.get('X-Telegram-Bot-Api-Secret-Token');
-  if (!merchant.telegramWebhookSecret || secretHeader !== merchant.telegramWebhookSecret) {
+  if (
+    !merchant.telegram?.telegramWebhookSecret ||
+    secretHeader !== merchant.telegram.telegramWebhookSecret
+  ) {
     return res.sendStatus(401);
   }
 
@@ -27,39 +47,167 @@ async function handleWebhook(req, res) {
     const chatId = msg.chat.id;
     const text = msg.text || '';
 
+    // Look up the customer by chatId so ANY inbound text gets logged, not just /start.
+    const customer = await Customer.findOne({
+      merchant: merchantId,
+      'telegram.chatId': String(chatId),
+    });
+
+    if (customer) {
+      await TelegramMessage.create({
+        merchant: merchantId,
+        customer: customer._id,
+        direction: 'in',
+        text,
+        telegramMessageId: String(msg.message_id),
+      });
+      customer.telegram.lastInteractionAt = new Date();
+      customer.lastSeen = new Date();
+      await customer.save();
+    }
+    // If customer is null, this chat hasn't been linked yet (pre-/start) — nothing to log to.
+
+    const miniAppUrl = buildMiniAppUrl(merchant.slug);
+
     if (text.startsWith('/start')) {
       const token = text.split(' ')[1];
-      const customer = token ? await resolveStart(merchant, msg.from, chatId, token) : null;
+      const linkedCustomer = token ? await resolveStart(merchant, msg.from, chatId, token) : null;
 
       await sendMessage(
         merchant,
+        linkedCustomer?._id,
         chatId,
-        customer
-          ? `Welcome${customer.fullName ? ', ' + customer.fullName : ''}! You'll get order updates and offers here.`
-          : `Welcome! This link seems invalid or expired — please rescan the QR at your table.`
+        linkedCustomer
+          ? `Welcome${linkedCustomer.fullName ? ', ' + linkedCustomer.fullName : ''}! 🍽️ You'll get order updates and offers here.`
+          : `Welcome! This link seems invalid or expired — please rescan the QR at your table, or tap the menu button below to order.`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: '🍽 Order Food', web_app: { url: miniAppUrl } }]],
+          },
+        }
       );
       return;
     }
 
-    if (text === '/stop' || text.toLowerCase() === 'stop') {
-      // Basic opt-out handling — extend resolveStart's counterpart to flip optIn: false
-      // on the matching customer by chatId if you want this to update the CRM record too.
-      await sendMessage(merchant, chatId, `You've been unsubscribed from marketing messages.`);
+    if (text === '/menu') {
+      await sendMessage(
+        merchant,
+        customer?._id,
+        chatId,
+        `Tap below to browse the menu and order.`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: '🍽 Open Menu', web_app: { url: miniAppUrl } }]],
+          },
+        }
+      );
       return;
     }
 
-    // Fallback for any other message
-    await sendMessage(merchant, chatId, `Thanks for your message! For menu and orders, please use the link shared at your table.`);
+    if (text === '/orders') {
+      await sendMessage(merchant, customer?._id, chatId, `Tap below to see your order history.`, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: '📋 My Orders',
+                web_app: { url: buildMiniAppUrl(merchant.slug, { view: 'orders' }) },
+              },
+            ],
+          ],
+        },
+      });
+      return;
+    }
+
+    if (text === '/stop' || text.toLowerCase() === 'stop') {
+      if (customer) {
+        customer.telegram.optIn = false;
+        await customer.save();
+      }
+      await sendMessage(
+        merchant,
+        customer?._id,
+        chatId,
+        `You've been unsubscribed from marketing messages. You'll still receive order updates for active orders.`
+      );
+      return;
+    }
+
+    // Fallback for any other message — still logged above regardless of this reply.
+    await sendMessage(
+      merchant,
+      customer?._id,
+      chatId,
+      `Thanks for your message! Our team will reply here shortly. To order, tap the menu button below.`
+    );
   } catch (err) {
     req.log?.error?.({ err, merchantId }, 'telegram webhook processing failed');
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// PUBLIC: MINI APP SESSION VERIFICATION
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/telegram/miniapp/verify
+ * Called by the Mini App frontend on load, with Telegram's signed initData.
+ * Public route — this endpoint IS the authentication step. Never trust a
+ * merchant/customer id passed alongside initData without this check.
+ * Body: { merchantSlug, initData }
+ */
+async function verifyMiniAppSession(req, res, next) {
+  try {
+    const { merchantSlug, initData } = req.body;
+    if (!merchantSlug || !initData) {
+      return res.status(400).json({ message: 'merchantSlug and initData are required' });
+    }
+
+    const merchant = await Merchant.findOne({ slug: merchantSlug }).select(
+      '+telegram.telegramBotToken'
+    );
+    if (!merchant?.telegram?.telegramBotToken) {
+      return res.status(404).json({ message: 'Merchant not found or Telegram not configured' });
+    }
+
+    const telegramUser = verifyInitData(initData, merchant.telegram.telegramBotToken);
+    if (!telegramUser) {
+      return res.status(401).json({ message: 'Invalid or expired Telegram session' });
+    }
+
+    const { customer, sessionToken } = await resolveMiniAppSession(merchant, telegramUser);
+
+    return res.status(200).json({
+      token: sessionToken,
+      customer: {
+        id: customer._id,
+        fullName: customer.fullName,
+        loyalty: customer.loyalty,
+      },
+      merchant: {
+        id: merchant._id,
+        slug: merchant.slug,
+        businessName: merchant.businessName,
+        brandColor: merchant.brandColor,
+        logo: merchant.logo,
+        settings: merchant.settings,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTHENTICATED: MERCHANT DASHBOARD — BOT CONFIG
+// ─────────────────────────────────────────────────────────────
+
 /**
  * POST /api/v1/merchant/:merchantId/telegram/connect
  * Admin-only. Merchant submits their BotFather token; we validate it,
- * register the webhook with Telegram, and store the credentials.
- * (Mount this under your authenticated merchant routes, not here.)
+ * register the webhook with Telegram, set the persistent menu button,
+ * and store the credentials.
  */
 async function connectBot(req, res, next) {
   try {
@@ -75,22 +223,42 @@ async function connectBot(req, res, next) {
 
     const botInfo = await getBotInfo(botToken); // throws if token invalid
 
-    const publicBaseUrl = process.env.PUBLIC_API_BASE_URL; // e.g. https://api.menuroom.et
+    const publicBaseUrl = process.env.PUBLIC_API_BASE_URL;
     if (!publicBaseUrl) {
-      return res.status(500).json({ message: 'PUBLIC_API_BASE_URL is not configured on the server' });
+      return res
+        .status(500)
+        .json({ message: 'PUBLIC_API_BASE_URL is not configured on the server' });
     }
 
     const { webhookSecret } = await registerWebhook({ merchant, botToken, publicBaseUrl });
 
-    merchant.telegramBotToken = botToken;
-    merchant.telegramBotUsername = botInfo.username;
-    merchant.telegramWebhookSecret = webhookSecret;
-    merchant.telegramBotConnectedAt = new Date();
+    // Menu button requires a live Mini App URL. Skip gracefully if not configured yet
+    // instead of failing the whole connect flow — this can be set later once the
+    // Mini App frontend exists.
+    if (process.env.MINI_APP_BASE_URL) {
+      try {
+        const miniAppUrl = buildMiniAppUrl(merchant.slug);
+        await setMenuButton(botToken, miniAppUrl);
+      } catch (menuErr) {
+        req.log?.warn?.(
+          { err: menuErr, merchantId },
+          'setMenuButton failed — continuing without it'
+        );
+      }
+    }
+
+    merchant.telegram.telegramBotToken = botToken;
+    merchant.telegram.telegramBotUsername = botInfo.username;
+    merchant.telegram.telegramWebhookSecret = webhookSecret;
+    merchant.telegram.telegramBotConnectedAt = new Date();
+    merchant.telegram.enabled = true;
+    await merchant.save();
     await merchant.save();
 
     return res.status(200).json({
       message: 'Telegram bot connected successfully',
       botUsername: botInfo.username,
+      deepLink: `https://t.me/${botInfo.username}`,
     });
   } catch (err) {
     return next(err);
@@ -107,11 +275,10 @@ async function getStatus(req, res, next) {
     const merchant = await Merchant.findById(merchantId);
     if (!merchant) return res.status(404).json({ message: 'Merchant not found' });
 
-    if (!merchant.telegramBotUsername || !merchant.telegramBotConnectedAt) {
+    if (!merchant.telegram?.telegramBotUsername || !merchant.telegram?.telegramBotConnectedAt) {
       return res.status(200).json({ connected: false });
     }
 
-    const Customer = require('../../../../models/Customer');
     const [linkedCustomersCount, optInCount] = await Promise.all([
       Customer.countDocuments({ merchant: merchantId, 'telegram.linked': true }),
       Customer.countDocuments({ merchant: merchantId, 'telegram.optIn': true }),
@@ -119,15 +286,73 @@ async function getStatus(req, res, next) {
 
     return res.status(200).json({
       connected: true,
-      botUsername: merchant.telegramBotUsername,
-      connectedAt: merchant.telegramBotConnectedAt,
+      botUsername: merchant.telegram.telegramBotUsername,
+      connectedAt: merchant.telegram.telegramBotConnectedAt,
       linkedCustomersCount,
       optInCount,
+      settings: merchant.telegram,
+      deepLink: `https://t.me/${merchant.telegram.telegramBotUsername}`,
     });
   } catch (err) {
     return next(err);
   }
 }
+
+/**
+ * PATCH /api/v1/merchant/:merchantId/telegram/settings
+ * Authenticated. Toggle delivery/notifications/marketing switches without
+ * touching bot credentials.
+ * Body: { deliveryEnabled?, notificationsEnabled?, marketingEnabled? }
+ */
+async function updateSettings(req, res, next) {
+  try {
+    const { merchantId } = req.params;
+    const { deliveryEnabled, notificationsEnabled, marketingEnabled } = req.body;
+
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) return res.status(404).json({ message: 'Merchant not found' });
+
+    if (deliveryEnabled !== undefined) merchant.telegram.deliveryEnabled = deliveryEnabled;
+    if (notificationsEnabled !== undefined)
+      merchant.telegram.notificationsEnabled = notificationsEnabled;
+    if (marketingEnabled !== undefined) merchant.telegram.marketingEnabled = marketingEnabled;
+
+    await merchant.save();
+    return res.status(200).json({ message: 'Settings updated', settings: merchant.telegram });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * DELETE /api/v1/merchant/:merchantId/telegram/disconnect
+ * Authenticated. Clears stored bot credentials. Does not delete customer
+ * telegram links already captured — those remain valid CRM data, they just
+ * won't receive new messages until reconnected.
+ */
+async function disconnectBot(req, res, next) {
+  try {
+    const { merchantId } = req.params;
+    const merchant = await Merchant.findById(merchantId).select('+telegram.telegramBotToken');
+    if (!merchant) return res.status(404).json({ message: 'Merchant not found' });
+
+    merchant.telegram.telegramBotToken = undefined;
+    merchant.telegram.telegramBotUsername = undefined;
+    merchant.telegram.telegramWebhookSecret = undefined;
+    merchant.telegram.telegramBotConnectedAt = undefined;
+    merchant.telegram.enabled = false;
+    await merchant.save();
+
+    return res.status(200).json({ message: 'Telegram bot disconnected' });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTHENTICATED: MESSAGING / CRM INBOX
+// ─────────────────────────────────────────────────────────────
+
 /**
  * POST /api/v1/merchant/:merchantId/telegram/send
  * Authenticated. Send a one-off message to a specific linked customer.
@@ -152,7 +377,13 @@ async function sendToCustomer(req, res, next) {
       return res.status(400).json({ message: 'Customer has not linked Telegram yet' });
     }
 
-    await sendMessage(merchant, customer.telegram.chatId, text);
+    const result = await sendMessage(merchant, customer._id, customer.telegram.chatId, text);
+
+    if (result?.status === 'failed') {
+      return res
+        .status(502)
+        .json({ message: 'Telegram rejected the message', error: result.error });
+    }
 
     return res.status(200).json({ message: 'Message sent' });
   } catch (err) {
@@ -161,29 +392,39 @@ async function sendToCustomer(req, res, next) {
 }
 
 /**
- * DELETE /api/v1/merchant/:merchantId/telegram/disconnect
- * Authenticated. Clears stored bot credentials. Does not delete customer
- * telegram links already captured — those remain valid CRM data, they just
- * won't receive new messages until reconnected.
+ * POST /api/v1/merchant/:merchantId/telegram/broadcast
+ * Authenticated, admin-only. Sends a promotional message to every
+ * opted-in, linked customer. For large customer bases, wrap this call in a
+ * background job (BullMQ/cron) instead of awaiting it inline — this handler
+ * will block until every message is sent (rate-limited to ~25/sec).
+ * Body: { text, promoCode? }
  */
-async function disconnectBot(req, res, next) {
+async function broadcastPromotion(req, res, next) {
   try {
     const { merchantId } = req.params;
-    const merchant = await Merchant.findById(merchantId).select('+telegramBotToken');
+    const { text, promoCode } = req.body;
+
+    if (!text) return res.status(400).json({ message: 'text is required' });
+
+    const merchant = await Merchant.findById(merchantId);
     if (!merchant) return res.status(404).json({ message: 'Merchant not found' });
 
-    merchant.telegramBotToken = undefined;
-    merchant.telegramBotUsername = undefined;
-    merchant.telegramWebhookSecret = undefined;
-    merchant.telegramBotConnectedAt = undefined;
-    await merchant.save();
+    if (!merchant.telegram?.marketingEnabled) {
+      return res.status(403).json({ message: 'Marketing messages are disabled for this merchant' });
+    }
 
-    return res.status(200).json({ message: 'Telegram bot disconnected' });
+    const result = await sendBroadcast(merchant, text, { promoCode });
+    return res.status(200).json({ message: 'Broadcast complete', ...result });
   } catch (err) {
     return next(err);
   }
 }
-// telegram.controller.js
+
+/**
+ * GET /api/v1/merchant/:merchantId/telegram/conversations
+ * Authenticated. Returns one row per customer with their most recent
+ * message, for a WhatsApp-style inbox list in the dashboard.
+ */
 async function listConversations(req, res, next) {
   try {
     const { merchantId } = req.params;
@@ -198,14 +439,15 @@ async function listConversations(req, res, next) {
           lastMessageAt: { $first: '$createdAt' },
           lastDirection: { $first: '$direction' },
           unreadCount: {
-            $sum: { $cond: [{ $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$readAt', null] }] }, 1, 0] },
+            $sum: {
+              $cond: [{ $and: [{ $eq: ['$direction', 'in'] }, { $eq: ['$readAt', null] }] }, 1, 0],
+            },
           },
         },
       },
       { $sort: { lastMessageAt: -1 } },
     ]);
 
-    // attach customer name/avatar for display
     const customerIds = conversations.map(c => c._id);
     const customers = await Customer.find({ _id: { $in: customerIds } })
       .select('fullName profileImage telegram.username')
@@ -215,6 +457,7 @@ async function listConversations(req, res, next) {
     const result = conversations.map(c => ({
       customerId: c._id,
       customerName: byId[String(c._id)]?.fullName || 'Guest',
+      telegramUsername: byId[String(c._id)]?.telegram?.username || null,
       lastMessage: c.lastMessage,
       lastMessageAt: c.lastMessageAt,
       lastDirection: c.lastDirection,
@@ -225,21 +468,12 @@ async function listConversations(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
 
-}
-async function markConversationRead(req, res, next) {
-  try {
-    const { merchantId, customerId } = req.params;
-    await TelegramMessage.updateMany(
-      { merchant: merchantId, customer: customerId, direction: 'in', readAt: null },
-      { $set: { readAt: new Date() } }
-    );
-    return res.status(200).json({ message: 'Marked as read' });
-  } catch (err) {
-    return next(err);
-  }
-}
-// telegram.controller.js
+/**
+ * GET /api/v1/merchant/:merchantId/telegram/conversations/:customerId
+ * Authenticated. Full message history with one customer.
+ */
 async function getConversation(req, res, next) {
   try {
     const { merchantId, customerId } = req.params;
@@ -254,13 +488,33 @@ async function getConversation(req, res, next) {
   }
 }
 
+/**
+ * PATCH /api/v1/merchant/:merchantId/telegram/conversations/:customerId/read
+ * Authenticated. Marks all inbound messages from this customer as read.
+ */
+async function markConversationRead(req, res, next) {
+  try {
+    const { merchantId, customerId } = req.params;
+    await TelegramMessage.updateMany(
+      { merchant: merchantId, customer: customerId, direction: 'in', readAt: null },
+      { $set: { readAt: new Date() } }
+    );
+    return res.status(200).json({ message: 'Marked as read' });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
-     handleWebhook, 
-     connectBot,
-     getStatus,
-     sendToCustomer,
-     disconnectBot,
-     listConversations,
-     markConversationRead ,
-     getConversation
-   };
+  handleWebhook,
+  verifyMiniAppSession,
+  connectBot,
+  getStatus,
+  updateSettings,
+  disconnectBot,
+  sendToCustomer,
+  broadcastPromotion,
+  listConversations,
+  markConversationRead,
+  getConversation,
+};

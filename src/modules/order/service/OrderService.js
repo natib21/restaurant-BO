@@ -1,19 +1,81 @@
 const mongoose = require('mongoose');
 const AppError = require('../../../../utils/appError');
 const MenuItem = require('../../../../models/menuModel');
+const Ingredient = require('../../../../models/Ingredient');
 const Table = require('../../../../models/tabelModel');
 const CustomerSession = require('../../../../models/customerSessionModule');
 const ApiFeatures = require('../../../../utils/apiFeatures');
-const { merchantScopedQuery, getMerchantId, getBranchId } = require('../../../common/utils/tenant-scope');
+const {
+  merchantScopedQuery,
+  getMerchantId,
+  getBranchId,
+} = require('../../../common/utils/tenant-scope');
 const { MenuService } = require('../../menu');
 const { NotificationService } = require('../../notifications');
 const { OrderRepository } = require('../repository/OrderRepository');
 const { attachPaymentImage } = require('../dto/order-response.dto');
-const { assertValidStaffOrderType, assertDineInTableId } = require('../validators/order.validators');
+const {
+  assertValidStaffOrderType,
+  assertDineInTableId,
+} = require('../validators/order.validators');
 const { OrderStateMachineService } = require('./OrderStateMachineService');
 
 class OrderService {
   static VALID_TRANSITIONS = OrderStateMachineService.TRANSITIONS;
+  /**
+   * Calculate COGS (Cost of Goods Sold) for a menu item based on its recipe.
+   * Returns null if the menu item has no recipe or ingredients aren't tracked.
+   * 
+   * @param {Object} menuItem - The menu item with populated recipe.ingredients
+   * @returns {Promise<Number|null>} - Unit cost or null if not trackable
+   */
+  static async calculateMenuItemCost(menuItem) {
+    // No recipe or ingredients means no COGS tracking
+    if (!menuItem.recipe || !menuItem.recipe.ingredients || menuItem.recipe.ingredients.length === 0) {
+      return null;
+    }
+
+    try {
+      // Get all ingredient IDs from the recipe
+      const ingredientIds = menuItem.recipe.ingredients.map(ri => ri.ingredient);
+      
+      // Fetch all ingredients with their current costPerUnit
+      const ingredients = await Ingredient.find({
+        _id: { $in: ingredientIds },
+        isActive: true
+      }).select('_id costPerUnit').lean();
+
+      // Create a map for quick lookup
+      const ingredientCostMap = new Map(
+        ingredients.map(ing => [String(ing._id), ing.costPerUnit])
+      );
+
+      // Calculate total cost
+      let totalCost = 0;
+      let hasAllCosts = true;
+
+      for (const recipeIngredient of menuItem.recipe.ingredients) {
+        const ingredientId = String(recipeIngredient.ingredient);
+        const costPerUnit = ingredientCostMap.get(ingredientId);
+
+        if (costPerUnit === undefined || costPerUnit === null) {
+          // Missing cost data for this ingredient
+          hasAllCosts = false;
+          break;
+        }
+
+        // Add (quantity × costPerUnit) to total
+        totalCost += recipeIngredient.quantity * costPerUnit;
+      }
+
+      // Return null if we couldn't calculate complete cost
+      return hasAllCosts ? totalCost : null;
+    } catch (error) {
+      // Log error but don't fail order placement
+      console.error('Error calculating menu item cost:', error);
+      return null;
+    }
+  }
 
   static formatElapsed(date) {
     const mins = Math.floor((Date.now() - new Date(date)) / 60000);
@@ -104,16 +166,23 @@ class OrderService {
       MenuService.assertMenuItemOrderable(menuItem);
 
       const quantity = Number(item.quantity) || 1;
-      if (quantity < 1) throw new AppError('Quantity must be at least 1', 400);
+
+      if (quantity < 1) {
+        throw new AppError('Quantity must be at least 1', 400);
+      }
 
       const unitPrice = menuItem.price;
       const totalPrice = quantity * unitPrice;
+
+      // Calculate COGS (Cost of Goods Sold) per unit
+      const unitCost = await OrderService.calculateMenuItemCost(menuItem);
 
       orderItems.push({
         menuItem: menuItem._id,
         name: menuItem.name,
         quantity,
         unitPrice,
+        unitCost, // Will be null if no recipe or ingredient costs unavailable
         totalPrice,
         notes: item.notes || '',
       });
@@ -121,10 +190,13 @@ class OrderService {
       subtotal += totalPrice;
     }
 
-    return { orderItems, subtotal };
+    return {
+      orderItems,
+      subtotal,
+    };
   }
 
-  static async staffPlaceOrder(data,req) {
+  static async staffPlaceOrder(data, req) {
     const {
       items,
       tableId,
@@ -145,7 +217,7 @@ class OrderService {
 
     let tableNumber = null;
     if (orderType === 'dine_in') {
-      const table = await Table.find({ branch: branchId, _id: tableId });
+      const table = await Table.findOne({ branch: branchId, _id: tableId });
       if (!table) throw new AppError('Table not found', 404);
       tableNumber = table.tableNumber;
     }
@@ -158,7 +230,7 @@ class OrderService {
         quantity: item.quantity,
         unitPrice,
         totalPrice: unitPrice * item.quantity,
-        notes: item.notes || ''
+        notes: item.notes || '',
       };
     });
     const order = OrderRepository.newOrder({
@@ -209,15 +281,16 @@ class OrderService {
       .populate('items.menuItem', 'name image')
       .sort('-placedAt');
 
-    const ordersWithImages = order.map(o => attachPaymentImage(o, req));
-    return ordersWithImages;
+    if (!order) {
+      return null;
+    }
+
+    return attachPaymentImage(order, req);
   }
 
   static async getActiveOrders(req) {
     const { branchId, status } = req.query || {};
-    const statusList = status
-      ? [status]
-      : ['pending', 'accepted', 'preparing', 'ready'];
+    const statusList = status ? [status] : ['pending', 'accepted', 'preparing', 'ready'];
 
     const query = { status: statusList };
     if (branchId) {
@@ -278,8 +351,6 @@ class OrderService {
 
       order.paymentStatus = 'paid';
       order.paidAt = new Date();
-      order.paidBy = req.user._id;
-      order.paymentMethod = paymentMethod;
 
       order.paymentDetails = {
         method: paymentMethod || 'cash',
@@ -287,24 +358,34 @@ class OrderService {
         paidAt: new Date(),
         receiptImage: image || null,
       };
+
       await order.save({ session });
 
       const wasCompleted = order.status === 'completed';
+
       if (!wasCompleted) {
         order.status = 'completed';
         order.completedAt = new Date();
+
         await order.save({ session });
       }
 
       if (req.customer) {
         const points = Math.floor(order.totalAmount);
+
         req.customer.loyalty.points += points;
         req.customer.loyalty.totalPointsEarned += points;
 
-        const tiers = { bronze: 0, silver: 5000, gold: 20000, platinum: 50000 };
+        const tiers = {
+          bronze: 0,
+          silver: 5000,
+          gold: 20000,
+          platinum: 50000,
+        };
+
         const newTier = Object.keys(tiers)
           .reverse()
-          .find(t => req.customer.loyalty.totalPointsEarned >= tiers[t]);
+          .find(tier => req.customer.loyalty.totalPointsEarned >= tiers[tier]);
 
         if (newTier && newTier !== req.customer.loyalty.tier) {
           req.customer.loyalty.tier = newTier;
@@ -317,12 +398,21 @@ class OrderService {
           addedAt: new Date(),
         });
 
-        await req.customer.save({ session, validateBeforeSave: false });
+        await req.customer.save({
+          session,
+          validateBeforeSave: false,
+        });
       }
 
       if (order.table) {
         await CustomerSession.updateOne(
-          merchantScopedQuery({ tableId: order.table, isActive: true }, req),
+          merchantScopedQuery(
+            {
+              tableId: order.table,
+              isActive: true,
+            },
+            req
+          ),
           { isActive: false },
           { session }
         );
@@ -338,11 +428,17 @@ class OrderService {
       }
 
       await NotificationService.notifyOrderPaid(
-        { order, paymentMethod, bankName, image },
+        {
+          order,
+          paymentMethod,
+          bankName,
+          image,
+        },
         session
       );
 
       await session.commitTransaction();
+
       return order;
     } catch (error) {
       await session.abortTransaction();
@@ -474,7 +570,12 @@ class OrderService {
       },
     ]);
 
-    const summary = stats[0] || { totalRevenue: 0, totalOrders: 0, paidOrders: 0, avgOrderValue: 0 };
+    const summary = stats[0] || {
+      totalRevenue: 0,
+      totalOrders: 0,
+      paidOrders: 0,
+      avgOrderValue: 0,
+    };
 
     return {
       total,
@@ -548,9 +649,7 @@ class OrderService {
       summary: {
         totalRevenue,
         totalOrders: orders.length,
-        avgOrderValue: orders.length
-          ? Math.round(totalRevenue / orders.length)
-          : 0,
+        avgOrderValue: orders.length ? Math.round(totalRevenue / orders.length) : 0,
       },
       orders,
     };
@@ -781,7 +880,9 @@ class OrderService {
     const merchantId = OrderService.getMerchantId(req);
     const { id: branchId } = req.params;
 
-    if (!branchId) throw new AppError('branchId is required', 400);
+    if (!branchId) {
+      throw new AppError('branchId is required', 400);
+    }
 
     let queryObj = {
       merchant: merchantId,
@@ -792,7 +893,11 @@ class OrderService {
 
     if (dateFrom || dateTo) {
       queryObj.placedAt = {};
-      if (dateFrom) queryObj.placedAt.$gte = new Date(dateFrom);
+
+      if (dateFrom) {
+        queryObj.placedAt.$gte = new Date(dateFrom);
+      }
+
       if (dateTo) {
         const end = new Date(dateTo);
         end.setHours(23, 59, 59, 999);
@@ -801,7 +906,11 @@ class OrderService {
     }
 
     if (search) {
-      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      const searchRegex = {
+        $regex: search.trim(),
+        $options: 'i',
+      };
+
       queryObj.$or = [
         { orderNumber: searchRegex },
         { customerName: searchRegex },
@@ -822,28 +931,49 @@ class OrderService {
       .limitFields()
       .paginate();
 
-    features.query = features.query.select('branch table customer');
+    // IMPORTANT:
+    // Do not call .select('branch table customer') here.
+    // It would strip the other order fields from the response.
 
     const orders = await features.query.lean();
 
     const total = await OrderRepository.countDocuments(queryObj);
+
     const stats = await OrderRepository.aggregate([
-      { $match: queryObj },
+      {
+        $match: queryObj,
+      },
       {
         $group: {
           _id: null,
-          totalRevenue: { $sum: '$totalAmount' },
-          totalOrders: { $sum: 1 },
-          paidOrders: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] } },
-          avgOrderValue: { $avg: '$totalAmount' },
+          totalRevenue: {
+            $sum: '$totalAmount',
+          },
+          totalOrders: {
+            $sum: 1,
+          },
+          paidOrders: {
+            $sum: {
+              $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0],
+            },
+          },
+          avgOrderValue: {
+            $avg: '$totalAmount',
+          },
         },
       },
     ]);
 
-    const summary = stats[0] || { totalRevenue: 0, totalOrders: 0, paidOrders: 0, avgOrderValue: 0 };
+    const summary = stats[0] || {
+      totalRevenue: 0,
+      totalOrders: 0,
+      paidOrders: 0,
+      avgOrderValue: 0,
+    };
 
     const ordersWithItemCount = orders.map(order => {
       const withImage = attachPaymentImage(order, req);
+
       return {
         ...withImage,
         itemCount: order.items?.reduce((sum, i) => sum + (i.quantity || 0), 0) || 0,
@@ -863,7 +993,6 @@ class OrderService {
       },
     };
   }
-
   static async getOrderById(req) {
     const { id } = req.params;
 

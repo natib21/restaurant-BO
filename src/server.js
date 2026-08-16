@@ -22,7 +22,7 @@ process.on('uncaughtException', err => {
 async function bootstrap() {
   const env = loadEnv();
   const app = createApp();
-  
+
   await connectDatabase();
   logger.info(chalk.white.bgGreen('MongoDB connected successfully!'));
 

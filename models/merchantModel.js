@@ -154,16 +154,16 @@ const merchantSchema = new mongoose.Schema(
       prepTimeMinutes: { type: Number, default: 15, min: 5, max: 180 },
     },
 
-    trialStartedAt: {
-      type: Date,
-      default: Date.now,
-    },
-    trialExpiresAt: {
-      type: Date,
-      default: function () {
-        return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-      },
-    },
+    // trialStartedAt: {
+    //   type: Date,
+    //   default: Date.now,
+    // },
+    // trialExpiresAt: {
+    //   type: Date,
+    //   default: function () {
+    //     return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    //   },
+    // },
     isSubscriptionActive: {
       type: Boolean,
       default: false,
@@ -177,6 +177,94 @@ const merchantSchema = new mongoose.Schema(
       enum: ['free', 'basic', 'pro', 'enterprise', 'feature', 'trial'],
       default: 'free',
     },
+    features: {
+      core: {
+        menu: {
+          enabled: {
+            type: Boolean,
+            default: true,
+          },
+        },
+
+        tableManagement: {
+          enabled: {
+            type: Boolean,
+            default: true,
+          },
+        },
+      },
+
+      optional: {
+        orders: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+        inventory: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        multiBranch: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        telegram: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        sales: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        reports: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        customerManagement: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        deliveryManagement: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        paymentIntegration: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        restaurantWebsite: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+      },
+    },
     isActive: { type: Boolean, default: true },
     mode: { type: String, default: 'Test' },
 
@@ -189,13 +277,43 @@ const merchantSchema = new mongoose.Schema(
     // leaked them to the frontend by default. Now hidden like apiKey.
     facebookPageId: String,
     facebookPageToken: { type: String, select: false },
-    telegramBotToken: { type: String, select: false },
-    telegramChannel: String,
-  
-telegramBotUsername: { type: String, trim: true },       // public, e.g. "marios_pizza_bot" — used in deep links
-telegramWebhookSecret: { type: String, select: false },  // random secret, verified via header on every webhook call
-telegramBotConnectedAt: Date,
 
+    telegram: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+
+      deliveryEnabled: {
+        type: Boolean,
+        default: false,
+      },
+
+      notificationsEnabled: {
+        type: Boolean,
+        default: true,
+      },
+
+      marketingEnabled: {
+        type: Boolean,
+        default: false,
+      },
+
+      telegramBotToken: {
+        type: String,
+        select: false,
+      },
+      telegramChannel: String,
+      telegramBotUsername: {
+        type: String,
+        trim: true,
+      }, // public, e.g. "marios_pizza_bot" — used in deep links
+      telegramWebhookSecret: {
+        type: String,
+        select: false,
+      }, // random secret, verified via header on every webhook call
+      telegramBotConnectedAt: Date,
+    },
   },
   {
     timestamps: true,
@@ -204,16 +322,20 @@ telegramBotConnectedAt: Date,
   }
 );
 
-merchantSchema.virtual('trialDaysLeft').get(function () {
-  if (!this.trialExpiresAt) return 0;
-  const now = new Date();
-  const diff = this.trialExpiresAt - now;
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-});
+// merchantSchema.virtual('trialDaysLeft').get(function () {
+//   if (!this.trialExpiresAt) return 0;
+//   const now = new Date();
+//   const diff = this.trialExpiresAt - now;
+//   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+// });
+// merchantSchema.virtual('hasActiveAccess').get(function () {
+//   const now = new Date();
+//   const isTrialValid = now <= this.trialExpiresAt;
+//   return this.status === 'approved' && this.isActive && (isTrialValid || this.isSubscriptionActive);
+// });
+// ✅ REPLACE the existing hasActiveAccess virtual with this
 merchantSchema.virtual('hasActiveAccess').get(function () {
-  const now = new Date();
-  const isTrialValid = now <= this.trialExpiresAt;
-  return this.status === 'approved' && this.isActive && (isTrialValid || this.isSubscriptionActive);
+  return this.status === 'approved' && this.isActive && this.isSubscriptionActive;
 });
 merchantSchema.virtual('publicWebsite').get(function () {
   if (this.customDomain && this.customDomainVerified) {
@@ -221,6 +343,17 @@ merchantSchema.virtual('publicWebsite').get(function () {
   }
   return `https://${this.slug}.menuroom.et`;
 });
+merchantSchema.methods.hasFeature = function (featureName) {
+  if (this.features?.core?.[featureName]?.enabled) {
+    return true;
+  }
+
+  if (this.features?.optional?.[featureName]?.enabled) {
+    return true;
+  }
+
+  return false;
+};
 
 merchantSchema.virtual('subscriptionHistory', {
   ref: 'Subscription',

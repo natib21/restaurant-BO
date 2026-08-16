@@ -232,153 +232,152 @@ class MenuService {
     };
   }
 
- // service/MenuService.js
-// service/MenuService.js
+  // service/MenuService.js
+  // service/MenuService.js
 
-static async getAllMenu(req) {
-  const merchantId = req.user?.merchant?._id || req.user?.merchant;
-  
-  if (!merchantId) {
-    throw new AppError('Merchant ID is required', 400);
+  static async getAllMenu(req) {
+    const merchantId = req.user?.merchant?._id || req.user?.merchant;
+
+    if (!merchantId) {
+      throw new AppError('Merchant ID is required', 400);
+    }
+
+    const filter = { merchant: merchantId };
+    // ✅ Return Mongoose documents (not formatted)
+    const menuItems = await MenuRepository.findMenus(filter).sort('-createdAt');
+
+    return menuItems || [];
   }
 
-  const filter = { merchant: merchantId };
-  // ✅ Return Mongoose documents (not formatted)
-  const menuItems = await MenuRepository.findMenus(filter).sort('-createdAt');
-  
-  return menuItems || [];
-}
+  static async getMenu(req) {
+    const merchantId = req.user?.merchant?._id || req.user?.merchant;
 
+    if (!merchantId) {
+      throw new AppError('Merchant ID is required', 400);
+    }
 
-static async getMenu(req) {
-  const merchantId = req.user?.merchant?._id || req.user?.merchant;
-  
-  if (!merchantId) {
-    throw new AppError('Merchant ID is required', 400);
+    const menuItem = await MenuRepository.findMenuOne({
+      _id: req.params.id,
+      merchant: merchantId,
+    });
+
+    if (!menuItem) {
+      throw new AppError('Menu item not found.', 404);
+    }
+
+    // ✅ Return the Mongoose document directly (NOT the formatted version)
+    // The controller will handle population and formatting
+    return menuItem;
   }
-
-  const menuItem = await MenuRepository.findMenuOne({
-    _id: req.params.id,
-    merchant: merchantId,
-  });
-  
-  if (!menuItem) {
-    throw new AppError('Menu item not found.', 404);
-  }
-  
-  // ✅ Return the Mongoose document directly (NOT the formatted version)
-  // The controller will handle population and formatting
-  return menuItem;
-}
 
   // service/MenuService.js
 
-static async createNewMenu(menuData, req) {
-  // ✅ Get merchantId from menuData instead of req.user
-  const merchantId = menuData.merchant || req?.user?.merchant?._id;
-  console.log("req user => :{",req.user)
-  if (!merchantId) {
-    throw new AppError('Merchant ID is required to create a menu item', 400);
-  }
+  static async createNewMenu(menuData, req) {
+    // ✅ Get merchantId from menuData instead of req.user
+    const merchantId = menuData.merchant || req?.user?.merchant?._id;
+    console.log('req user => :{', req.user);
+    if (!merchantId) {
+      throw new AppError('Merchant ID is required to create a menu item', 400);
+    }
 
-  const variants = parseJSON(menuData.variants, []);
-  const ingredients = parseJSON(menuData.ingredients, []);
-  const allergens = parseJSON(menuData.allergens, []);
-  const tags = parseJSON(menuData.tags, []);
+    const variants = parseJSON(menuData.variants, []);
+    const ingredients = parseJSON(menuData.ingredients, []);
+    const allergens = parseJSON(menuData.allergens, []);
+    const tags = parseJSON(menuData.tags, []);
 
-  const {
-    name,
-    type,
-    category,
-    description,
-    prepTime,
-    drinkType,
-    isAlcoholic,
-    alcoholPercentage,
-    isVeg,
-    isSpicy,
-    available,
-    price,
-    image,
-    imageFilename,
-  } = menuData;
+    const {
+      name,
+      type,
+      category,
+      description,
+      prepTime,
+      drinkType,
+      isAlcoholic,
+      alcoholPercentage,
+      isVeg,
+      isSpicy,
+      available,
+      price,
+      image,
+      imageFilename,
+    } = menuData;
 
-  assertMenuCreateFields({ name, type, category });
+    assertMenuCreateFields({ name, type, category });
 
-  let finalVariants = [];
+    let finalVariants = [];
 
-  if (variants.length > 0) {
-    finalVariants = variants.map((v, index) => {
-      if (v.price == null || v.price < 0) {
-        throw new AppError(`Variant ${index + 1} must have a valid price`, 400);
+    if (variants.length > 0) {
+      finalVariants = variants.map((v, index) => {
+        if (v.price == null || v.price < 0) {
+          throw new AppError(`Variant ${index + 1} must have a valid price`, 400);
+        }
+
+        return {
+          name: v.name?.trim() || 'Regular',
+          size: v.size || undefined,
+          volume: v.volume || undefined,
+          price: Number(v.price),
+          calories: v.calories,
+          available: v.available !== false,
+          isDefault: Boolean(v.isDefault),
+        };
+      });
+
+      if (!finalVariants.some(v => v.isDefault)) {
+        finalVariants[0].isDefault = true;
       }
-
-      return {
-        name: v.name?.trim() || 'Regular',
-        size: v.size || undefined,
-        volume: v.volume || undefined,
-        price: Number(v.price),
-        calories: v.calories,
-        available: v.available !== false,
-        isDefault: Boolean(v.isDefault),
-      };
-    });
-
-    if (!finalVariants.some(v => v.isDefault)) {
-      finalVariants[0].isDefault = true;
     }
-  }
 
-  if (finalVariants.length === 0) {
-    finalVariants.push({
-      name: 'Regular',
-      price: Number(price) || 0,
-      isDefault: true,
-    });
-  }
+    if (finalVariants.length === 0) {
+      finalVariants.push({
+        name: 'Regular',
+        price: Number(price) || 0,
+        isDefault: true,
+      });
+    }
 
-  // ✅ Build menu data with proper fields
-  const menuDataToCreate = {
-    merchant: merchantId,
-    name: name.trim(),
-    type,
-    category: category.trim(),
-    description,
-    prepTime,
-    drinkType: drinkType || null,
-    isAlcoholic: isAlcoholic === 'true',
-    alcoholPercentage: Number(alcoholPercentage) || 0,
-    isVeg: isVeg === 'true' ? true : isVeg === 'false' ? false : null,
-    isSpicy: isSpicy === 'true',
-    available: available !== 'false',
-    price: price || 0,
-    variants: finalVariants,
-    ingredients,
-    allergens,
-    tags,
-    // ✅ Handle image properly
-    image: image || null,
-    imageFilename: imageFilename || null,
-  };
+    // ✅ Build menu data with proper fields
+    const menuDataToCreate = {
+      merchant: merchantId,
+      name: name.trim(),
+      type,
+      category: category.trim(),
+      description,
+      prepTime,
+      drinkType: drinkType || null,
+      isAlcoholic: isAlcoholic === 'true',
+      alcoholPercentage: Number(alcoholPercentage) || 0,
+      isVeg: isVeg === 'true' ? true : isVeg === 'false' ? false : null,
+      isSpicy: isSpicy === 'true',
+      available: available !== 'false',
+      price: price || 0,
+      variants: finalVariants,
+      ingredients,
+      allergens,
+      tags,
+      // ✅ Handle image properly
+      image: image || null,
+      imageFilename: imageFilename || null,
+    };
 
-  // Create the menu
-  const menu = await MenuRepository.createMenu(menuDataToCreate);
+    // Create the menu
+    const menu = await MenuRepository.createMenu(menuDataToCreate);
 
-  // Add to default menu group
-  await MenuRepository.findOneAndUpdateMenuGroup(
-    { merchant: merchantId, isSystemDefault: true },
-    {
-      $push: {
-        items: {
-          menu: menu._id,
-          sortOrder: Date.now(),
+    // Add to default menu group
+    await MenuRepository.findOneAndUpdateMenuGroup(
+      { merchant: merchantId, isSystemDefault: true },
+      {
+        $push: {
+          items: {
+            menu: menu._id,
+            sortOrder: Date.now(),
+          },
         },
-      },
-    }
-  );
+      }
+    );
 
-  return menu;
-}
+    return menu;
+  }
 
   static async updateMenu(req) {
     const merchantId = req.user.merchant._id;
@@ -458,12 +457,13 @@ static async createNewMenu(menuData, req) {
             _id: i.menuItem._id,
             name: i.customName || i.menuItem.name,
             description: i.customDescription || i.menuItem.description,
-            image: resolveSingleImageData({
-              image: i.menuItem.image,
-              imageFilename: i.menuItem.imageFilename,
-              imageUrl: i.menuItem.imageUrl,
-              legacyBasePath: '/img/menu',
-            })?.url || null,
+            image:
+              resolveSingleImageData({
+                image: i.menuItem.image,
+                imageFilename: i.menuItem.imageFilename,
+                imageUrl: i.menuItem.imageUrl,
+                legacyBasePath: '/img/menu',
+              })?.url || null,
             price: i.overridePrice || i.menuItem.variants[0]?.price || i.menuItem.price,
             variants: i.menuItem.variants,
             isVeg: i.menuItem.isVeg,

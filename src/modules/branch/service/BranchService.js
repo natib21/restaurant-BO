@@ -262,17 +262,36 @@ class BranchService {
       throw new AppError('Name, city, and coordinates are required', 400);
     }
 
+    // Fetch a fresh Merchant document — don't trust req.user.merchant to carry
+    // instance methods like hasFeature(); it may be a plain populated subdoc
+    // depending on how the JWT/auth guard hydrated it.
+    const merchant = await Merchant.findById(merchantId);
+    if (!merchant) throw new AppError('Merchant not found', 404);
+
+    const existingBranchCount = await BranchRepository.findBranches({
+      merchant: merchantId,
+      isActive: true,
+    }).countDocuments();
+
+    // First branch (their base location) is always free — every merchant gets
+    // that regardless of subscription. Only the SECOND+ branch requires the
+    // multiBranch add-on.
+    if (existingBranchCount >= 1 && !merchant.hasFeature('multiBranch')) {
+      throw new AppError(
+        'Adding more than one branch requires the Multi-Branch feature. Upgrade your subscription to add additional locations.',
+        403
+      );
+    }
+
     if (isMain) {
       const existingMain = await BranchRepository.findBranchOne({
         merchant: merchantId,
         isMain: true,
       });
-      if (existingMain) {
-        throw new AppError('Only one main branch allowed', 400);
-      }
+      if (existingMain) throw new AppError('Only one main branch allowed', 400);
     }
 
-    return BranchRepository.createBranch({
+    const branch = await BranchRepository.createBranch({
       name,
       merchant: merchantId,
       phone,
@@ -292,16 +311,22 @@ class BranchService {
       settings: req.body.settings || {},
       branding: req.body.branding || {},
     });
+
+    // Keep branchCounter meaningful now that it's actually enforced against
+    merchant.branchCounter = existingBranchCount + 1;
+    await merchant.save({ validateBeforeSave: false });
+
+    return branch;
   }
 
   static async getAllBranches(req) {
     const merchantId = req.user.merchant?._id;
 
     if (!merchantId) {
-       // If the user doesn't have a merchant, they might be a Super Admin 
-       // who should be able to see all branches. 
-       // Adjust this logic based on your system's business rules.
-       throw new AppError('User is not associated with a merchant', 403);
+      // If the user doesn't have a merchant, they might be a Super Admin
+      // who should be able to see all branches.
+      // Adjust this logic based on your system's business rules.
+      throw new AppError('User is not associated with a merchant', 403);
     }
     const features = new ApiFeatures(
       BranchRepository.findBranches({ merchant: merchantId }),
@@ -448,10 +473,7 @@ class BranchService {
   static async getMerchantUsersByBranch(req) {
     const merchantId = req.user.merchant?._id;
     if (!merchantId) {
-      throw new AppError(
-        'Merchant context not found — are you logged in as a merchant user?',
-        403
-      );
+      throw new AppError('Merchant context not found — are you logged in as a merchant user?', 403);
     }
 
     const { id } = req.params;
@@ -551,9 +573,8 @@ class BranchService {
   }
 
   static async getAllTables(req) {
-      console.log("user req",req)
+    console.log('user req', req);
     const features = new ApiFeatures(
-    
       BranchRepository.findTables({ merchant: req.user.merchant._id, isActive: true }),
       req.query
     )
@@ -614,11 +635,7 @@ class BranchService {
     }
 
     try {
-      const qrResult = await generateSecureQR(
-        req.user.merchant._id,
-        table.branch,
-        table._id
-      );
+      const qrResult = await generateSecureQR(req.user.merchant._id, table.branch, table._id);
 
       table.qrCode = qrResult.qrImage;
       table.qrData = qrResult.data;
@@ -707,7 +724,7 @@ class BranchService {
 
   static async getTablesByBranch(req) {
     const { id } = req.params;
-    console.log(req)
+    console.log(req);
     const merchantId = req.user.merchant._id;
 
     if (!id) {

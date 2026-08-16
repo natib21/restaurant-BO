@@ -9,7 +9,11 @@ const router = express.Router();
 router.use(protect);
 router.use(restrictTo());
 
-router.post('/publish', requireCapability(CAPABILITIES.MENU_MANAGE), menuController.publishMenuGroup);
+router.post(
+  '/publish',
+  requireCapability(CAPABILITIES.MENU_MANAGE),
+  menuController.publishMenuGroup
+);
 router.patch(
   '/items/:id/archive',
   requireCapability(CAPABILITIES.MENU_MANAGE),

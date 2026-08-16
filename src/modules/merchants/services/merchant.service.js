@@ -28,7 +28,11 @@ class MerchantService {
   }
 
   async createMerchant(data, approvedByUserId) {
-    const exists = await merchantRepository.findByUniqueFields(data.phone, data.taxId, data.businessName);
+    const exists = await merchantRepository.findByUniqueFields(
+      data.phone,
+      data.taxId,
+      data.businessName
+    );
     if (exists) {
       throw new AppError('Merchant already exists with this phone, tax ID, or name', 400);
     }
@@ -59,8 +63,14 @@ class MerchantService {
 
   async updateMe(merchantId, data) {
     const restrictedFields = [
-      'status', 'isActive', 'taxId', 'approvedBy',
-      'subscriptionPlan', 'suspendedReason', 'suspendedAt', 'createdAt',
+      'status',
+      'isActive',
+      'taxId',
+      'approvedBy',
+      'subscriptionPlan',
+      'suspendedReason',
+      'suspendedAt',
+      'createdAt',
     ];
 
     restrictedFields.forEach(field => {
@@ -73,7 +83,10 @@ class MerchantService {
   }
 
   async deleteMerchant(id) {
-    const merchant = await merchantRepository.updateById(id, { status: 'inactive', isActive: false });
+    const merchant = await merchantRepository.updateById(id, {
+      status: 'inactive',
+      isActive: false,
+    });
     if (!merchant) throw new AppError('Merchant not found', 404);
 
     await merchantRepository.deactivateUsersForMerchant(id);
@@ -83,7 +96,8 @@ class MerchantService {
   async approveMerchant(id, approvedByUserId) {
     const merchant = await merchantRepository.findById(id);
     if (!merchant) throw new AppError('Merchant not found', 404);
-    if (merchant.status !== 'pending') throw new AppError('Only pending merchants can be approved', 400);
+    if (merchant.status !== 'pending')
+      throw new AppError('Only pending merchants can be approved', 400);
 
     return await merchantRepository.updateById(id, {
       status: 'approved',
@@ -126,7 +140,7 @@ class MerchantService {
 
     const merchant = await merchantRepository.updateById(id, {
       subscriptionPlan: plan,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
     if (!merchant) throw new AppError('Merchant not found', 404);
     return merchant;

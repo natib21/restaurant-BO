@@ -11,7 +11,7 @@
 
 const express = require('express');
 const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const comboController         = require('./controller/combo.controller');
+const comboController = require('./controller/combo.controller');
 
 const router = express.Router();
 
@@ -22,7 +22,8 @@ router.get('/active', comboController.getActiveCombos);
 router.use(protect);
 router.use(restrictTo());
 
-router.route('/')
+router
+  .route('/')
   .get(comboController.getAllCombos)
   .post(
     comboController.uploadComboPhoto,
@@ -30,7 +31,8 @@ router.route('/')
     comboController.createCombo
   );
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(comboController.getCombo)
   .patch(
     comboController.uploadComboPhoto,
@@ -39,8 +41,8 @@ router.route('/:id')
   )
   .delete(comboController.deleteCombo);
 
-router.patch('/:id/toggle-active',       comboController.toggleComboActive);
-router.patch('/:comboId/branch-toggle',  comboController.toggleBranchActive);
+router.patch('/:id/toggle-active', comboController.toggleComboActive);
+router.patch('/:comboId/branch-toggle', comboController.toggleBranchActive);
 router.patch('/:comboId/branch-override', comboController.updateBranchOverride);
 
 // Internal (service-to-service, still RBAC protected)

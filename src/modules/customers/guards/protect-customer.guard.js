@@ -1,7 +1,11 @@
 const catchAsync = require('../../../../utils/catchAsync');
 const AppError = require('../../../../utils/appError');
 const Customer = require('../../../../models/customerModule');
-const { getMerchantId, getBranchId, getCustomerId } = require('../../../../src/common/utils/tenant-scope');
+const {
+  getMerchantId,
+  getBranchId,
+  getCustomerId,
+} = require('../../../../src/common/utils/tenant-scope');
 
 exports.protectCustomer = catchAsync(async (req, res, next) => {
   const customerId = getCustomerId(req);

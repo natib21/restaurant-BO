@@ -1,7 +1,6 @@
-
 /**
  * Order Status Handlers
- * 
+ *
  * Handles status queries and status transitions.
  * All handlers are staff/merchant scoped and require JWT + RBAC.
  */
@@ -13,25 +12,20 @@ const { OrderService } = require('../../service/OrderService');
 /**
  * GET /api/v1/orders/active (staff)
  * Get active orders for branch
- * 
+ *
  * Query: { status?, tableNumber?, limit?, offset? }
  * Response: { success, message, data: { orders }, meta: { count } }
  */
 exports.getActiveOrders = catchAsync(async (req, res, next) => {
   const orders = await OrderService.getActiveOrders(req);
 
-  res.sendList(
-    orders,
-    'orders',
-    200,
-    { count: orders.length }
-  );
+  res.sendList(orders, 'orders', 200, { count: orders.length });
 });
 
 /**
  * PATCH /api/v1/orders/:id/status (staff)
  * Update order status (e.g., pending → accepted → preparing → ready)
- * 
+ *
  * Params: id (order ID)
  * Body: { status, reason? }
  * Response: { success, message, data: { order } }
@@ -106,7 +100,7 @@ exports.getCanceledOrders = createStatusEndpoint('canceled');
 /**
  * GET /api/v1/orders/completed
  * Get all completed orders with summary stats
- * 
+ *
  * Response: { status, count, summary: { totalRevenue, avgValue }, data: { orders } }
  */
 exports.getCompletedOrders = catchAsync(async (req, res) => {

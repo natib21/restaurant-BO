@@ -4,12 +4,12 @@
  * No legacy dependency.
  */
 
-const Role       = require('../../../models/roleModel');
-const Task       = require('../../../models/taskModel');
-const Merchant   = require('../../../models/merchantModel');
-const User       = require('../../../models/userModel');
+const Role = require('../../../models/roleModel');
+const Task = require('../../../models/taskModel');
+const Merchant = require('../../../models/merchantModel');
+const User = require('../../../models/userModel');
 const catchAsync = require('../../../utils/catchAsync');
-const AppError   = require('../../../utils/appError');
+const AppError = require('../../../utils/appError');
 
 exports.getAllRoles = catchAsync(async (req, res) => {
   const roles = await Role.find()
@@ -31,6 +31,13 @@ exports.createRole = catchAsync(async (req, res, next) => {
 
   if (!name || !description) return next(new AppError('Name and description are required', 400));
 
+  // Validate tasks for non-system roles (system roles bypass task-based RBAC)
+  if (isSystemRole !== true) {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return next(new AppError('Non-system roles must have at least one task assigned', 400));
+    }
+  }
+
   let finalMerchant = null;
   if (merchant) {
     const merchantDoc = await Merchant.findById(merchant);
@@ -41,7 +48,8 @@ exports.createRole = catchAsync(async (req, res, next) => {
   if (tasks?.length) {
     if (!Array.isArray(tasks)) return next(new AppError('Tasks must be an array of IDs', 400));
     const valid = await Task.find({ _id: { $in: tasks } });
-    if (valid.length !== tasks.length) return next(new AppError('One or more task IDs are invalid', 400));
+    if (valid.length !== tasks.length)
+      return next(new AppError('One or more task IDs are invalid', 400));
   }
 
   const exists = await Role.findOne({ name: name.toUpperCase(), merchant: finalMerchant || null });
@@ -85,7 +93,8 @@ exports.updateRole = catchAsync(async (req, res, next) => {
   if (tasks !== undefined) {
     if (!Array.isArray(tasks)) return next(new AppError('Tasks must be an array', 400));
     const valid = await Task.find({ _id: { $in: tasks } });
-    if (valid.length !== tasks.length) return next(new AppError('One or more task IDs are invalid', 400));
+    if (valid.length !== tasks.length)
+      return next(new AppError('One or more task IDs are invalid', 400));
   }
 
   const updated = await Role.findByIdAndUpdate(
@@ -95,7 +104,9 @@ exports.updateRole = catchAsync(async (req, res, next) => {
       ...(description && { description }),
       ...(tasks !== undefined && { tasks }),
       ...(isSystemRole !== undefined && { isSystemRole }),
-      ...(req.body.isSubscriptionBased !== undefined && { isSubscriptionBased: req.body.isSubscriptionBased }),
+      ...(req.body.isSubscriptionBased !== undefined && {
+        isSubscriptionBased: req.body.isSubscriptionBased,
+      }),
     },
     { new: true, runValidators: true }
   )
