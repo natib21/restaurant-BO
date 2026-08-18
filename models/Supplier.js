@@ -1,6 +1,7 @@
 // models/Supplier.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const auditPlugin = require('../utils/auditPlugin');
 
 const supplierSchema = new Schema(
   {
@@ -63,5 +64,21 @@ const supplierSchema = new Schema(
 // Indexes
 supplierSchema.index({ merchant: 1, name: 1 });
 supplierSchema.index({ merchant: 1, isActive: 1 });
+
+// Apply audit plugin BEFORE model creation
+supplierSchema.plugin(auditPlugin, {
+  resource: 'Supplier',
+  auditedFields: [
+    'name',
+    'contactPerson',
+    'phone',
+    'email',
+    'address',
+    'paymentTerms',
+    'leadTime',
+    'isActive',
+    'rating',
+  ],
+});
 
 module.exports = mongoose.model('Supplier', supplierSchema);

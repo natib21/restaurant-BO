@@ -2,6 +2,7 @@
 // ✅ PHASE 0: Kitchen Display System - Station model
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const auditPlugin = require('../utils/auditPlugin');
 
 const kitchenStationSchema = new Schema(
   {
@@ -58,5 +59,11 @@ kitchenStationSchema.index({ branch: 1, code: 1 }, { unique: true });
 
 // For listing active stations in a branch
 kitchenStationSchema.index({ branch: 1, isActive: 1, displayOrder: 1 });
+
+// Apply audit plugin BEFORE model creation
+kitchenStationSchema.plugin(auditPlugin, {
+  resource: 'KitchenStation',
+  auditedFields: ['name', 'code', 'description', 'isActive', 'displayOrder'],
+});
 
 module.exports = mongoose.model('KitchenStation', kitchenStationSchema);
