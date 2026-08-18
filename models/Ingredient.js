@@ -1,6 +1,7 @@
 // models/Ingredient.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const auditPlugin = require('../utils/auditPlugin');
 
 const ingredientSchema = new Schema(
   {
@@ -86,5 +87,23 @@ ingredientSchema.statics.getLowStockItems = function (merchantId) {
     $expr: { $lte: ['$currentStock', '$minStock'] },
   });
 };
+
+// Apply audit plugin BEFORE model creation
+ingredientSchema.plugin(auditPlugin, {
+  resource: 'Ingredient',
+  auditedFields: [
+    'name',
+    'category',
+    'unit',
+    'currentStock',
+    'minStock',
+    'maxStock',
+    'costPerUnit',
+    'supplier',
+    'isActive',
+    'lastRestocked',
+    'expiryDate',
+  ],
+});
 
 module.exports = mongoose.model('Ingredient', ingredientSchema);
