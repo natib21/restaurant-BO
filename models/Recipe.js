@@ -1,6 +1,7 @@
 // models/Recipe.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const auditPlugin = require('../utils/auditPlugin');
 
 const recipeItemSchema = new Schema(
   {
@@ -78,6 +79,19 @@ recipeSchema.pre('save', async function (next) {
 
   this.totalCost = totalCost / this.yield; // Cost per serving
   next();
+});
+
+// Apply audit plugin BEFORE model creation
+recipeSchema.plugin(auditPlugin, {
+  resource: 'Recipe',
+  auditedFields: [
+    'name',
+    'items',
+    'totalCost',
+    'yield',
+    'isActive',
+    'menuItem',
+  ],
 });
 
 module.exports = mongoose.model('Recipe', recipeSchema);

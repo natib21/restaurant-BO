@@ -1,6 +1,7 @@
 // models/Invitation.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const auditPlugin = require('../utils/auditPlugin');
 
 const invitationSchema = new mongoose.Schema(
   {
@@ -76,5 +77,20 @@ invitationSchema.methods.markAsUsed = function (userId) {
   this.usedBy = userId;
   return this.save();
 };
+
+// Apply audit plugin BEFORE model creation
+invitationSchema.plugin(auditPlugin, {
+  resource: 'Invitation',
+  auditedFields: [
+    'used',
+    'usedAt',
+    'usedBy',
+    'role',
+    'branch',
+    'email',
+    'invitedBy',
+    'expiresAt',
+  ],
+});
 
 module.exports = mongoose.model('Invitation', invitationSchema);

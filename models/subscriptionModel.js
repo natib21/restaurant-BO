@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const auditPlugin = require('../utils/auditPlugin');
 
 const subscriptionSchema = new mongoose.Schema(
   {
@@ -71,5 +72,25 @@ const subscriptionSchema = new mongoose.Schema(
 );
 
 subscriptionSchema.index({ merchant: 1, status: 1 });
+
+// Apply audit plugin BEFORE model creation
+subscriptionSchema.plugin(auditPlugin, {
+  resource: 'Subscription',
+  auditedFields: [
+    'status',
+    'plan',
+    'features',
+    'isTrial',
+    'trialStartDate',
+    'trialEndDate',
+    'amount',
+    'currency',
+    'startDate',
+    'endDate',
+    'paymentProvider',
+    'transactionReference',
+    'verifiedAt',
+  ],
+});
 
 module.exports = mongoose.model('Subscription', subscriptionSchema);

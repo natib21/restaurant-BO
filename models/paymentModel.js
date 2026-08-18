@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const auditPlugin = require('../utils/auditPlugin');
 
 const paymentSchema = new mongoose.Schema({
   order: {
@@ -57,6 +58,20 @@ paymentSchema.index({ restaurant: 1, status: 1, paymentDate: -1 });
 paymentSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
+});
+
+// Apply audit plugin BEFORE model creation
+paymentSchema.plugin(auditPlugin, {
+  resource: 'Payment',
+  auditedFields: [
+    'status',
+    'amount',
+    'currency',
+    'method',
+    'transactionId',
+    'paymentDate',
+    'notes',
+  ],
 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

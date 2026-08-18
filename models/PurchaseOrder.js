@@ -1,6 +1,7 @@
 // models/PurchaseOrder.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const auditPlugin = require('../utils/auditPlugin');
 
 const purchaseOrderItemSchema = new Schema(
   {
@@ -106,6 +107,22 @@ purchaseOrderSchema.pre('save', function (next) {
   this.subtotal = this.items.reduce((sum, item) => sum + item.totalPrice, 0);
   this.totalAmount = this.subtotal + this.taxAmount;
   next();
+});
+
+// Apply audit plugin BEFORE model creation
+purchaseOrderSchema.plugin(auditPlugin, {
+  resource: 'PurchaseOrder',
+  auditedFields: [
+    'status',
+    'items',
+    'subtotal',
+    'taxAmount',
+    'totalAmount',
+    'expectedDeliveryDate',
+    'actualDeliveryDate',
+    'approvedBy',
+    'notes',
+  ],
 });
 
 module.exports = mongoose.model('PurchaseOrder', purchaseOrderSchema);
