@@ -1,6 +1,7 @@
 // models/Table.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const auditPlugin = require('../utils/auditPlugin');
 
 const tableSchema = new mongoose.Schema(
   {
@@ -179,5 +180,18 @@ tableSchema.methods.moveTo = async function (newTableId) {
 
   return { success: true, newTable: newTable.tableNumber };
 };
+
+// Apply audit plugin BEFORE model creation
+tableSchema.plugin(auditPlugin, {
+  resource: 'Table',
+  auditedFields: [
+    'tableNumber',
+    'capacity',
+    'status',
+    'location',
+    'section',
+    'isActive',
+  ],
+});
 
 module.exports = mongoose.model('Table', tableSchema);
