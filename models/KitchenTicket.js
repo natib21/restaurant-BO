@@ -2,6 +2,7 @@
 // ✅ PHASE 0: Kitchen Display System - Ticket model
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
+const auditPlugin = require('../utils/auditPlugin');
 
 const kitchenTicketItemSchema = new Schema(
   {
@@ -137,5 +138,22 @@ kitchenTicketSchema.index({ order: 1 });
 
 // For station dashboard with priority sorting
 kitchenTicketSchema.index({ station: 1, status: 1, priority: -1, createdAt: 1 });
+
+// Apply audit plugin BEFORE model creation
+kitchenTicketSchema.plugin(auditPlugin, {
+  resource: 'KitchenTicket',
+  auditedFields: [
+    'status',
+    'priority',
+    'assignedTo',
+    'acceptedAt',
+    'startedAt',
+    'completedAt',
+    'canceledAt',
+    'canceledBy',
+    'canceledReason',
+    'items.status',
+  ],
+});
 
 module.exports = mongoose.model('KitchenTicket', kitchenTicketSchema);
