@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const validator = require('validator');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const auditPlugin = require('../utils/auditPlugin');
 
 const historySchema = new mongoose.Schema({
   orderId: {
@@ -169,6 +170,12 @@ userSchema.methods.createPasswordResetToken = function () {
   this.find({ restaurant: { $ne: null } });
   next();
 }); */
+
+// Apply audit plugin BEFORE model creation
+userSchema.plugin(auditPlugin, {
+  resource: 'User',
+  auditedFields: ['role', 'isActive', 'email', 'phone', 'branch', 'passwordChangedAt'],
+});
 
 // --- MODEL EXPORT ---
 const User = mongoose.model('User', userSchema);
