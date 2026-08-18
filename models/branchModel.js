@@ -131,5 +131,15 @@ branchSchema.pre('save', async function (next) {
   next();
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// PHASE 2 - STEP 3: Apply Audit Plugin
+// ══════════════════════════════════════════════════════════════════════════
+const auditPlugin = require('../utils/auditPlugin');
+
+branchSchema.plugin(auditPlugin, {
+  resource: 'Branch',
+  auditedFields: ['name', 'phone', 'isActive', 'isMain', 'location', 'settings'],
+});
+
 const Branch = mongoose.model('Branch', branchSchema);
 module.exports = Branch;

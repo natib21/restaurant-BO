@@ -4,6 +4,7 @@ const AppError = require('../../../../utils/appError');
 const logger = require('../../../../utils/logger');
 const { generateSecureQR } = require('../../../../utils/secureQR');
 const Role = require('../../../../models/roleModel');
+const Merchant =require('../../../../models/merchantModel')
 const { BranchRepository } = require('../repository/BranchRepository');
 const { BranchControlService } = require('../branch-control.service');
 const { QrTokenService } = require('../qr-token.service');

@@ -2,6 +2,15 @@ const OutboxEvent = require('../../../models/OutboxEvent');
 const logger = require('../../../utils/logger');
 const { publishWithLogging } = require('./outbox-publisher');
 
+// ✅ PHASE 1: Domain-specific event handlers registry
+const { handleOrderPreparing } = require('./handlers/kds-handler');
+const { handleAllTicketsReady } = require('./handlers/order-ready-handler');
+
+const EVENT_HANDLERS = {
+  'order:preparing': handleOrderPreparing,
+  'kitchen:all_tickets_ready': handleAllTicketsReady,
+};
+
 const DEFAULT_POLL_MS = 1000;
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_RETRIES = 8;
@@ -145,6 +154,15 @@ class OutboxWorker {
     };
 
     try {
+      // ✅ PHASE 1: Execute domain-specific handler if registered
+      const handler = EVENT_HANDLERS[event.eventType];
+      if (handler) {
+        logger.info('outbox.event.handler.executing', meta);
+        await handler(event);
+        logger.info('outbox.event.handler.success', meta);
+      }
+
+      // Publish to Socket.IO (existing behavior)
       publishWithLogging(event);
 
       await OutboxEvent.updateOne(

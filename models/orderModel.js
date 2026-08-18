@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const Counter = require('./CounterModel.js');
+const auditPlugin = require('../utils/auditPlugin');
 /* -----------------------------------------------------
    Order Item Sub-schema (snapshot of menu at order time)
 ------------------------------------------------------ */
@@ -10,12 +11,33 @@ const orderItemSchema = new Schema(
     menuItem: { type: Schema.Types.ObjectId, ref: 'Menu', required: true },
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
+    unitCost: { type: Number, min: 0, default: null }, // COGS per unit — null if no recipe/inventory tracking
     totalPrice: { type: Number, required: true, min: 0 },
     notes: { type: String, trim: true },
   },
+  { _id: true } // ✅ PHASE 0: Enable _id for KDS ticket item tracking
+);
+const deliverySchema = new Schema(
+  {
+    location: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+    },
+    addressNote: { type: String, trim: true, maxlength: 500 },
+    // Contact number for whoever's delivering — may differ from
+    // customerPhone already on the order.
+    phone: { type: String, trim: true },
+    fee: { type: Number, default: 0, min: 0 },
+    // Free-text, no account — "Abebe (branch motorbike)". Matches the
+    // no-rider-account model you described.
+    handledBy: { type: String, trim: true, maxlength: 100 },
+    // Written by OrderStateMachineService.applyDeliveryStatusTimestamps —
+    // already implemented, just needs these fields to exist on the schema.
+    dispatchedAt: Date,
+    deliveredAt: Date,
+  },
   { _id: false }
 );
-
 /* -----------------------------------------------------
    Main Order Schema
 ------------------------------------------------------ */
@@ -66,32 +88,35 @@ const orderSchema = new Schema(
       required: true,
     },
     source: {
-      type: String,
-      enum: ['web', 'telegram', 'admin', 'waiter'],
-      default: 'web',
-      required: true,
-      index: true,
-    },
-    deliveryNotes: {
-      type: String,
-      trim: true,
-      maxlength: 500,
-    },
-    deliveryFee: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-   status: {
   type: String,
-  enum: [
-    'pending', 'accepted', 'preparing', 'ready', 'served',
-    'out_for_delivery', 'delivered',
-    'completed', 'canceled',
-  ],
-  default: 'pending',
+  enum: ['web', 'telegram', 'admin', 'waiter'],
+  default: 'web',
+  required: true,
   index: true,
 },
+ delivery: {
+   type: deliverySchema,
+   required: function () {
+   return this.orderType === 'delivery';
+  },
+ },
+ 
+deliveryNotes: {
+  type: String,
+  trim: true,
+  maxlength: 500,
+},
+deliveryFee: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
+    status: {
+      type: String,
+      enum: ['pending', 'accepted', 'preparing', 'ready', 'served', 'completed', 'canceled'],
+      default: 'pending',
+      index: true,
+    },
     statusHistory: [
       {
         fromStatus: { type: String, required: true },
@@ -189,8 +214,6 @@ const orderSchema = new Schema(
     readyAt: Date,
     servedAt: Date,
     completedAt: Date,
-    outForDeliveryAt: Date,
-deliveredAt: Date,
 
     // Users assigned by merchant (dynamic roles)
     assignedWaiter: { type: Schema.Types.ObjectId, ref: 'User', index: true },
@@ -226,7 +249,6 @@ orderSchema.pre('validate', async function (next) {
       prefix = this.tableNumber.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'POS';
     } else if (this.orderType === 'delivery') prefix = 'DEL';
     else if (this.orderType === 'takeaway') prefix = 'TAKE';
-    
 
     const counter = await Counter.findOneAndUpdate(
       { merchantId: this.merchant, branchId: this.branch, date: today, prefix },
@@ -244,6 +266,18 @@ orderSchema.pre('validate', async function (next) {
   }
 });
 
+orderSchema.pre('validate', function (next) {
+     if (this.orderType === 'delivery') {
+       if (!this.delivery?.location?.lat || !this.delivery?.location?.lng) {
+         return next(new Error('delivery.location is required for delivery orders'));
+       }
+       if (!this.delivery?.phone) {
+         return next(new Error('delivery.phone is required for delivery orders'));
+       }
+    }
+      next();
+   });
+
 /* -----------------------------------------------------
    Indexes — for real restaurant performance
 ------------------------------------------------------ */
@@ -254,6 +288,10 @@ orderSchema.index({ customer: 1, placedAt: -1 });
 orderSchema.index({ assignedWaiter: 1 });
 orderSchema.index({ placedAt: -1 });
 
+// Advanced Reporting indexes (Requirement 18.1)
+orderSchema.index({ merchant: 1, paymentStatus: 1, placedAt: -1 }); // For sales reports filtering by payment status
+orderSchema.index({ merchant: 1, branch: 1, placedAt: -1 }); // For branch-specific report queries
+
 /* -----------------------------------------------------
    Virtual — clean populate for frontend
 ------------------------------------------------------ */
@@ -262,6 +300,27 @@ orderSchema.virtual('tableDetails', {
   localField: 'table',
   foreignField: '_id',
   justOne: true,
+});
+
+// ✅ PHASE 2 - STEP 4: Apply audit plugin for Order model
+// Track business-critical fields (financial, status, payment)
+orderSchema.plugin(auditPlugin, {
+  resource: 'Order',
+  auditedFields: [
+    'status',
+    'orderType',
+    'totalAmount',
+    'subtotal',
+    'taxAmount',
+    'discountAmount',
+    'paymentStatus',
+    'paymentDetails',
+    'canceledAt',
+    'canceledBy',
+    'canceledReason',
+    'assignedWaiter',
+    'assignedKitchenStaff',
+  ],
 });
 
 module.exports = mongoose.model('Order', orderSchema);

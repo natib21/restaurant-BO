@@ -115,6 +115,33 @@ function createSocketServer(app) {
       socket.join(`merchant:${merchantId}`);
     });
 
+    /**
+     * ✅ PHASE 1: KDS station subscription
+     * Kitchen staff subscribe to real-time ticket updates for their station
+     * Room pattern: branch:{branchId}:station:{stationId}
+     */
+    socket.on('kds:subscribe', ({ branchId, stationId }) => {
+      if (!branchId || !stationId) return;
+
+      // Verify user has access to this branch
+      const userBranchId = String(user.branch?._id ?? user.branch);
+      if (String(branchId) !== userBranchId) {
+        logger.warn(`Socket ${socket.id} denied KDS access to branch ${branchId}`);
+        return;
+      }
+
+      // Subscribe to station-specific room
+      const stationRoom = `branch:${branchId}:station:${stationId}`;
+      socket.join(stationRoom);
+
+      logger.info(`Socket ${socket.id} subscribed to KDS station`, {
+        userId: user._id,
+        branchId,
+        stationId,
+        room: stationRoom,
+      });
+    });
+
     socket.on('disconnect', reason => {
       logger.info(`Socket disconnected: ${socket.id} (${reason})`);
     });

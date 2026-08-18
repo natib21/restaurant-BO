@@ -21,6 +21,7 @@ const Branch = require('../models/branchModel');
 const Menu = require('../models/menuModel');
 const User = require('../models/userModel');
 const Role = require('../models/roleModel');
+const Task = require('../models/taskModel');
 const Ingredient = require('../models/Ingredient');
 
 let app;
@@ -32,7 +33,7 @@ function createTestToken(user) {
     id: user._id.toString(),
     merchant: user.merchant.toString(),
     branch: Array.isArray(user.branch) ? user.branch[0].toString() : user.branch.toString(),
-    role: user.role.name
+    role: user.role._id.toString()
   };
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
@@ -41,10 +42,22 @@ beforeAll(async () => {
   await connectDatabase();
   app = createApp();
 
+  // Clean up any existing test data first
+  await Task.deleteMany({ name: 'View Reports' });
+  await Role.deleteMany({ name: 'MERCHANT_ADMIN' });
+
+  // Create tasks for reports access
+  const reportsTask = await Task.create({
+    name: 'View Reports',
+    endpoint: '/api/v1/reports/*',
+    method: 'GET'
+  });
+
   const adminRole = await Role.create({
     name: 'MERCHANT_ADMIN',
     description: 'Merchant Administrator',
-    isSystemRole: false
+    isSystemRole: false,
+    tasks: [reportsTask._id]
   });
 
   const merchant = await Merchant.create({
@@ -143,6 +156,7 @@ afterAll(async () => {
   await User.deleteMany({ _id: userId });
   await Merchant.deleteMany({ _id: merchantId });
   await Role.deleteMany({ name: 'MERCHANT_ADMIN' });
+  await Task.deleteMany({ name: 'View Reports' });
   await disconnectDatabase();
 }, 30000);
 
@@ -167,6 +181,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#MIXED-001',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -251,6 +266,12 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
           orderNumber: '#NULL-002',
           customerName: 'Customer 2',
           orderType: 'delivery',
+          location: {
+            type: 'Point',
+            coordinates: [38.7578, 9.025],
+            city: 'Addis Ababa',
+            formattedAddress: 'Test Address, Addis Ababa, Ethiopia'
+          },
           status: 'completed',
           paymentStatus: 'paid',
           items: [
@@ -273,6 +294,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
           orderNumber: '#NULL-003',
           customerName: 'Customer 3',
           orderType: 'dine_in',
+          table: new mongoose.Types.ObjectId(),
           status: 'completed',
           paymentStatus: 'paid',
           items: [
@@ -334,6 +356,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#ALL-NULL',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -390,6 +413,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#ALL-COST',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -449,6 +473,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#WARNING-001',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -509,6 +534,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#NO-WARNING',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -557,6 +583,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#PERCENT-WARNING',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -611,6 +638,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#PROFIT-001',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -668,6 +696,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#MARGIN-001',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [
@@ -741,6 +770,7 @@ describe('Task 19.2: Profitability Report with Mixed Cost Data', () => {
         orderNumber: '#STRUCTURE-001',
         customerName: 'Test Customer',
         orderType: 'dine_in',
+        table: new mongoose.Types.ObjectId(),
         status: 'completed',
         paymentStatus: 'paid',
         items: [

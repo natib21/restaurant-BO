@@ -4,6 +4,7 @@ const catchAsync = require('../../../utils/catchAsync');
 const AppError = require('../errors');
 const User = require('../../../models/userModel');
 const { loadEnv } = require('../../config/env');
+const { setUser } = require('../../../utils/request-context');
 
 const verifyJwt = promisify(jwt.verify);
 
@@ -32,6 +33,9 @@ function syncStaffContext(req) {
   req.ctx.merchantId = req.user.merchant?._id ?? req.user.merchant;
   const branchId = resolveBranchId(req.user.branch);
   if (branchId) req.ctx.branchId = branchId;
+  
+  // ✅ PHASE 1: Sync user to AsyncLocalStorage context
+  setUser(req.user);
 }
 
 /**

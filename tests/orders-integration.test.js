@@ -306,7 +306,7 @@ describe('Orders Module - Integration Tests', () => {
         merchant: merchantId,
         branch: branchId,
         customerName: 'Test Customer',
-        orderType: 'dine_in',
+        orderType: 'takeaway',
         status: 'pending',
         items: [
           {
@@ -316,6 +316,7 @@ describe('Orders Module - Integration Tests', () => {
             totalPrice: 250,
           },
         ],
+        subtotal: 250,
         totalAmount: 250,
         orderNumber: `#T${Date.now()}`,
       });

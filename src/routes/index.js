@@ -43,6 +43,9 @@ const comboRoutes = require('../modules/menu/combos.routes');
 // ── Order Domain ──────────────────────────────────────────────────────────────
 const orderRoutes = require('../modules/orders/orders.routes');
 
+// ── Kitchen / KDS Domain ─────────────────────────────────────────────────────
+const kitchenRoutes = require('../modules/kitchen/kitchen.routes');
+
 // ── Inventory Domain ──────────────────────────────────────────────────────────
 const ingredientRoutes = require('../modules/inventory/ingredients.routes');
 const inventoryRoutes = require('../modules/inventory/inventory.routes');
@@ -63,6 +66,9 @@ const campaignRoutes = require('../modules/campaign/campaignRoutes');
 // ── Analytics & Reports ───────────────────────────────────────────────────────
 const analyticsRoutes = require('../modules/analytics/analytics.routes');
 const reportRoutes = require('../modules/reports/reports.routes');
+
+// ── Audit Logging (PHASE 2) ──────────────────────────────────────────────────
+const auditRoutes = require('../modules/audit/audit.routes');
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
 const telegramWebhookRoutes = require('../modules/telegram/routes/telegramWebhookRoute'); // public
@@ -119,6 +125,9 @@ router.use('/api/v1/combo', comboRoutes);
 // ── 13. Orders ────────────────────────────────────────────────────────────────
 router.use('/api/v1/order', orderRoutes);
 
+// ── 13.5. Kitchen / KDS ──────────────────────────────────────────────────────
+router.use('/api/v1/kitchen', kitchenRoutes);
+
 // ── 14. Inventory ─────────────────────────────────────────────────────────────
 router.use('/api/v1/ingredients', ingredientRoutes);
 router.use('/api/v1/inventory', inventoryRoutes);
@@ -147,5 +156,8 @@ router.use('/api/v1/analytics', analyticsRoutes);
 
 // ── 21. Reports ───────────────────────────────────────────────────────────────
 router.use('/api/v1/reports', reportRoutes);
+
+// ── 22. Audit Logs (PHASE 2) ──────────────────────────────────────────────────
+router.use('/api/v1/audit-logs', auditRoutes);
 
 module.exports = router;

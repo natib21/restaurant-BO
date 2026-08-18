@@ -68,7 +68,15 @@ beforeAll(async () => {
     email: 'test1@restaurant.com',
     phone: '+251911111111',
     status: 'approved',
+    isActive: true,
+    isSubscriptionActive: true,
     mode: 'Test',
+    owner: {
+      fullName: 'Owner One',
+      gender: 'Male',
+      email: 'owner1@test-restaurant-1.com',
+      phone: '+251911111111'
+    },
     features: {
       core: {
         orders: { enabled: true },
@@ -170,6 +178,7 @@ beforeAll(async () => {
     orderNumber: '#T001',
     customerName: 'Customer 1',
     orderType: 'dine_in',
+    table: new mongoose.Types.ObjectId(),
     status: 'completed',
     paymentStatus: 'paid',
     items: [
@@ -188,6 +197,7 @@ beforeAll(async () => {
         unitCost: null // No recipe
       }
     ],
+    subtotal: 680,
     totalAmount: 680,
     discountAmount: 0,
     taxAmount: 0,
@@ -205,6 +215,12 @@ beforeAll(async () => {
     orderNumber: '#T002',
     customerName: 'Customer 2',
     orderType: 'delivery',
+    location: {
+      type: 'Point',
+      coordinates: [38.7578, 9.025],
+      city: 'Addis Ababa',
+      formattedAddress: 'Test Address, Addis Ababa, Ethiopia'
+    },
     status: 'delivered',
     paymentStatus: 'paid',
     items: [
@@ -216,6 +232,7 @@ beforeAll(async () => {
         unitCost: 1.10
       }
     ],
+    subtotal: 250,
     totalAmount: 280,
     discountAmount: 10,
     taxAmount: 10,
@@ -246,6 +263,7 @@ beforeAll(async () => {
         unitCost: null
       }
     ],
+    subtotal: 180,
     totalAmount: 180,
     discountAmount: 0,
     taxAmount: 0,
@@ -256,12 +274,14 @@ beforeAll(async () => {
   // Create stock movement for inventory report
   await StockMovement.create({
     merchant: merchant1Id,
-    branch: branch1Id,
     ingredient: ingredientId1,
-    type: 'purchase',
+    type: 'in',
+    reason: 'purchase',
     quantity: 20,
-    unitCost: 5.50,
-    totalCost: 110,
+    previousStock: 50,
+    newStock: 70,
+    cost: 110,
+    performedBy: user1Id,
     reference: 'PO-001',
     createdAt: yesterday
   });
@@ -275,7 +295,15 @@ beforeAll(async () => {
     email: 'test2@restaurant.com',
     phone: '+251922222222',
     status: 'approved',
+    isActive: true,
+    isSubscriptionActive: true,
     mode: 'Test',
+    owner: {
+      fullName: 'Owner Two',
+      gender: 'Female',
+      email: 'owner2@test-restaurant-2.com',
+      phone: '+251922222222'
+    },
     features: {
       core: {
         orders: { enabled: true },
@@ -327,6 +355,7 @@ beforeAll(async () => {
     orderNumber: '#M2-001',
     customerName: 'Merchant 2 Customer',
     orderType: 'dine_in',
+    table: new mongoose.Types.ObjectId(),
     status: 'completed',
     paymentStatus: 'paid',
     items: [
@@ -338,6 +367,7 @@ beforeAll(async () => {
         unitCost: null
       }
     ],
+    subtotal: 100,
     totalAmount: 100,
     discountAmount: 0,
     taxAmount: 0,

@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { initializeContext: initAsyncContext, setUser } = require('../../../utils/request-context');
 
 function initRequestContext(req, res, next) {
   const requestId = uuidv4().slice(0, 8);
@@ -12,7 +13,9 @@ function initRequestContext(req, res, next) {
   req.requestId = requestId;
   req.requestTime = requestTime;
   res.locals.requestId = requestId;
-  next();
+  
+  // ✅ PHASE 1: Initialize AsyncLocalStorage context for audit logging
+  initAsyncContext(req, res, next);
 }
 
 function syncRequestContext(req, res, next) {
@@ -22,6 +25,9 @@ function syncRequestContext(req, res, next) {
     req.ctx.actorType = 'staff';
     req.ctx.actorId = req.user._id;
     req.ctx.merchantId = req.ctx.merchantId ?? req.user.merchant?._id;
+    
+    // ✅ PHASE 1: Sync user to AsyncLocalStorage context
+    setUser(req.user);
   } else if (req.customerId || req.ctx.customerId) {
     req.ctx.actorType = 'customer';
   } else if (req.merchantId) {

@@ -1,6 +1,56 @@
 const { z } = require('zod');
 
 // ============================================================
+// CUSTOM DATE VALIDATORS
+// ============================================================
+
+/**
+ * Custom date validator that accepts both formats:
+ * - Date-only: "2026-07-18"
+ * - Full ISO datetime: "2026-07-18T00:00:00.000Z"
+ * 
+ * Automatically converts date-only to full ISO datetime at start of day (00:00:00.000Z)
+ */
+const flexibleDateString = (fieldName, options = {}) => {
+  const { startOfDay = false } = options;
+  
+  return z.string({
+    required_error: `${fieldName} is required`
+  })
+  .refine((val) => {
+    // Check if it's a valid date-only format (YYYY-MM-DD)
+    const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (dateOnlyRegex.test(val)) {
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }
+    
+    // Check if it's a valid ISO datetime
+    const date = new Date(val);
+    return !isNaN(date.getTime()) && val.includes('T');
+  }, {
+    message: `${fieldName} must be ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ or YYYY-MM-DD)`
+  })
+  .transform((val) => {
+    // If date-only format, convert to full ISO datetime
+    const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (dateOnlyRegex.test(val)) {
+      const date = new Date(val);
+      if (startOfDay) {
+        // Start of day: 00:00:00.000Z
+        date.setUTCHours(0, 0, 0, 0);
+      } else {
+        // End of day: 23:59:59.999Z
+        date.setUTCHours(23, 59, 59, 999);
+      }
+      return date.toISOString();
+    }
+    // Already ISO datetime, return as-is
+    return val;
+  });
+};
+
+// ============================================================
 // ZOD SCHEMAS FOR REPORT VALIDATION
 // ============================================================
 
@@ -15,21 +65,17 @@ const { z } = require('zod');
  * - 4.5: Format support for JSON/CSV
  */
 const reportQuerySchema = z.object({
-  // Required ISO date string for start of date range
-  // Requirement 19.1: Missing dateFrom → "dateFrom is required"
-  dateFrom: z.string({ 
-    required_error: 'dateFrom is required' 
-  }).datetime({ 
-    message: 'dateFrom must be ISO 8601 format' 
-  }).describe('Start date (ISO 8601 format)'),
+  // Required date string for start of date range
+  // Accepts: "2026-07-18" or "2026-07-18T00:00:00.000Z"
+  // Converts date-only to start of day (00:00:00.000Z)
+  dateFrom: flexibleDateString('dateFrom', { startOfDay: true })
+    .describe('Start date (ISO 8601 format or YYYY-MM-DD)'),
   
-  // Required ISO date string for end of date range
-  // Requirement 19.2: Missing dateTo → "dateTo is required"
-  dateTo: z.string({ 
-    required_error: 'dateTo is required' 
-  }).datetime({ 
-    message: 'dateTo must be ISO 8601 format' 
-  }).describe('End date (ISO 8601 format)'),
+  // Required date string for end of date range
+  // Accepts: "2026-08-17" or "2026-08-17T23:59:59.999Z"
+  // Converts date-only to end of day (23:59:59.999Z)
+  dateTo: flexibleDateString('dateTo', { startOfDay: false })
+    .describe('End date (ISO 8601 format or YYYY-MM-DD)'),
   
   // Optional ObjectId for filtering to specific branch
   branchId: z.string()
@@ -98,19 +144,15 @@ const exportJobRequestSchema = z.object({
     })
   }).describe('Type of report to export'),
   
-  // Required ISO date string for start of date range
-  dateFrom: z.string({ 
-    required_error: 'dateFrom is required' 
-  }).datetime({ 
-    message: 'dateFrom must be ISO 8601 format' 
-  }).describe('Start date (ISO 8601 format)'),
+  // Required date string for start of date range
+  // Accepts: "2026-07-18" or "2026-07-18T00:00:00.000Z"
+  dateFrom: flexibleDateString('dateFrom', { startOfDay: true })
+    .describe('Start date (ISO 8601 format or YYYY-MM-DD)'),
   
-  // Required ISO date string for end of date range
-  dateTo: z.string({ 
-    required_error: 'dateTo is required' 
-  }).datetime({ 
-    message: 'dateTo must be ISO 8601 format' 
-  }).describe('End date (ISO 8601 format)'),
+  // Required date string for end of date range
+  // Accepts: "2026-08-17" or "2026-08-17T23:59:59.999Z"
+  dateTo: flexibleDateString('dateTo', { startOfDay: false })
+    .describe('End date (ISO 8601 format or YYYY-MM-DD)'),
   
   // Optional ObjectId for filtering to specific branch
   branchId: z.string()

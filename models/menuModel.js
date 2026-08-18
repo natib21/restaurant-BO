@@ -152,6 +152,14 @@ const menuSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ✅ PHASE 0: KDS integration - station assignment
+    kitchenStation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'KitchenStation',
+      default: null,
+      index: true,
+    },
+
     ratingAverage: {
       type: Number,
       default: 4.5,

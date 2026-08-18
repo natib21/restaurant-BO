@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const auditPlugin = require('../utils/auditPlugin');
 
 const officialRepresentativeSchema = new mongoose.Schema({
   fullName: { type: String, required: true, trim: true },
@@ -385,5 +386,26 @@ merchantSchema.methods.getDisplayName = function () {
 merchantSchema.methods.getMainBranch = async function () {
   return await mongoose.model('Branch').findOne({ merchant: this._id, isMain: true });
 };
+
+// ✅ PHASE 2 - STEP 3: Apply audit plugin for Merchant model
+// Track business-critical fields (excluding sensitive data like apiKey, tokens, passwords)
+merchantSchema.plugin(auditPlugin, {
+  resource: 'Merchant',
+  auditedFields: [
+    'businessName',
+    'slug',
+    'status',
+    'phone',
+    'sector',
+    'isActive',
+    'mode',
+    'subscriptionPlan',
+    'isSubscriptionActive',
+    'currentSubscription',
+    'brandColor',
+    'customDomain',
+    'customDomainVerified',
+  ],
+});
 
 module.exports = mongoose.model('Merchant', merchantSchema);
