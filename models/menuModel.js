@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
+const auditPlugin = require('../utils/auditPlugin');
 
 const variantSchema = new mongoose.Schema({
   name: {
@@ -229,6 +230,12 @@ menuSchema.virtual('imagesData').get(function () {
     return this.images.map(id => `/api/v1/files/${id}/content`);
   }
   return [];
+});
+
+// Apply audit plugin BEFORE model creation
+menuSchema.plugin(auditPlugin, {
+  resource: 'Menu',
+  auditedFields: ['name', 'price', 'category', 'available', 'publishStatus', 'kitchenStation', 'inStock'],
 });
 
 module.exports = mongoose.model('Menu', menuSchema);
