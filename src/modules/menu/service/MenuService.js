@@ -15,8 +15,31 @@ const {
   attachMenuGroupImages,
 } = require('../dto/menu-response.dto');
 const { resolveSingleImageData } = require('../utils/image-response');
+const { ROLE_NAMES } = require('../../../../common/constants/roles');
 
 class MenuService {
+  /**
+   * Validate that one or more branch IDs belong to the given merchant.
+   * @param {string|string[]} branchIds - Single branch ID or array of branch IDs
+   * @param {string} merchantId - Merchant ObjectId to validate against
+   * @throws {AppError} 403 if any branch doesn't belong to the merchant
+   */
+  static async validateBranchOwnership(branchIds, merchantId) {
+    const Branch = require('../../../../models/branchModel');
+    
+    const ids = Array.isArray(branchIds) ? branchIds : [branchIds];
+    const idsAsStrings = ids.map(id => id.toString());
+    
+    const validBranches = await Branch.find({
+      _id: { $in: idsAsStrings },
+      merchant: merchantId,
+    }).select('_id');
+    
+    if (validBranches.length !== idsAsStrings.length) {
+      throw new AppError('One or more branches do not belong to your merchant', 403);
+    }
+  }
+
   /* ---------- Publish / orderability (MenuManagementService — unchanged logic) ---------- */
 
   static publishMenuGroup(params) {
@@ -882,11 +905,14 @@ class MenuService {
   static async createCombo(comboData, req) {
     MenuService.parseComboFormFields(comboData);
 
-    if (req.user.role.name !== 'SUPER-MERCHANT-ADMIN') {
+    if (req.user.role.name !== ROLE_NAMES.SUPER_MERCHANT_ADMIN) {
       if (!req.user.branch) throw new AppError('No branch assigned', 403);
       comboData.branches = [req.user.branch._id];
     } else if (!comboData.branches?.length) {
       throw new AppError('Super admin must select at least one branch', 400);
+    } else {
+      // Validate branch ownership for SUPER-MERCHANT-ADMIN
+      await MenuService.validateBranchOwnership(comboData.branches, req.user.merchant._id);
     }
 
     comboData.items = await MenuService.enrichComboItems(comboData.items);
@@ -935,7 +961,7 @@ class MenuService {
 
     let query = { merchant: req.user.merchant._id };
 
-    if (userRole !== 'SUPER-MERCHANT-ADMIN') {
+    if (userRole !== ROLE_NAMES.SUPER_MERCHANT_ADMIN) {
       if (!userBranchId) throw new AppError('No branch assigned', 403);
       query.$or = [{ branches: { $size: 0 } }, { branches: userBranchId }];
     }
@@ -972,8 +998,13 @@ class MenuService {
     });
     if (!combo) throw new AppError('Combo not found', 404);
 
-    if (req.body.branches !== undefined && req.user.role.name !== 'SUPER-MERCHANT-ADMIN') {
+    if (req.body.branches !== undefined && req.user.role.name !== ROLE_NAMES.SUPER_MERCHANT_ADMIN) {
       throw new AppError('Not allowed to change branches', 403);
+    }
+
+    // Validate branch ownership if SUPER-MERCHANT-ADMIN is updating branches
+    if (req.body.branches !== undefined && req.user.role.name === ROLE_NAMES.SUPER_MERCHANT_ADMIN) {
+      await MenuService.validateBranchOwnership(req.body.branches, req.user.merchant._id);
     }
 
     if (req.body.items) {
@@ -1006,7 +1037,7 @@ class MenuService {
     if (!combo) throw new AppError('Combo not found', 404);
 
     if (
-      req.user.role.name !== 'SUPER-MERCHANT-ADMIN' &&
+      req.user.role.name !== ROLE_NAMES.SUPER_MERCHANT_ADMIN &&
       req.user.branch?._id.toString() !== branchId
     ) {
       throw new AppError('You can only override your own branch', 403);
@@ -1090,7 +1121,9 @@ class MenuService {
     if (!branchId) throw new AppError('No branch assigned', 403);
 
     let targetBranchId = branchId;
-    if (req.user.role.name === 'SUPER-MERCHANT-ADMIN' && req.body.branchId) {
+    if (req.user.role.name === ROLE_NAMES.SUPER_MERCHANT_ADMIN && req.body.branchId) {
+      // Validate branch ownership before accepting submitted branch ID
+      await MenuService.validateBranchOwnership(req.body.branchId, req.user.merchant._id);
       targetBranchId = req.body.branchId;
     }
 
