@@ -15,7 +15,8 @@ const {
   attachMenuGroupImages,
 } = require('../dto/menu-response.dto');
 const { resolveSingleImageData } = require('../utils/image-response');
-const { ROLE_NAMES } = require('../../../../common/constants/roles');
+const { ROLE_NAMES } = require('../../../common/constants/roles');
+const ApiFeatures = require('../../../../utils/apiFeatures');
 
 class MenuService {
   /**
@@ -262,9 +263,18 @@ class MenuService {
       throw new AppError('Merchant ID is required', 400);
     }
 
-    const filter = { merchant: merchantId };
-    // ✅ Return Mongoose documents (not formatted)
-    const menuItems = await MenuRepository.findMenus(filter).sort('-createdAt');
+    // Base query with merchant scoping (NEVER from req.query)
+    const baseQuery = MenuRepository.findMenus({ merchant: merchantId });
+
+    // Apply ApiFeatures for filter, search, sort, fields, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['name', 'description', 'category'])
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+
+    const menuItems = await features.query;
 
     return menuItems || [];
   }
@@ -721,24 +731,43 @@ class MenuService {
 
   static async getAllMenuGroups(req) {
     const merchantId = req.user.merchant._id;
-    return MenuRepository.findMenuGroups({ merchant: merchantId })
-      .sort({ priority: -1, createdAt: -1 })
-      .select('-__v')
+
+    // Base query with merchant scoping (NEVER from req.query)
+    const baseQuery = MenuRepository.findMenuGroups({ merchant: merchantId })
       .populate({
         path: 'items.menu',
         select: 'name image variants available inStock',
       });
+
+    // Apply ApiFeatures for filter, search, sort, fields, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['name', 'description'])
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+
+    return await features.query;
   }
 
   static async getAllMenuGroupsLight(req) {
     const merchantId = req.user.merchant._id || req.user._id;
 
-    const menuGroups = await MenuRepository.findMenuGroups({ merchant: merchantId })
-      .sort({ priority: -1, createdAt: -1 })
+    // Base query with merchant scoping (NEVER from req.query)
+    const baseQuery = MenuRepository.findMenuGroups({ merchant: merchantId })
       .select(
         'name description bannerImage visibility priority isAlcoholMenu isSystemDefault slug items.menu items.sortOrder items.isHidden items.overridePrice items.customName'
       )
       .lean();
+
+    // Apply ApiFeatures for filter, search, sort, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['name'])
+      .filter()
+      .sort()
+      .paginate();
+
+    const menuGroups = await features.query;
 
     return menuGroups.map(group => ({
       ...group,
@@ -925,12 +954,21 @@ class MenuService {
     const branchId = req.query.branchId || req.user?.branch?._id;
     if (!branchId) throw new AppError('Branch ID is required', 400);
 
-    const combos = await MenuRepository.findCombos({
+    // Base query with merchant scoping (NEVER from req.query)
+    const baseQuery = MenuRepository.findCombos({
       merchant: req.user.merchant._id,
       $or: [{ branches: { $size: 0 } }, { branches: branchId }],
-    })
-      .sort({ priority: -1, createdAt: -1 })
-      .populate('items.menuItem', 'name image price defaultVariant variants available inStock');
+    }).populate('items.menuItem', 'name image price defaultVariant variants available inStock');
+
+    // Apply ApiFeatures for search, filter, sort, fields, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['name', 'description'])
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+
+    const combos = await features.query;
 
     return combos
       .filter(combo => combo.isAvailableNow(branchId))
@@ -959,19 +997,29 @@ class MenuService {
     const userRole = req.user.role.name;
     const userBranchId = req.user.branch?._id;
 
-    let query = { merchant: req.user.merchant._id };
+    // Build base query filter (merchant scoping NEVER from req.query)
+    let queryFilter = { merchant: req.user.merchant._id };
 
     if (userRole !== ROLE_NAMES.SUPER_MERCHANT_ADMIN) {
       if (!userBranchId) throw new AppError('No branch assigned', 403);
-      query.$or = [{ branches: { $size: 0 } }, { branches: userBranchId }];
+      queryFilter.$or = [{ branches: { $size: 0 } }, { branches: userBranchId }];
     }
 
-    const combos = await MenuRepository.findCombos(query)
-      .populate({
-        path: 'branches',
-        select: 'name location.code location.city location.formattedAddress',
-      })
-      .sort({ priority: -1, createdAt: -1 });
+    // Base query with merchant scoping
+    const baseQuery = MenuRepository.findCombos(queryFilter).populate({
+      path: 'branches',
+      select: 'name location.code location.city location.formattedAddress',
+    });
+
+    // Apply ApiFeatures for search, filter, sort, fields, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['name', 'description'])
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+
+    const combos = await features.query;
 
     return combos.map(combo => attachComboImage(combo.toObject(), req));
   }
@@ -1240,16 +1288,24 @@ class MenuService {
     const merchantId = req.user.merchant._id.toString();
     const branchId = req.user.branch._id.toString();
 
-    return MenuRepository.findBranchMenuGroups({
+    // Base query with merchant and branch scoping (NEVER from req.query)
+    const baseQuery = MenuRepository.findBranchMenuGroups({
       branch: branchId,
       merchant: merchantId,
-    })
-      .sort({ priority: -1, createdAt: -1 })
-      .select('-__v')
-      .populate({
-        path: 'items.menuItem',
-        select: 'name image price variants type isVeg isSpicy isAlcoholic prepTime tags',
-      });
+    }).populate({
+      path: 'items.menuItem',
+      select: 'name image price variants type isVeg isSpicy isAlcoholic prepTime tags',
+    });
+
+    // Apply ApiFeatures for search, filter, sort, fields, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['name', 'description'])
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+
+    return await features.query;
   }
 
   static async getBranchMenuGroup(req) {

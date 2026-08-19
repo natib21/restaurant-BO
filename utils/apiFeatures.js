@@ -1,12 +1,13 @@
 class ApiFeatures {
   constructor(query, queryString) {
-    ((this.query = query), (this.queryString = queryString));
+    this.query = query;
+    this.queryString = queryString;
   }
 
   filter() {
     const queryObj = { ...this.queryString };
 
-    const excludedFields = ['page', 'sort', 'limit', 'fields'];
+    const excludedFields = ['page', 'sort', 'limit', 'fields', 'search'];
 
     excludedFields.forEach(el => delete queryObj[el]);
 
@@ -14,21 +15,33 @@ class ApiFeatures {
 
     queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
 
-    this.query.find(JSON.parse(queryStr));
+    this.query = this.query.find(JSON.parse(queryStr));
 
     return this;
-    /*  let query = Menu.find(JSON.parse(queryStr)); */
   }
+
+  // New — regex search must NOT go through filter()'s JSON.stringify/parse,
+  // since a RegExp object serializes to `{}` and silently loses the pattern.
+  search(fields = []) {
+    if (this.queryString.search && fields.length > 0) {
+      const regex = new RegExp(this.queryString.search.trim(), 'i');
+      this.query = this.query.find({
+        $or: fields.map(field => ({ [field]: regex })),
+      });
+    }
+    return this;
+  }
+
   sort() {
     if (this.queryString.sort) {
-      const sortBy = req.queryString.sort.split(',').join(' ');
-      console.log(sortBy);
+      const sortBy = this.queryString.sort.split(',').join(' ');
       this.query = this.query.sort(sortBy);
     } else {
       this.query = this.query.sort('-createdAt');
     }
     return this;
   }
+
   limitFields() {
     if (this.queryString.fields) {
       const fields = this.queryString.fields.split(',').join(' ');
@@ -38,6 +51,7 @@ class ApiFeatures {
     }
     return this;
   }
+
   paginate() {
     const page = this.queryString.page * 1 || 1;
     const limit = this.queryString.limit * 1 || 100;

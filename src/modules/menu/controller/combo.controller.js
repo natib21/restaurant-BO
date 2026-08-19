@@ -9,6 +9,7 @@ const { FileAsset } = require('../../../../models/FileAsset');
 const { FileManagementService } = require('../../files/file-management.service');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
 const { resolveSingleImageData } = require('../utils/image-response');
+const { sendResponse } = require('../../../../utils/sendResponse');
 
 const multerStorage = multer.memoryStorage();
 
@@ -121,10 +122,7 @@ exports.createCombo = catchAsync(async (req, res) => {
     });
   }
 
-  res.status(201).json({
-    status: 'success',
-    data: { combo: formatComboResponse(combo) },
-  });
+  sendResponse(res, 201, 'combo', formatComboResponse(combo));
 });
 
 // ============================================
@@ -134,11 +132,7 @@ exports.getAllCombos = catchAsync(async (req, res) => {
   const combos = await MenuService.getAllCombos(req);
 
   if (!combos || combos.length === 0) {
-    return res.status(200).json({
-      status: 'success',
-      results: 0,
-      data: { combos: [] },
-    });
+    return sendResponse(res, 200, 'combos', [], { results: 0 });
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -148,11 +142,7 @@ exports.getAllCombos = catchAsync(async (req, res) => {
 
   const formattedCombos = combos.map(combo => formatComboResponse(combo));
 
-  res.status(200).json({
-    status: 'success',
-    results: formattedCombos.length,
-    data: { combos: formattedCombos },
-  });
+  sendResponse(res, 200, 'combos', formattedCombos, { results: formattedCombos.length });
 });
 
 // ============================================
@@ -168,11 +158,7 @@ exports.getActiveCombos = catchAsync(async (req, res) => {
 
   const formattedCombos = combos.map(combo => formatComboResponse(combo));
 
-  res.status(200).json({
-    status: 'success',
-    results: formattedCombos.length,
-    data: { combos: formattedCombos },
-  });
+  sendResponse(res, 200, 'combos', formattedCombos, { results: formattedCombos.length });
 });
 
 // ============================================
@@ -190,10 +176,7 @@ exports.getCombo = catchAsync(async (req, res) => {
     console.log('Combo has toObject:', combo?.toObject ? true : false);
   }
 
-  res.status(200).json({
-    status: 'success',
-    data: { combo: formatComboResponse(combo) },
-  });
+  sendResponse(res, 200, 'combo', formatComboResponse(combo));
 });
 
 // ============================================
@@ -223,10 +206,7 @@ exports.updateCombo = catchAsync(async (req, res) => {
     });
   }
 
-  res.status(201).json({
-    status: 'success',
-    data: { combo: formatComboResponse(combo) },
-  });
+  sendResponse(res, 200, 'combo', formatComboResponse(combo));
 });
 
 // ============================================
@@ -235,11 +215,7 @@ exports.updateCombo = catchAsync(async (req, res) => {
 exports.updateBranchOverride = catchAsync(async (req, res) => {
   const { combo, message } = await MenuService.updateBranchOverride(req);
 
-  res.status(200).json({
-    status: 'success',
-    message,
-    data: { combo: formatComboResponse(combo) },
-  });
+  sendResponse(res, 200, 'combo', formatComboResponse(combo), { message });
 });
 
 // ============================================
@@ -283,17 +259,17 @@ exports.incrementComboSold = catchAsync(async (req, res) => {
 exports.toggleComboActive = catchAsync(async (req, res) => {
   const result = await MenuService.toggleComboActive(req);
 
-  res.status(200).json({
-    status: 'success',
-    message: result.message,
-    data: {
-      combo: {
-        id: result.id,
-        name: result.name,
-        isActive: result.isActive,
-      },
+  sendResponse(
+    res,
+    200,
+    'combo',
+    {
+      id: result.id,
+      name: result.name,
+      isActive: result.isActive,
     },
-  });
+    { message: result.message }
+  );
 });
 
 // ============================================
@@ -302,11 +278,7 @@ exports.toggleComboActive = catchAsync(async (req, res) => {
 exports.toggleBranchActive = catchAsync(async (req, res) => {
   const result = await MenuService.toggleBranchActive(req);
 
-  res.status(200).json({
-    status: 'success',
-    message: result.message,
-    data: { isActive: result.isActive },
-  });
+  sendResponse(res, 200, 'branchOverride', { isActive: result.isActive }, { message: result.message });
 });
 
 // ============================================

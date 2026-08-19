@@ -9,6 +9,7 @@ const { MenuService } = require('../service/MenuService');
 const { FileManagementService } = require('../../files/file-management.service');
 const FileAsset = require('../../../../models/FileAsset');
 const { resolveSingleImageData, resolveImageCollectionData } = require('../utils/image-response');
+const { sendResponse } = require('../../../../utils/sendResponse');
 
 const multerStorage = multer.memoryStorage();
 
@@ -165,10 +166,7 @@ exports.createNewMenu = catchAsync(async (req, res) => {
     { path: 'images', match: { isDeleted: false } },
   ]);
 
-  res.status(201).json({
-    status: 'success',
-    data: { menu: formatMenuResponse(menu) },
-  });
+  sendResponse(res, 201, 'menu', formatMenuResponse(menu));
 });
 
 // ============================================
@@ -195,25 +193,18 @@ exports.getMenu = catchAsync(async (req, res, next) => {
     { path: 'images', match: { isDeleted: false } },
   ]);
 
-  res.status(200).json({
-    status: 'success',
-    data: { menu: formatMenuResponse(menu) },
-  });
+  sendResponse(res, 200, 'menu', formatMenuResponse(menu));
 });
 
 // ============================================
 // 2. GET ALL MENU
 // ============================================
 exports.getAllMenu = catchAsync(async (req, res, next) => {
-  // ✅ Get menu items - returns Mongoose documents
+  // ✅ Get menu items - returns Mongoose documents (with ApiFeatures applied)
   const menuItems = await MenuService.getAllMenu(req);
 
   if (!menuItems || menuItems.length === 0) {
-    return res.status(200).json({
-      status: 'success',
-      results: 0,
-      data: { menu: [] },
-    });
+    return sendResponse(res, 200, 'menus', [], { results: 0 });
   }
 
   // ✅ Populate and format each menu
@@ -227,11 +218,8 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
     })
   );
 
-  res.status(200).json({
-    status: 'success',
-    results: formattedMenus.length,
-    data: { menu: formattedMenus },
-  });
+  // Use standardized response helper (note: 'menu' → 'menus' for consistency)
+  sendResponse(res, 200, 'menus', formattedMenus, { results: formattedMenus.length });
 });
 
 // ============================================
@@ -267,10 +255,7 @@ exports.updateMenu = catchAsync(async (req, res, next) => {
     { path: 'images', match: { isDeleted: false } },
   ]);
 
-  res.status(200).json({
-    status: 'success',
-    data: { menu: formatMenuResponse(updatedMenu) },
-  });
+  sendResponse(res, 200, 'menu', formatMenuResponse(updatedMenu));
 });
 
 // ============================================
@@ -339,11 +324,13 @@ exports.getActiveMenu = catchAsync(async (req, res) => {
 exports.toggleMenuItemAvailability = catchAsync(async (req, res) => {
   const result = await MenuService.toggleMenuItemAvailability(req);
 
-  res.status(200).json({
-    status: 'success',
-    message: result.message,
-    data: { menu: { id: result.id, name: result.name, available: result.available } },
-  });
+  sendResponse(
+    res,
+    200,
+    'menu',
+    { id: result.id, name: result.name, available: result.available },
+    { message: result.message }
+  );
 });
 
 // ============================================
@@ -377,10 +364,7 @@ exports.publishMenuGroup = catchAsync(async (req, res) => {
     publishedBy: req.user._id,
   });
 
-  res.status(201).json({
-    status: 'success',
-    data: { publication },
-  });
+  sendResponse(res, 201, 'publication', publication);
 });
 
 // ============================================
@@ -389,7 +373,7 @@ exports.publishMenuGroup = catchAsync(async (req, res) => {
 exports.archiveMenuItem = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
   const menu = await MenuService.archiveMenuItem(req.params.id, merchantId);
-  res.status(200).json({ status: 'success', data: { menu } });
+  sendResponse(res, 200, 'menu', menu);
 });
 
 // ============================================
@@ -401,11 +385,7 @@ exports.getBranchPublications = catchAsync(async (req, res) => {
     merchantId,
     req.params.branchId
   );
-  res.status(200).json({
-    status: 'success',
-    results: publications.length,
-    data: { publications },
-  });
+  sendResponse(res, 200, 'publications', publications, { results: publications.length });
 });
 
 // ============================================
