@@ -58,8 +58,6 @@ exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
 
     req.processedImageId = fileAsset._id;
     req.body.image = fileAsset._id;
-    req.body.imageUrl = fileAsset.getPublicUrl();
-    req.body.imageFilename = `combo-${merchantId}-${Date.now()}.jpeg`;
   }
 
   next();
@@ -202,8 +200,17 @@ exports.getCombo = catchAsync(async (req, res) => {
 // 5. UPDATE COMBO
 // ============================================
 exports.updateCombo = catchAsync(async (req, res) => {
-  // If new image was uploaded, update combo data
+  const merchantId = getMerchantId(req);
+
+  // If new image was uploaded, cleanup old FileAsset before updating
   if (req.processedImageId) {
+    const oldCombo = await MenuService.getCombo(req);
+
+    // Clean up old image
+    if (oldCombo.image && typeof oldCombo.image !== 'string') {
+      await FileManagementService.softDelete(oldCombo.image, merchantId);
+    }
+
     req.body.image = req.processedImageId;
   }
 
@@ -311,9 +318,6 @@ function formatComboResponse(combo) {
   const comboObj = combo.toObject ? combo.toObject() : combo;
   const imageData = resolveSingleImageData({
     image: comboObj.image,
-    imageFilename: comboObj.imageFilename,
-    imageUrl: comboObj.imageUrl,
-    legacyBasePath: '/img/combo',
   });
 
   return {

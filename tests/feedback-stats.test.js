@@ -15,42 +15,34 @@ describe('feedback repository & menu image response helpers', () => {
     it('builds a public FileAsset URL for object id strings', () => {
       const imageData = resolveSingleImageData({
         image: '6a421b0c03d39206c382def0',
-        imageFilename: 'default-menu-item.jpg',
-        legacyBasePath: '/img/menu',
       });
       expect(imageData.url).toBe('/api/v1/files/6a421b0c03d39206c382def0/content');
       expect(imageData.id).toBe('6a421b0c03d39206c382def0');
     });
 
-    it('falls back to the static menu filename when image is missing', () => {
+    it('returns null when image is missing', () => {
       const imageData = resolveSingleImageData({
         image: null,
-        imageFilename: 'default-menu-item.jpg',
-        legacyBasePath: '/img/menu',
       });
-      expect(imageData.url).toBe('/img/menu/default-menu-item.jpg');
-      expect(imageData.filename).toBe('default-menu-item.jpg');
+      expect(imageData).toBe(null);
     });
 
     it('preserves absolute origin for public menu responses', () => {
       const imageData = resolveSingleImageData({
-        image: null,
-        imageFilename: 'menu-merchant-1.jpeg',
-        legacyBasePath: '/img/menu',
+        image: '6a421b0c03d39206c382def0',
         origin: 'http://localhost:4000',
       });
-      expect(imageData.url).toBe('http://localhost:4000/img/menu/menu-merchant-1.jpeg');
+      expect(imageData.url).toBe('http://localhost:4000/api/v1/files/6a421b0c03d39206c382def0/content');
     });
 
-    it('maps mixed image collections to usable URLs', () => {
+    it('maps image collections to FileAsset URLs', () => {
       const imagesData = resolveImageCollectionData(
-        ['6a421b0c03d39206c382def0', { _id: '6a421b0c03d39206c382def1' }, 'legacy-menu.jpeg'],
-        { legacyBasePath: '/img/menu' }
+        ['6a421b0c03d39206c382def0', { _id: '6a421b0c03d39206c382def1' }],
+        { origin: 'http://localhost:4000' }
       );
-      expect(imagesData).toHaveLength(3);
-      expect(imagesData[0].url).toBe('/api/v1/files/6a421b0c03d39206c382def0/content');
-      expect(imagesData[1].url).toBe('/api/v1/files/6a421b0c03d39206c382def1/content');
-      expect(imagesData[2].url).toBe('/img/menu/legacy-menu.jpeg');
+      expect(imagesData).toHaveLength(2);
+      expect(imagesData[0].url).toBe('http://localhost:4000/api/v1/files/6a421b0c03d39206c382def0/content');
+      expect(imagesData[1].url).toBe('http://localhost:4000/api/v1/files/6a421b0c03d39206c382def1/content');
     });
   });
 });

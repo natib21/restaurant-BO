@@ -128,7 +128,7 @@ comboSchema.virtual('imageData').get(function () {
   if (this.image) {
     return `/api/v1/files/${this.image}/content`;
   }
-  return this.imageUrl || null;
+  return null;
 });
 
 // ========================= METHODS =========================

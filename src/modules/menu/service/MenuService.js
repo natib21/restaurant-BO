@@ -159,9 +159,6 @@ class MenuService {
 
         const imageData = resolveSingleImageData({
           image: menu.image,
-          imageFilename: menu.imageFilename,
-          imageUrl: menu.imageUrl,
-          legacyBasePath: '/img/menu',
           origin,
         });
 
@@ -476,9 +473,6 @@ class MenuService {
             image:
               resolveSingleImageData({
                 image: i.menu.image,
-                imageFilename: i.menu.imageFilename,
-                imageUrl: i.menu.imageUrl,
-                legacyBasePath: '/img/menu',
               })?.url || null,
             price: i.overridePrice || i.menu.variants[0]?.price || i.menu.price,
             variants: i.menu.variants,
@@ -638,9 +632,6 @@ class MenuService {
 
         const imageData = resolveSingleImageData({
           image: menu.image,
-          imageFilename: menu.imageFilename,
-          imageUrl: menu.imageUrl,
-          legacyBasePath: '/img/menu',
           origin,
         });
 

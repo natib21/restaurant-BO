@@ -51,7 +51,11 @@ const menuGroupSchema = new mongoose.Schema(
     },
 
     description: { type: String, trim: true },
-    bannerImage: { type: String },
+    bannerImage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
 
     // Visibility & Scheduling
     visibility: {

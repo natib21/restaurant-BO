@@ -59,8 +59,6 @@ exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
 
     req.processedImageId = fileAsset._id;
     req.body.image = fileAsset._id;
-    req.body.imageUrl = fileAsset.getPublicUrl();
-    req.body.imageFilename = `menu-${merchantId}-${Date.now()}.jpeg`;
   }
 
   // Handle multiple images upload
@@ -240,6 +238,27 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
 // 4. UPDATE MENU
 // ============================================
 exports.updateMenu = catchAsync(async (req, res, next) => {
+  const merchantId = getMerchantId(req);
+
+  // If new image uploaded, cleanup old FileAsset before updating
+  if (req.processedImageId || (req.processedImageIds && req.processedImageIds.length > 0)) {
+    const oldMenu = await MenuService.getMenu(req);
+
+    // Clean up old single image
+    if (req.processedImageId && oldMenu.image && typeof oldMenu.image !== 'string') {
+      await FileManagementService.softDelete(oldMenu.image, merchantId);
+    }
+
+    // Clean up old images array
+    if (req.processedImageIds && oldMenu.images && oldMenu.images.length > 0) {
+      for (const imageId of oldMenu.images) {
+        if (typeof imageId !== 'string') {
+          await FileManagementService.softDelete(imageId, merchantId);
+        }
+      }
+    }
+  }
+
   const updatedMenu = await MenuService.updateMenu(req);
 
   // Populate image references
@@ -398,13 +417,8 @@ function formatMenuResponse(menu) {
   const menuObj = menu.toObject ? menu.toObject() : menu;
   const imageData = resolveSingleImageData({
     image: menuObj.image,
-    imageFilename: menuObj.imageFilename,
-    imageUrl: menuObj.imageUrl,
-    legacyBasePath: '/img/menu',
   });
-  const imagesData = resolveImageCollectionData(menuObj.images, {
-    legacyBasePath: '/img/menu',
-  });
+  const imagesData = resolveImageCollectionData(menuObj.images, {});
 
   return {
     ...menuObj,

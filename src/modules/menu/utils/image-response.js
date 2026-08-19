@@ -20,7 +20,7 @@ function isObjectIdLike(value) {
   return typeof value === 'string' && OBJECT_ID_REGEX.test(value);
 }
 
-function resolveSingleImageData({ image, imageFilename, imageUrl, legacyBasePath, origin = '' }) {
+function resolveSingleImageData({ image, origin = '' }) {
   if (isPopulatedFileAsset(image)) {
     return {
       id: String(image._id),
@@ -41,28 +41,12 @@ function resolveSingleImageData({ image, imageFilename, imageUrl, legacyBasePath
         url: buildFileAssetUrl(imageValue, origin),
       };
     }
-
-    return {
-      filename: imageValue,
-      url: buildStaticAssetUrl(legacyBasePath, imageValue, origin),
-    };
-  }
-
-  if (imageUrl) {
-    return { url: imageUrl };
-  }
-
-  if (imageFilename) {
-    return {
-      filename: imageFilename,
-      url: buildStaticAssetUrl(legacyBasePath, imageFilename, origin),
-    };
   }
 
   return null;
 }
 
-function resolveImageCollectionData(images, { legacyBasePath, origin = '' }) {
+function resolveImageCollectionData(images, { origin = '' } = {}) {
   if (!Array.isArray(images) || images.length === 0) {
     return [];
   }
@@ -70,7 +54,6 @@ function resolveImageCollectionData(images, { legacyBasePath, origin = '' }) {
   return images.map(image =>
     resolveSingleImageData({
       image,
-      legacyBasePath,
       origin,
     })
   );

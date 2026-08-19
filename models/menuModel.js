@@ -126,14 +126,6 @@ const menuSchema = new mongoose.Schema(
         ref: 'FileAsset',
       },
     ],
-    imageUrl: {
-      type: String,
-      default: null,
-    },
-    imageFilename: {
-      type: String,
-      default: 'default-menu-item.jpg',
-    },
     prepTime: { type: String, default: '15-25 min' },
 
     recipe: {
@@ -223,7 +215,7 @@ menuSchema.virtual('imageData').get(function () {
   if (this.image) {
     return `/api/v1/files/${this.image}/content`;
   }
-  return this.imageUrl || null;
+  return null;
 });
 
 menuSchema.virtual('imagesData').get(function () {
