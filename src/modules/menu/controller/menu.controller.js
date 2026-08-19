@@ -33,10 +33,6 @@ exports.uploadMenuPhotos = upload.array('images', 5);
 // RESIZE & PROCESS IMAGE (Using FileAsset)
 // ============================================
 exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
-  console.log('📸 req.file →', req.file);
-  console.log('📸 req.files →', req.files);
-  console.log('📸 req.body →', req.body);
-
   const merchantId = getMerchantId(req);
   const branchId = req.body.branchId || null;
   const userId = req.user._id;
@@ -101,60 +97,12 @@ exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
 });
 
 // ============================================
-// EXISTING MIDDLEWARE (Legacy support)
-// ============================================
-exports.resizeMenuPhoto = catchAsync(async (req, res, next) => {
-  console.log('🔄 Legacy resizeMenuPhoto →', req.file);
-  console.log('📝 req.body →', req.body);
-
-  if (!req.file) {
-    console.log('No file uploaded → skipping resize');
-    return next();
-  }
-
-  const merchantId = req.user.merchant._id;
-  const itemName = (req.body.name || 'item').replace(/\s+/g, '_').toLowerCase();
-  const filename = `menu-${merchantId}-${itemName}-${Date.now()}.jpeg`;
-
-  await sharp(req.file.buffer)
-    .resize(800, 800, { fit: 'cover', position: 'center' })
-    .toFormat('jpeg')
-    .jpeg({ quality: 92 })
-    .toFile(`uploads/img/menu/${filename}`);
-
-  req.body.image = filename;
-  console.log('image - ', req.body.image);
-  next();
-});
-
-// ============================================
 // QUERY MIDDLEWARES
 // ============================================
 exports.getAllBeverage = (req, res, next) => {
   req.query.type = 'drink';
   next();
 };
-
-exports.getAppetizers = (req, res, next) => {
-  req.query.category = 'Appetizers';
-  next();
-};
-
-exports.getSpecials = (req, res, next) => {
-  req.query.isSpecial = 'true';
-  next();
-};
-
-exports.searchMenu = catchAsync(async (req, res, next) => {
-  const { query } = req.query;
-  if (!query?.trim()) return next();
-
-  const searchRegex = new RegExp(query.trim(), 'i');
-  req.query = {
-    $or: [{ name: searchRegex }, { description: searchRegex }],
-  };
-  next();
-});
 
 exports.getFoodOnly = (req, res, next) => {
   req.query.type = 'food';
@@ -169,9 +117,6 @@ exports.getFoodOnly = (req, res, next) => {
 // 1. CREATE NEW MENU
 // ============================================
 exports.createNewMenu = catchAsync(async (req, res) => {
-  console.log('👤 user=>', req.user);
-  console.log('📦 req.body=>', req.body);
-
   const merchantId = getMerchantId(req);
   const userId = req.user._id;
 
@@ -198,13 +143,6 @@ exports.createNewMenu = catchAsync(async (req, res) => {
       menuData.image = req.processedImageIds[0];
     }
   }
-
-  console.log('📦 Final menuData:', {
-    name: menuData.name,
-    merchant: menuData.merchant,
-    image: menuData.image,
-    images: menuData.images,
-  });
 
   // Create menu item
   const menu = await MenuService.createNewMenu(menuData, req);
@@ -246,8 +184,6 @@ exports.createNewMenu = catchAsync(async (req, res) => {
 // 3. GET SINGLE MENU
 // ============================================
 exports.getMenu = catchAsync(async (req, res, next) => {
-  console.log('🔍 getMenu called for ID:', req.params.id);
-
   // ✅ Get menu - now returns Mongoose document
   const menu = await MenuService.getMenu(req);
 

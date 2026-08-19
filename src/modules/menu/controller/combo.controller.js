@@ -32,9 +32,6 @@ exports.uploadComboPhoto = upload.single('image');
 // RESIZE & PROCESS IMAGE (Using FileAsset)
 // ============================================
 exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
-  console.log('📸 req.file →', req.file);
-  console.log('📸 req.body →', req.body);
-
   const merchantId = getMerchantId(req);
   const branchId = req.body.branchId || null;
   const userId = req.user._id;
@@ -72,8 +69,6 @@ exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
 // LEGACY RESIZE MIDDLEWARE
 // ============================================
 exports.resizeComboPhoto = catchAsync(async (req, res, next) => {
-  console.log('req.file:', req.file);
-  console.log('req.body before resize:', req.body);
   if (!req.file) {
     delete req.body.image;
     return next();
@@ -101,9 +96,6 @@ exports.resizeComboPhoto = catchAsync(async (req, res, next) => {
 // 1. CREATE COMBO
 // ============================================
 exports.createCombo = catchAsync(async (req, res) => {
-  console.log('👤 user=>', req.user);
-  console.log('📦 req.body=>', req.body);
-
   const merchantId = getMerchantId(req);
   const userId = req.user._id;
 
@@ -121,12 +113,6 @@ exports.createCombo = catchAsync(async (req, res) => {
   if (req.processedImageId) {
     comboData.image = req.processedImageId;
   }
-
-  console.log('📦 Final comboData:', {
-    name: comboData.name,
-    merchant: comboData.merchant,
-    image: comboData.image,
-  });
 
   const combo = await MenuService.createCombo(comboData, req);
 

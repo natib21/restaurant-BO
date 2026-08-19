@@ -21,6 +21,7 @@ const variantSchema = new mongoose.Schema({
   price: {
     type: Number,
     min: [0, 'Price cannot be negative'],
+    required: [true, 'Variant price is required'],
   },
   calories: { type: Number },
   available: { type: Boolean, default: true },

@@ -138,7 +138,7 @@ class MenuService {
       .sort({ priority: -1 })
       .populate({
         path: 'items.menu',
-        match: { available: true, inStock: true },
+        match: { available: true, inStock: true, publishStatus: 'published' },
         select:
           'name description image imageUrl imageFilename variants price type isVeg isSpicy isAlcoholic prepTime tags ingredients allergens ratingAverage',
       });
@@ -275,7 +275,6 @@ class MenuService {
   static async createNewMenu(menuData, req) {
     // ✅ Get merchantId from menuData instead of req.user
     const merchantId = menuData.merchant || req?.user?.merchant?._id;
-    console.log('req user => :{', req.user);
     if (!merchantId) {
       throw new AppError('Merchant ID is required to create a menu item', 400);
     }
@@ -352,7 +351,7 @@ class MenuService {
       available: available !== 'false',
       price: price || 0,
       variants: finalVariants,
-      ingredients,
+      recipe: { ingredients },
       allergens,
       tags,
       // ✅ Handle image properly
@@ -397,6 +396,21 @@ class MenuService {
       req.body.isVeg = req.body.isVeg === 'true' ? true : req.body.isVeg === 'false' ? false : null;
     }
 
+    // Validate variant prices
+    if (req.body.variants && Array.isArray(req.body.variants)) {
+      req.body.variants.forEach((v, index) => {
+        if (v.price == null || v.price < 0) {
+          throw new AppError(`Variant ${index + 1} must have a valid price`, 400);
+        }
+      });
+    }
+
+    // Fix ingredients field structure
+    if (req.body.ingredients) {
+      req.body.recipe = { ingredients: req.body.ingredients };
+      delete req.body.ingredients;
+    }
+
     const updatedMenu = await MenuRepository.findOneAndUpdateMenu(
       { _id: req.params.id, merchant: merchantId },
       req.body,
@@ -433,19 +447,21 @@ class MenuService {
     const menuGroups = await MenuRepository.findMenuGroups({
       merchant: merchantId,
       visibility: { $in: ['always', 'scheduled'] },
-      $or: [{ activeDays: currentDay }, { activeDays: { $size: 0 } }],
-      $or: [{ blockedDays: { $ne: currentDay } }, { blockedDays: { $size: 0 } }],
+      $and: [
+        { $or: [{ activeDays: currentDay }, { activeDays: { $size: 0 } }] },
+        { $or: [{ blockedDays: { $ne: currentDay } }, { blockedDays: { $size: 0 } }] }
+      ],
     })
       .sort({ priority: -1 })
       .populate({
         path: 'items.menu',
-        match: { available: true, inStock: true },
+        match: { available: true, inStock: true, publishStatus: 'published' },
         populate: { path: 'variants' },
       });
 
     const cleanedGroups = menuGroups
       .map(group => {
-        const visibleItems = group.items.filter(i => i.menuItem && !i.isHidden);
+        const visibleItems = group.items.filter(i => i.menu && !i.isHidden);
         if (visibleItems.length === 0) return null;
 
         return {
@@ -454,28 +470,28 @@ class MenuService {
           description: group.description,
           bannerImage: group.bannerImage,
           items: visibleItems.map(i => ({
-            _id: i.menuItem._id,
-            name: i.customName || i.menuItem.name,
-            description: i.customDescription || i.menuItem.description,
+            _id: i.menu._id,
+            name: i.customName || i.menu.name,
+            description: i.customDescription || i.menu.description,
             image:
               resolveSingleImageData({
-                image: i.menuItem.image,
-                imageFilename: i.menuItem.imageFilename,
-                imageUrl: i.menuItem.imageUrl,
+                image: i.menu.image,
+                imageFilename: i.menu.imageFilename,
+                imageUrl: i.menu.imageUrl,
                 legacyBasePath: '/img/menu',
               })?.url || null,
-            price: i.overridePrice || i.menuItem.variants[0]?.price || i.menuItem.price,
-            variants: i.menuItem.variants,
-            isVeg: i.menuItem.isVeg,
-            isSpicy: i.menuItem.isSpicy,
-            prepTime: i.menuItem.prepTime,
+            price: i.overridePrice || i.menu.variants[0]?.price || i.menu.price,
+            variants: i.menu.variants,
+            isVeg: i.menu.isVeg,
+            isSpicy: i.menu.isSpicy,
+            prepTime: i.menu.prepTime,
           })),
         };
       })
       .filter(Boolean);
 
     const combos = await MenuRepository.findCombos({
-      /* same logic as before */
+      merchant: merchantId,
     })
       .sort({ priority: -1 })
       .populate('items.menuItem');
@@ -593,7 +609,7 @@ class MenuService {
       .sort({ priority: -1 })
       .populate({
         path: 'items.menu',
-        match: { available: true, inStock: true },
+        match: { available: true, inStock: true, publishStatus: 'published' },
       });
 
     const origin = `${protocol}://${host}`;

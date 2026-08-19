@@ -42,24 +42,6 @@ router.get(
   menuController.getFoodOnly,
   menuController.getPublicMenu
 );
-router.get(
-  '/public/appetizers',
-  protectTableSession,
-  menuController.getAppetizers,
-  menuController.getPublicMenu
-);
-router.get(
-  '/public/specials',
-  protectTableSession,
-  menuController.getSpecials,
-  menuController.getPublicMenu
-);
-router.get(
-  '/public/search',
-  protectTableSession,
-  menuController.searchMenu,
-  menuController.getPublicMenu
-);
 
 // ── 2. Staff (JWT + RBAC) ─────────────────────────────────────────────────────
 router.use(protect);
@@ -97,7 +79,7 @@ router.get(
 router
   .route('/:id')
   .get(menuController.getMenu)
-  .patch(menuController.uploadMenuPhoto, menuController.resizeMenuPhoto, menuController.updateMenu)
+  .patch(menuController.uploadMenuPhoto, menuController.resizeAndProcessImages, menuController.updateMenu)
   .delete(menuController.deleteMenu);
 
 module.exports = router;
