@@ -13,11 +13,11 @@
  */
 
 const express = require('express');
-const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const { requireCapability } = require('../../common/guards/capability.guard');
-const { CAPABILITIES } = require('../../common/capabilities/capabilities');
-const { protectTableSession } = require('../customers/customer-session.guard');
-const menuController = require('./controller/menu.controller');
+const { protect, restrictTo } = require('../../../common/guards/auth.guard');
+const { requireCapability } = require('../../../common/guards/capability.guard');
+const { CAPABILITIES } = require('../../../common/capabilities/capabilities');
+const { protectTableSession } = require('../../customers/customer-session.guard');
+const menuController = require('../controller/menu.controller');
 const menuMgmtController = menuController; // same file handles both CRUD and publish lifecycle
 
 const router = express.Router();
@@ -79,7 +79,11 @@ router.get(
 router
   .route('/:id')
   .get(menuController.getMenu)
-  .patch(menuController.uploadMenuPhoto, menuController.resizeAndProcessImages, menuController.updateMenu)
+  .patch(
+    menuController.uploadMenuPhoto,
+    menuController.resizeAndProcessImages,  // ✅ Consistent with CREATE
+    menuController.updateMenu
+  )
   .delete(menuController.deleteMenu);
 
 module.exports = router;

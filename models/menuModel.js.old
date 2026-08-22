@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
 const auditPlugin = require('../utils/auditPlugin');
+const localizedTextSchema = require('../utils/schemas/localizedText');
 
 const variantSchema = new mongoose.Schema({
   name: {
@@ -59,19 +60,19 @@ const menuSchema = new mongoose.Schema(
       required: [true, 'Menu item must belong to a merchant'],
       index: true,
     },
+    
+    // ✅ Multilingual name support (en, am)
     name: {
-      type: String,
+      type: localizedTextSchema,
       required: [true, 'Menu item must have a name'],
-      trim: true,
-      maxlength: 100,
     },
 
     slug: String,
 
+    // ✅ Multilingual description support (en, am)
     description: {
-      type: String,
-      trim: true,
-      maxlength: 800,
+      type: localizedTextSchema,
+      required: false,
     },
 
     type: {
@@ -81,11 +82,37 @@ const menuSchema = new mongoose.Schema(
       default: 'food',
     },
 
+    // DEPRECATED: Legacy string-based category (kept for backward compatibility)
+    // TODO: Remove after frontend migration to categoryId
     category: {
       type: String,
       trim: true,
-      required: [true, 'Category is required'],
+      required: false, // Made optional - use categoryId instead
     },
+    
+    // ✅ NEW: Dynamic category reference (replaces hardcoded category string)
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Category',
+      default: null,
+      index: true,
+    },
+    
+    isFasting: {
+  type: Boolean,
+  default: null,
+  index: true,
+},
+cuisineOrigin: {
+  type: String,
+  enum: ['local', 'international'],
+  default: 'local',
+  index: true,
+},
+cuisineTags: {
+  type: [String],
+  default: [],
+},
 
     drinkType: {
       type: String,
@@ -189,10 +216,14 @@ const menuSchema = new mongoose.Schema(
 // `Combo` supports `branchOverrides`), that has to be added as a real field
 // first — see note in the review.
 menuSchema.index({ merchant: 1, available: 1 });
+menuSchema.index({ merchant: 1, isFasting: 1 });
+menuSchema.index({ merchant: 1, cuisineOrigin: 1 });
 
 menuSchema.pre('save', function (next) {
   if (this.isModified('name') || !this.slug) {
-    const baseSlug = slugify(this.name, { lower: true, strict: true });
+    // Use English name for slug generation
+    const nameForSlug = this.name?.en || this.name || '';
+    const baseSlug = slugify(nameForSlug, { lower: true, strict: true });
     this.slug = `${baseSlug}-${Date.now().toString(36)}`;
   }
   this.updatedAt = Date.now();

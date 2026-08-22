@@ -1,6 +1,7 @@
-const Menu = require('../../../../models/menuModel');
-const MenuGroup = require('../../../../models/menuGroupModel');
-const Combo = require('../../../../models/comboModel');
+// Use new structured models
+const MenuItem = require('../model/MenuItem.model');
+const MenuGroup = require('../model/MenuGroup.model');
+const Combo = require('../model/Combo.model');
 const BranchMenu = require('../../../../models/branchMenuModel');
 const BranchMenuGroup = require('../../../../models/branchMenuGroupModel');
 
@@ -9,39 +10,39 @@ const BranchMenuGroup = require('../../../../models/branchMenuGroupModel');
  */
 class MenuRepository {
   static getMenuModel() {
-    return Menu;
+    return MenuItem;
   }
 
   static findMenus(filter) {
-    return Menu.find(filter);
+    return MenuItem.find(filter);
   }
 
   static findMenuOne(filter) {
-    return Menu.findOne(filter);
+    return MenuItem.findOne(filter);
   }
 
   static findMenuById(id) {
-    return Menu.findById(id);
+    return MenuItem.findById(id);
   }
 
   static createMenu(doc) {
-    return Menu.create(doc);
+    return MenuItem.create(doc);
   }
 
   static findOneAndUpdateMenu(filter, update, options) {
-    return Menu.findOneAndUpdate(filter, update, options);
+    return MenuItem.findOneAndUpdate(filter, update, options);
   }
 
   static findOneAndDeleteMenu(filter) {
-    return Menu.findOneAndDelete(filter);
+    return MenuItem.findOneAndDelete(filter);
   }
 
   static countMenus(filter) {
-    return Menu.countDocuments(filter);
+    return MenuItem.countDocuments(filter);
   }
 
   static newMenu(doc) {
-    return new Menu(doc);
+    return new MenuItem(doc);
   }
 
   static findMenuGroups(filter) {

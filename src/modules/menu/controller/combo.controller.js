@@ -4,7 +4,8 @@ const catchAsync = require('../../../../utils/catchAsync');
 const multer = require('multer');
 const sharp = require('sharp');
 const AppError = require('../../../../utils/appError');
-const { MenuService } = require('../service/MenuService');
+const { MenuService } = require('../service/MenuService'); // Legacy service for some methods
+const ComboService = require('../service/Combo.service'); // New structured service
 const { FileAsset } = require('../../../../models/FileAsset');
 const { FileManagementService } = require('../../files/file-management.service');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
@@ -105,15 +106,13 @@ exports.createCombo = catchAsync(async (req, res) => {
   // Create combo with processed image ID
   const comboData = {
     ...req.body,
-    merchant: merchantId,
-    createdBy: userId,
   };
 
   if (req.processedImageId) {
     comboData.image = req.processedImageId;
   }
 
-  const combo = await MenuService.createCombo(comboData, req);
+  const combo = await ComboService.create(comboData, merchantId, userId);
 
   // Update FileAsset record with entityId after combo creation
   if (combo.image && typeof combo.image !== 'string') {
@@ -129,7 +128,7 @@ exports.createCombo = catchAsync(async (req, res) => {
 // 2. GET ALL COMBOS
 // ============================================
 exports.getAllCombos = catchAsync(async (req, res) => {
-  const combos = await MenuService.getAllCombos(req);
+  const combos = await ComboService.getAll(req);
 
   if (!combos || combos.length === 0) {
     return sendResponse(res, 200, 'combos', [], { results: 0 });
@@ -149,7 +148,11 @@ exports.getAllCombos = catchAsync(async (req, res) => {
 // 3. GET ACTIVE COMBOS
 // ============================================
 exports.getActiveCombos = catchAsync(async (req, res) => {
-  const combos = await MenuService.getActiveCombos(req);
+  // For public endpoint, try multiple sources for merchantId
+  const merchantId = req.query.merchantId || getMerchantId(req);
+  const branchId = req.query.branchId || null;
+  
+  const combos = await ComboService.getActive(merchantId, branchId);
 
   if (process.env.NODE_ENV === 'development') {
     console.log('GET ACTIVE COMBOS returned', combos.length, 'records');
@@ -165,7 +168,9 @@ exports.getActiveCombos = catchAsync(async (req, res) => {
 // 4. GET SINGLE COMBO
 // ============================================
 exports.getCombo = catchAsync(async (req, res) => {
-  const combo = await MenuService.getCombo(req);
+  const merchantId = getMerchantId(req);
+  
+  const combo = await ComboService.getById(req.params.id, merchantId);
 
   if (!combo) {
     throw new AppError('Combo not found', 404);
@@ -184,10 +189,11 @@ exports.getCombo = catchAsync(async (req, res) => {
 // ============================================
 exports.updateCombo = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
+  const userId = req.user._id;
 
   // If new image was uploaded, cleanup old FileAsset before updating
   if (req.processedImageId) {
-    const oldCombo = await MenuService.getCombo(req);
+    const oldCombo = await ComboService.getById(req.params.id, merchantId);
 
     // Clean up old image
     if (oldCombo.image && typeof oldCombo.image !== 'string') {
@@ -197,7 +203,7 @@ exports.updateCombo = catchAsync(async (req, res) => {
     req.body.image = req.processedImageId;
   }
 
-  const combo = await MenuService.updateCombo(req);
+  const combo = await ComboService.update(req.params.id, req.body, merchantId, userId);
 
   // Update FileAsset record with entityId after combo update
   if (combo.image && typeof combo.image !== 'string') {
@@ -223,16 +229,17 @@ exports.updateBranchOverride = catchAsync(async (req, res) => {
 // ============================================
 exports.deleteCombo = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
+  const userId = req.user._id;
 
   // Get combo before deletion to clean up image
-  const combo = await MenuService.getCombo(req);
+  const combo = await ComboService.getById(req.params.id, merchantId);
 
   // Soft delete FileAsset image
   if (combo.image && typeof combo.image !== 'string') {
     await FileManagementService.softDelete(combo.image, merchantId);
   }
 
-  await MenuService.deleteCombo(req);
+  await ComboService.softDelete(req.params.id, merchantId, userId);
 
   res.status(204).json({
     status: 'success',
@@ -257,18 +264,20 @@ exports.incrementComboSold = catchAsync(async (req, res) => {
 // 9. TOGGLE COMBO ACTIVE
 // ============================================
 exports.toggleComboActive = catchAsync(async (req, res) => {
-  const result = await MenuService.toggleComboActive(req);
+  const merchantId = getMerchantId(req);
+  
+  const combo = await ComboService.toggleActive(req.params.id, merchantId);
 
   sendResponse(
     res,
     200,
     'combo',
     {
-      id: result.id,
-      name: result.name,
-      isActive: result.isActive,
+      id: combo._id,
+      name: combo.name,
+      isActive: combo.isActive,
     },
-    { message: result.message }
+    { message: `Combo ${combo.isActive ? 'activated' : 'deactivated'} successfully` }
   );
 });
 

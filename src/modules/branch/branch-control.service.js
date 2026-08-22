@@ -1,6 +1,6 @@
 const Branch = require('../../../models/branchModel');
 const User = require('../../../models/userModel');
-const MenuGroup = require('../../../models/menuGroupModel');
+const MenuGroup = require('../menu/model/MenuGroup.model');
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
 

@@ -2,6 +2,8 @@
 // ✅ PHASE 1: Full Order → Ticket → Order Ready integration test
 const mongoose = require('mongoose');
 const Order = require('../models/orderModel');
+console.log('SCHEMA _id option:', Order.schema.path('items').schema.options._id);
+console.log('SCHEMA items path type:', Order.schema.path('items').instance);
 const KitchenTicket = require('../models/KitchenTicket');
 const KitchenStation = require('../models/KitchenStation');
 const OutboxEvent = require('../models/OutboxEvent');
@@ -173,6 +175,9 @@ describe('KDS Integration: Order → Ticket → Order Ready Flow', () => {
       totalPrice: 15,
       customer: null,
     });
+
+    console.log('DEBUG raw item 0 after create:', JSON.stringify(order.items[0]));
+console.log('DEBUG raw item 0 _id:', order.items[0]._id);
 
     console.log('✓ Step 1: Order created:', order._id.toString());
     console.log('  Order items with _id:', order.items.map(i => ({ _id: i._id?.toString(), menuItem: i.menuItem.toString() })));

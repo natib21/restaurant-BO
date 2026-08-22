@@ -24,11 +24,11 @@ const auditLogger = async ({
   req,
 }) => {
   try {
-    const { getRequestContext } = require('../src/common/middleware/request-context');
+    const { getContext } = require('./request-context');
 
     // Fall back to async context if req not provided
     if (!req) {
-      const context = getRequestContext();
+      const context = getContext();
       req = context?.req;
       user = user || context?.user;
     }

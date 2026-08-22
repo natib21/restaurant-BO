@@ -35,10 +35,11 @@ const customerRoutes = require('../modules/customers/customers.routes');
 const sessionRoutes = require('../modules/sessions/sessions.routes');
 
 // ── Menu Domain ───────────────────────────────────────────────────────────────
-const menuRoutes = require('../modules/menu/menus.routes');
-const menuGroupRoutes = require('../modules/menu/menu-groups.routes');
-const branchMenuGroupRoutes = require('../modules/menu/branch-menu-groups.routes');
-const comboRoutes = require('../modules/menu/combos.routes');
+const menuRoutes = require('../modules/menu/router/menus.routes');
+const menuGroupRoutes = require('../modules/menu/router/menu-groups.routes');
+const branchMenuGroupRoutes = require('../modules/menu/router/branch-menu-groups.routes');
+const comboRoutes = require('../modules/menu/router/combos.routes');
+const categoryRoutes = require('../modules/menu/router/categories.routes');
 
 // ── Order Domain ──────────────────────────────────────────────────────────────
 const orderRoutes = require('../modules/orders/orders.routes');
@@ -121,6 +122,7 @@ router.use('/api/v1/menu', menuRoutes);
 router.use('/api/v1/menu-group', menuGroupRoutes);
 router.use('/api/v1/branch-menu-group', branchMenuGroupRoutes);
 router.use('/api/v1/combo', comboRoutes);
+router.use('/api/v1/categories', categoryRoutes);
 
 // ── 13. Orders ────────────────────────────────────────────────────────────────
 router.use('/api/v1/order', orderRoutes);

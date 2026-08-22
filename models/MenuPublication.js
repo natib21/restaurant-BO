@@ -53,6 +53,20 @@ const menuPublicationSchema = new Schema(
       passed: { type: Boolean, default: true },
       missingRecipes: [{ menuItemId: Schema.Types.ObjectId, name: String }],
     },
+    // Legacy field from non-transactional implementation - kept for backward compatibility
+    // With transactions, publications are atomic (no partial state possible)
+    publishState: {
+      type: String,
+      enum: ['pending', 'complete', 'incomplete'],
+      default: 'complete', // Transaction-based always complete
+      index: true,
+    },
+    errorDetails: {
+      error: String,
+      timestamp: Date,
+      recoveredAt: Date,
+      recoveredItemCount: Number,
+    },
   },
   { timestamps: true }
 );

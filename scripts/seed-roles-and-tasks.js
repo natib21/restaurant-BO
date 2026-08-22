@@ -5,8 +5,8 @@
  * - SUPER-ADMIN: isSystemRole=true, no tasks (relies on bypass)
  * - SUPER-MERCHANT-ADMIN: isSystemRole=false, all merchant-scoped tasks (isMerchant: true)
  * 
- * Total: 202 fine-grained tasks
- * - 177 merchant-scoped (isMerchant: true) - assigned to SUPER-MERCHANT-ADMIN
+ * Total: 209 fine-grained tasks
+ * - 184 merchant-scoped (isMerchant: true) - assigned to SUPER-MERCHANT-ADMIN
  * - 25 system-wide (isMerchant: false) - SUPER-ADMIN only (accessed via bypass)
  * 
  * Phase 1 KDS: Added 15 kitchen display system tasks (all merchant-scoped)
@@ -16,6 +16,9 @@
  * 
  * Phase 2 Audit: Added 6 audit logging tasks (all merchant-scoped)
  *   - Query, view, resource history, correlation, export, stats
+ * 
+ * Phase 3 Categories: Added 7 category management tasks (all merchant-scoped)
+ *   - List active, CRUD operations, soft delete, restore
  * 
  * Idempotent: Safe to re-run (uses upsert)
  * Target: Production database only (not test)
@@ -146,6 +149,15 @@ const ALL_TASKS = [
   { name: 'combos.toggleBranch', endpoint: '/api/v1/combo/:comboId/branch-toggle', method: 'PATCH', description: 'Toggle combo for branch', isMerchant: true, hidden: false },
   { name: 'combos.updateBranchOverride', endpoint: '/api/v1/combo/:comboId/branch-override', method: 'PATCH', description: 'Update branch combo override', isMerchant: true, hidden: false },
   { name: 'combos.incrementSold', endpoint: '/api/v1/combo/increment-sold', method: 'POST', description: 'Increment combo sold count', isMerchant: true, hidden: false },
+
+  // ========== CATEGORIES MODULE (7 tasks) ==========
+  { name: 'categories.listActive', endpoint: '/api/v1/categories/active', method: 'GET', description: 'List active categories', isMerchant: true, hidden: false },
+  { name: 'categories.list', endpoint: '/api/v1/categories', method: 'GET', description: 'List all categories', isMerchant: true, hidden: false },
+  { name: 'categories.create', endpoint: '/api/v1/categories', method: 'POST', description: 'Create category', isMerchant: true, hidden: false },
+  { name: 'categories.read', endpoint: '/api/v1/categories/:id', method: 'GET', description: 'Get category by ID', isMerchant: true, hidden: false },
+  { name: 'categories.update', endpoint: '/api/v1/categories/:id', method: 'PATCH', description: 'Update category', isMerchant: true, hidden: false },
+  { name: 'categories.delete', endpoint: '/api/v1/categories/:id', method: 'DELETE', description: 'Soft delete category', isMerchant: true, hidden: false },
+  { name: 'categories.restore', endpoint: '/api/v1/categories/:id/restore', method: 'PATCH', description: 'Restore deleted category', isMerchant: true, hidden: false },
 
   // ========== MERCHANTS MODULE (26 tasks - 10 system-wide, 16 merchant-scoped) ==========
   { name: 'merchants.createKyc', endpoint: '/api/v1/merchant/kyc', method: 'POST', description: 'Submit KYC documents', isMerchant: true, hidden: false },
@@ -296,7 +308,7 @@ const ALL_TASKS = [
 async function seedRolesAndTasks() {
   try {
     // Connect to production database
-    const dbUri = process.env.DATABASE || 'mongodb://127.0.0.1:27017/MesobDb';
+    const dbUri ='mongodb://127.0.0.1:27017/MesobDb';
     await mongoose.connect(dbUri);
     console.log('✅ Connected to database:', mongoose.connection.name);
 

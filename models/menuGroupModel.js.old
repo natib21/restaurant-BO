@@ -1,6 +1,7 @@
 // models/menuGroupModel.js
 const mongoose = require('mongoose');
 const slugify = require('slugify');
+const localizedTextSchema = require('../utils/schemas/localizedText');
 
 const menuGroupItemSchema = new mongoose.Schema({
   menu: {
@@ -34,12 +35,7 @@ const menuGroupItemSchema = new mongoose.Schema({
 
 const menuGroupSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: [true, 'Menu group must have a name'],
-      trim: true,
-      maxlength: 60,
-    },
+    name: localizedTextSchema,
 
     slug: String,
 
@@ -50,7 +46,7 @@ const menuGroupSchema = new mongoose.Schema(
       index: true,
     },
 
-    description: { type: String, trim: true },
+    description: localizedTextSchema,
     bannerImage: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'FileAsset',
@@ -128,7 +124,9 @@ menuGroupSchema.index({ merchant: 1, branches: 1 });
 // ========================= SLUG =========================
 menuGroupSchema.pre('save', function (next) {
   if (this.isModified('name') || !this.slug) {
-    const base = slugify(this.name, { lower: true, strict: true });
+    // Use English name for slug generation
+    const nameForSlug = this.name?.en || this.name;
+    const base = slugify(nameForSlug, { lower: true, strict: true });
     this.slug = `${base}-${this._id.toString().slice(-6)}`;
   }
   next();

@@ -10,8 +10,8 @@
  */
 
 const express = require('express');
-const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const comboController = require('./controller/combo.controller');
+const { protect, restrictTo } = require('../../../common/guards/auth.guard');
+const comboController = require('../controller/combo.controller');
 
 const router = express.Router();
 

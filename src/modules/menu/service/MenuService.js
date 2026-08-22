@@ -17,6 +17,16 @@ const {
 const { resolveSingleImageData } = require('../utils/image-response');
 const { ROLE_NAMES } = require('../../../common/constants/roles');
 const ApiFeatures = require('../../../../utils/apiFeatures');
+const {
+  getMenuName,
+  getMenuDescription,
+  getComboName,
+  getComboDescription,
+  getMenuGroupName,
+  getMenuGroupDescription,
+  normalizeName,
+  normalizeDescription,
+} = require('../../../../utils/localization-helper');
 
 class MenuService {
   /**
@@ -44,7 +54,8 @@ class MenuService {
   /* ---------- Publish / orderability (MenuManagementService — unchanged logic) ---------- */
 
   static publishMenuGroup(params) {
-    return MenuManagementService.publishMenuGroup(params);
+    const MenuGroupService = require('./MenuGroup.service');
+    return MenuGroupService.publishMenuGroup(params);
   }
 
   static archiveMenuItem(menuItemId, merchantId) {
@@ -188,8 +199,8 @@ class MenuService {
 
         finalItems.push({
           _id: menu._id,
-          name: item.customName || menu.name,
-          description: item.customDescription || menu.description || '',
+          name: item.customName || getMenuName(menu),  // ✅ Use helper
+          description: item.customDescription || getMenuDescription(menu) || '',  // ✅ Use helper
           image: imageData?.url || null,
           price: defaultPrice,
           variants: menu.variants || [],
@@ -202,7 +213,7 @@ class MenuService {
           ingredients: menu.ingredients || [],
           allergens: menu.allergens || [],
           rating: menu.ratingAverage || 4.5,
-          displayedIn: group.name,
+          displayedIn: getMenuGroupName(group, 'en'),  // ✅ Use helper for group name
         });
       }
     }
@@ -329,9 +340,14 @@ class MenuService {
       price,
       image,
       imageFilename,
+      categoryId,
     } = menuData;
 
-    assertMenuCreateFields({ name, type, category });
+    // ✅ Normalize name and description to handle both string and localized formats
+    const normalizedName = normalizeName(name);
+    const normalizedDescription = normalizeDescription(description);
+
+    assertMenuCreateFields({ name: normalizedName, type, categoryId: categoryId || category });
 
     let finalVariants = [];
 
@@ -365,13 +381,14 @@ class MenuService {
       });
     }
 
-    // ✅ Build menu data with proper fields
+    // ✅ Build menu data with localized name and description
     const menuDataToCreate = {
       merchant: merchantId,
-      name: name.trim(),
+      name: normalizedName,  // ✅ Localized name object
       type,
-      category: category.trim(),
-      description,
+      category: category?.trim() || null,  // Legacy field - optional
+      categoryId: categoryId || null,  // New field - preferred
+      description: normalizedDescription,  // ✅ Localized description object
       prepTime,
       drinkType: drinkType || null,
       isAlcoholic: isAlcoholic === 'true',
@@ -496,13 +513,13 @@ class MenuService {
 
         return {
           _id: group._id,
-          name: group.name,
-          description: group.description,
+          name: getMenuGroupName(group, 'en'),  // ✅ Use helper for group name
+          description: getMenuGroupDescription(group, 'en'),  // ✅ Use helper for group description
           bannerImage: group.bannerImage,
           items: visibleItems.map(i => ({
             _id: i.menu._id,
-            name: i.customName || i.menu.name,
-            description: i.customDescription || i.menu.description,
+            name: i.customName || getMenuName(i.menu),  // ✅ Use helper
+            description: i.customDescription || getMenuDescription(i.menu),  // ✅ Use helper
             image:
               resolveSingleImageData({
                 image: i.menu.image,
@@ -553,7 +570,7 @@ class MenuService {
 
     return {
       id: menuItem._id,
-      name: menuItem.name,
+      name: getMenuName(menuItem),  // ✅ Use helper
       available: menuItem.available,
       message: `Menu item is now ${newAvailability ? 'available' : 'unavailable'}`,
     };
@@ -670,8 +687,8 @@ class MenuService {
 
         finalItems.push({
           id: menu._id,
-          name: itemEntry.customName || menu.name,
-          description: itemEntry.customDescription || menu.description || '',
+          name: itemEntry.customName || getMenuName(menu),  // ✅ Use helper
+          description: itemEntry.customDescription || getMenuDescription(menu) || '',  // ✅ Use helper
           image: imageData?.url || null,
           price: itemPrice,
           variants: menu.variants || [],
@@ -713,11 +730,15 @@ class MenuService {
       items,
     } = req.body;
 
+    // ✅ Normalize localized fields
+    const normalizedName = normalizeName(name);
+    const normalizedDescription = normalizeDescription(description);
+
     return MenuRepository.createMenuGroup({
       merchant: merchantId,
       branches: branchId,
-      name,
-      description,
+      name: normalizedName,
+      description: normalizedDescription,
       bannerImage,
       visibility: visibility || 'always',
       priority: priority || 0,
@@ -803,6 +824,14 @@ class MenuService {
 
   static async updateMenuGroup(req) {
     const merchantId = req.user.merchant._id || req.user._id;
+
+    // ✅ Normalize localized fields if present
+    if (req.body.name) {
+      req.body.name = normalizeName(req.body.name);
+    }
+    if (req.body.description !== undefined) {
+      req.body.description = normalizeDescription(req.body.description);
+    }
 
     const menuGroup = await MenuRepository.findOneAndUpdateMenuGroup(
       { _id: req.params.id, merchant: merchantId },
@@ -898,7 +927,7 @@ class MenuService {
     const menuIds = [...new Set(items.map(i => i.menuItem))];
     const menus = await MenuRepository.findMenus({ _id: { $in: menuIds } }).select('name');
 
-    const menuMap = Object.fromEntries(menus.map(m => [m._id.toString(), m.name]));
+    const menuMap = Object.fromEntries(menus.map(m => [m._id.toString(), getMenuName(m)]));  // ✅ Use helper
 
     return items.map(item => {
       const name = menuMap[item.menuItem.toString()];
@@ -933,6 +962,14 @@ class MenuService {
 
   static async createCombo(comboData, req) {
     MenuService.parseComboFormFields(comboData);
+
+    // Normalize localized fields
+    if (comboData.name) {
+      comboData.name = normalizeName(comboData.name);
+    }
+    if (comboData.description) {
+      comboData.description = normalizeDescription(comboData.description);
+    }
 
     if (req.user.role.name !== ROLE_NAMES.SUPER_MERCHANT_ADMIN) {
       if (!req.user.branch) throw new AppError('No branch assigned', 403);
@@ -1039,6 +1076,14 @@ class MenuService {
 
   static async updateCombo(req) {
     MenuService.parseComboFormFields(req.body);
+
+    // ✅ Normalize localized fields if present
+    if (req.body.name) {
+      req.body.name = normalizeName(req.body.name);
+    }
+    if (req.body.description !== undefined) {
+      req.body.description = normalizeDescription(req.body.description);
+    }
 
     const combo = await MenuRepository.findComboOne({
       _id: req.params.id,
@@ -1156,7 +1201,7 @@ class MenuService {
 
     return {
       id: combo._id,
-      name: combo.name,
+      name: getComboName(combo, 'en'), // Extract English name
       isActive: combo.isActive,
       message: `Special offer is now ${newActiveStatus ? 'active' : 'inactive'}`,
     };

@@ -756,7 +756,7 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
    * @returns {Promise<Object>} Updated menu item
    */
   static async assignMenuItemStation(menuItemId, stationId, merchantId, branchId) {
-    const Menu = require('../../../../models/menuModel');
+    const Menu = require('../../menu/model/MenuItem.model');
 
     // Get menu item
     const menuItem = await Menu.findOne({

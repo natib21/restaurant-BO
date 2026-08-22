@@ -25,9 +25,21 @@ class ApiFeatures {
   search(fields = []) {
     if (this.queryString.search && fields.length > 0) {
       const regex = new RegExp(this.queryString.search.trim(), 'i');
-      this.query = this.query.find({
-        $or: fields.map(field => ({ [field]: regex })),
+      
+      // ✅ Handle localized fields (name, description) by searching both en and am
+      const searchConditions = fields.flatMap(field => {
+        if (field === 'name' || field === 'description') {
+          // For localized fields, search both English and Amharic
+          return [
+            { [`${field}.en`]: regex },
+            { [`${field}.am`]: regex }
+          ];
+        }
+        // For non-localized fields, search as usual
+        return [{ [field]: regex }];
       });
+      
+      this.query = this.query.find({ $or: searchConditions });
     }
     return this;
   }

@@ -9,8 +9,8 @@
  */
 
 const express = require('express');
-const { protect, restrictTo } = require('../../common/guards/auth.guard');
-const branchMenuGroupController = require('./controller/branch-menu-group.controller');
+const { protect, restrictTo } = require('../../../common/guards/auth.guard');
+const branchMenuGroupController = require('../controller/branch-menu-group.controller');
 
 const router = express.Router();
 

@@ -5,7 +5,9 @@ const catchAsync = require('../../../../utils/catchAsync');
 const multer = require('multer');
 const sharp = require('sharp');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
-const { MenuService } = require('../service/MenuService');
+const { MenuService } = require('../service/MenuService'); // Legacy service for some methods
+const MenuItemService = require('../service/MenuItem.service'); // New structured service
+const MenuGroupService = require('../service/MenuGroup.service'); // New structured service
 const { FileManagementService } = require('../../files/file-management.service');
 const FileAsset = require('../../../../models/FileAsset');
 const { resolveSingleImageData, resolveImageCollectionData } = require('../utils/image-response');
@@ -126,8 +128,6 @@ exports.createNewMenu = catchAsync(async (req, res) => {
   // Create menu with processed image IDs
   const menuData = {
     ...req.body,
-    merchant: merchantId,
-    createdBy: userId,
   };
 
   // If we have processed image IDs from middleware
@@ -144,7 +144,7 @@ exports.createNewMenu = catchAsync(async (req, res) => {
   }
 
   // Create menu item
-  const menu = await MenuService.createNewMenu(menuData, req);
+  const menu = await MenuItemService.create(menuData, merchantId, userId);
 
   // Update FileAsset records with entityId after menu creation
   if (menu.image && typeof menu.image !== 'string') {
@@ -180,8 +180,10 @@ exports.createNewMenu = catchAsync(async (req, res) => {
 // 3. GET SINGLE MENU
 // ============================================
 exports.getMenu = catchAsync(async (req, res, next) => {
-  // ✅ Get menu - now returns Mongoose document
-  const menu = await MenuService.getMenu(req);
+  const merchantId = getMerchantId(req);
+  
+  // ✅ Get menu using new service - now returns Mongoose document
+  const menu = await MenuItemService.getById(req.params.id, merchantId);
 
   if (!menu) {
     throw new AppError('Menu not found', 404);
@@ -200,8 +202,8 @@ exports.getMenu = catchAsync(async (req, res, next) => {
 // 2. GET ALL MENU
 // ============================================
 exports.getAllMenu = catchAsync(async (req, res, next) => {
-  // ✅ Get menu items - returns Mongoose documents (with ApiFeatures applied)
-  const menuItems = await MenuService.getAllMenu(req);
+  // ✅ Get menu items using new service - returns Mongoose documents (with ApiFeatures applied)
+  const menuItems = await MenuItemService.getAll(req);
 
   if (!menuItems || menuItems.length === 0) {
     return sendResponse(res, 200, 'menus', [], { results: 0 });
@@ -227,10 +229,11 @@ exports.getAllMenu = catchAsync(async (req, res, next) => {
 // ============================================
 exports.updateMenu = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
+  const userId = req.user._id;
 
   // If new image uploaded, cleanup old FileAsset before updating
   if (req.processedImageId || (req.processedImageIds && req.processedImageIds.length > 0)) {
-    const oldMenu = await MenuService.getMenu(req);
+    const oldMenu = await MenuItemService.getById(req.params.id, merchantId);
 
     // Clean up old single image
     if (req.processedImageId && oldMenu.image && typeof oldMenu.image !== 'string') {
@@ -247,7 +250,7 @@ exports.updateMenu = catchAsync(async (req, res, next) => {
     }
   }
 
-  const updatedMenu = await MenuService.updateMenu(req);
+  const updatedMenu = await MenuItemService.update(req.params.id, req.body, merchantId, userId);
 
   // Populate image references
   await updatedMenu.populate([
@@ -263,9 +266,10 @@ exports.updateMenu = catchAsync(async (req, res, next) => {
 // ============================================
 exports.deleteMenu = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
+  const userId = req.user._id;
 
   // Get menu before deletion to clean up images
-  const menu = await MenuService.getMenu(req);
+  const menu = await MenuItemService.getById(req.params.id, merchantId);
 
   // Soft delete all FileAsset images
   if (menu.image && typeof menu.image !== 'string') {
@@ -280,7 +284,7 @@ exports.deleteMenu = catchAsync(async (req, res) => {
     }
   }
 
-  await MenuService.deleteMenu(req);
+  await MenuItemService.softDelete(req.params.id, merchantId, userId);
 
   res.status(204).json({
     status: 'success',
@@ -292,17 +296,11 @@ exports.deleteMenu = catchAsync(async (req, res) => {
 // 6. GET PUBLIC MENU
 // ============================================
 exports.getPublicMenu = catchAsync(async (req, res, next) => {
-  const payload = await MenuService.getPublicMenu(req);
+  const payload = await MenuGroupService.getPublicMenu(req);
 
   res.status(200).json({
     status: 'success',
-    restaurant: payload.restaurant,
-    generatedAt: payload.generatedAt,
-    totalItems: payload.totalItems,
-    data: {
-      menus: payload.menus,
-      specialOffers: payload.specialOffers,
-    },
+    data: payload,
   });
 });
 
@@ -322,14 +320,16 @@ exports.getActiveMenu = catchAsync(async (req, res) => {
 // 8. TOGGLE AVAILABILITY
 // ============================================
 exports.toggleMenuItemAvailability = catchAsync(async (req, res) => {
-  const result = await MenuService.toggleMenuItemAvailability(req);
+  const merchantId = getMerchantId(req);
+  
+  const menuItem = await MenuItemService.toggleAvailability(req.params.id, merchantId);
 
   sendResponse(
     res,
     200,
     'menu',
-    { id: result.id, name: result.name, available: result.available },
-    { message: result.message }
+    { id: menuItem._id, name: menuItem.name, available: menuItem.available },
+    { message: `Menu item ${menuItem.available ? 'made available' : 'made unavailable'} successfully` }
   );
 });
 
@@ -337,7 +337,7 @@ exports.toggleMenuItemAvailability = catchAsync(async (req, res) => {
 // 9. GET STAFF MENU
 // ============================================
 exports.getStaffMenu = catchAsync(async (req, res) => {
-  const payload = await MenuService.getStaffMenu(req);
+  const payload = await MenuGroupService.getStaffMenu(req);
 
   res.status(200).json({
     status: 'success',
@@ -399,6 +399,10 @@ function formatMenuResponse(menu) {
     image: menuObj.image,
   });
   const imagesData = resolveImageCollectionData(menuObj.images, {});
+
+  // Remove populated image objects to keep response clean
+  delete menuObj.image;
+  delete menuObj.images;
 
   return {
     ...menuObj,

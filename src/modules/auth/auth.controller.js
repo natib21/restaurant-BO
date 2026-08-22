@@ -21,6 +21,7 @@ function sendTokenResponse(user, statusCode, res) {
 
   res.status(statusCode).json({
     status: 'success',
+    token,
     data: { user: AuthService.buildAuthResponse(user) },
   });
 }

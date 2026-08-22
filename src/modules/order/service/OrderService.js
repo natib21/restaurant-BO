@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const AppError = require('../../../../utils/appError');
-const MenuItem = require('../../../../models/menuModel');
+const MenuItem = require('../../menu/model/MenuItem.model');
 const Ingredient = require('../../../../models/Ingredient');
 const Table = require('../../../../models/tabelModel');
 const CustomerSession = require('../../../../models/customerSessionModule');
@@ -64,7 +64,7 @@ class OrderService {
           break;
         }
 
-        // Add (quantity × costPerUnit) to total
+        // Add (quantity ï¿½ costPerUnit) to total
         totalCost += recipeIngredient.quantity * costPerUnit;
       }
 

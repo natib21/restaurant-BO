@@ -5,7 +5,7 @@ const User = require('../../../models/userModel');
 const Merchant = require('../../../models/merchantModel');
 const Branch = require('../../../models/branchModel');
 const Role = require('../../../models/roleModel');
-const MenuGroup = require('../../../models/menuGroupModel');
+const MenuGroup = require('../menu/model/MenuGroup.model');
 const AppError = require('../../common/errors');
 const sendEmail = require('../../../utils/email');
 const { loadEnv } = require('../../config/env');
@@ -306,8 +306,14 @@ class AuthService {
             {
               merchant: merchant._id,
               branches: [mainBranch._id],
-              name: 'All Items (System Default)',
-              description: 'Hidden system group for all menu items.',
+               name: {
+        en: 'All Items (System Default)',
+        am: 'ሁሉም ምግቦች (ነባሪ)',
+      },
+      description: {
+        en: 'Hidden system group for all menu items.',
+        am: 'ለሁሉም የምግብ ዝርዝር እቃዎች የተደበቀ የስርዓት ቡድን።',
+      },
               visibility: 'always',
               priority: -100,
               isSystemDefault: true,

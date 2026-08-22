@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
+const localizedTextSchema = require('../utils/schemas/localizedText');
+
 // Helper for time-to-minutes conversion (useful for filtering availability)
 const timeToMinutes = timeStr => {
   const [hrs, mins] = timeStr.split(':').map(Number);
@@ -52,14 +54,9 @@ const comboSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    name: {
-      type: String,
-      required: [true, 'Combo must have a name'],
-      trim: true,
-      maxlength: 100,
-    },
+    name: localizedTextSchema,
     slug: String,
-    description: { type: String, trim: true, maxlength: 600 },
+    description: localizedTextSchema,
 
     // Global Default Items
     items: {
@@ -171,7 +168,9 @@ comboSchema.methods.isAvailableNow = function (branchId) {
 
 comboSchema.pre('save', function (next) {
   if (this.isModified('name')) {
-    this.slug = slugify(this.name, {
+    // Use English name for slug generation
+    const nameForSlug = this.name?.en || this.name;
+    this.slug = slugify(nameForSlug, {
       lower: true,
       strict: true,
     });

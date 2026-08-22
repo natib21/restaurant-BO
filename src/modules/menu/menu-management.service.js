@@ -1,10 +1,14 @@
 const mongoose = require('mongoose');
-const Menu = require('../../../models/menuModel');
-const MenuGroup = require('../../../models/menuGroupModel');
+const Menu = require('./model/MenuItem.model');
+const MenuGroup = require('./model/MenuGroup.model');
 const MenuPublication = require('../../../models/MenuPublication');
 const Recipe = require('../../../models/Recipe');
 const AppError = require('../../../utils/appError');
 const logger = require('../../../utils/logger');
+const {
+  getMenuName,
+  getMenuGroupName,
+} = require('../../../utils/localization-helper');
 
 function isOrderablePublishStatus(status) {
   if (!status || status === 'published') return true;
@@ -44,75 +48,14 @@ class MenuManagementService {
 
   /**
    * Publish menu group for a branch — creates versioned snapshot.
+   * DEPRECATED: Use MenuGroupService.publishMenuGroup() instead.
+   * This method now delegates to MenuGroupService.
+   * 
+   * @deprecated Use MenuGroupService.publishMenuGroup() directly
    */
   static async publishMenuGroup({ menuGroupId, merchantId, branchId, publishedBy }) {
-    const { group, menus, missing } = await MenuManagementService.validateRecipesForGroup(
-      menuGroupId,
-      merchantId
-    );
-
-    if (missing.length > 0) {
-      throw new AppError(`Cannot publish: ${missing.length} item(s) missing active recipes`, 400);
-    }
-
-    if (!group.branches.map(b => b.toString()).includes(String(branchId))) {
-      throw new AppError('Menu group is not assigned to this branch', 400);
-    }
-
-    const last = await MenuPublication.findOne({
-      merchant: merchantId,
-      branch: branchId,
-      menuGroup: menuGroupId,
-    })
-      .sort('-version')
-      .select('version')
-      .lean();
-
-    const version = (last?.version || 0) + 1;
-
-    await Menu.updateMany(
-      { _id: { $in: menus.map(m => m._id) }, merchant: merchantId },
-      { $set: { publishStatus: 'published' } }
-    );
-
-    const snapshot = {
-      menuGroup: {
-        _id: group._id,
-        name: group.name,
-        visibility: group.visibility,
-        priority: group.priority,
-      },
-      items: group.items.map(item => ({
-        menu: item.menu,
-        sortOrder: item.sortOrder,
-        overridePrice: item.overridePrice,
-        isHidden: item.isHidden,
-      })),
-      menus: menus.map(m => ({
-        _id: m._id,
-        name: m.name,
-        publishStatus: 'published',
-      })),
-    };
-
-    const publication = await MenuPublication.create({
-      merchant: merchantId,
-      branch: branchId,
-      menuGroup: menuGroupId,
-      version,
-      publishedBy,
-      snapshot,
-      recipeValidation: { passed: true, missingRecipes: [] },
-    });
-
-    logger.info('menu.published', {
-      menuGroupId: String(menuGroupId),
-      branchId: String(branchId),
-      version,
-      merchantId: String(merchantId),
-    });
-
-    return publication;
+    const MenuGroupService = require('./service/MenuGroup.service');
+    return MenuGroupService.publishMenuGroup({ menuGroupId, merchantId, branchId, publishedBy });
   }
 
   static async archiveMenuItem(menuItemId, merchantId) {

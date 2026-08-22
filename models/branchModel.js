@@ -1,7 +1,7 @@
 // models/Branch.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-
+const auditPlugin = require('../utils/auditPlugin');
 const branchSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -134,7 +134,7 @@ branchSchema.pre('save', async function (next) {
 // ══════════════════════════════════════════════════════════════════════════
 // PHASE 2 - STEP 3: Apply Audit Plugin
 // ══════════════════════════════════════════════════════════════════════════
-const auditPlugin = require('../utils/auditPlugin');
+
 
 branchSchema.plugin(auditPlugin, {
   resource: 'Branch',

@@ -11,7 +11,7 @@
 const mongoose = require('mongoose');
 const User = require('../models/userModel');
 const Role = require('../models/roleModel');
-const Task = require('../models/taskModel'); // Required for Role.populate('tasks')
+// Required for Role.populate('tasks')
 const Task = require('../models/taskModel'); // Required for Role population
 
 // Parse command line arguments
@@ -50,7 +50,7 @@ function parseArgs() {
 async function createSuperAdmin() {
   try {
     // Connect to production database
-    const dbUri = process.env.DATABASE || 'mongodb://127.0.0.1:27017/MesobDb';
+    const dbUri ='mongodb://127.0.0.1:27017/MesobDb';
     await mongoose.connect(dbUri);
     console.log('✅ Connected to database:', mongoose.connection.name);
 

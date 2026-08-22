@@ -2,7 +2,7 @@ const Branch = require('../../../../models/branchModel');
 const Table = require('../../../../models/tabelModel');
 const StaffAssignment = require('../../../../models/staffAssignTabelModel');
 const CustomerSession = require('../../../../models/customerSessionModule');
-const MenuGroup = require('../../../../models/menuGroupModel');
+const MenuGroup = require('../../menu/model/MenuGroup.model');
 const User = require('../../../../models/userModel');
 
 /**

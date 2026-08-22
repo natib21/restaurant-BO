@@ -29,6 +29,10 @@ router.post(
   requireCapability(CAPABILITIES.MENU_MANAGE),
   branchController.assignMenuGroup
 );
-router.get('/:id/staff', requireCapability(CAPABILITIES.BRANCH_MANAGE), branchController.listStaff);
+router.get(
+  '/:id/staff', 
+  requireCapability(CAPABILITIES.BRANCH_MANAGE), 
+  branchController.listStaff
+);
 
 module.exports = router;
