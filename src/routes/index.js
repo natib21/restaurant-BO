@@ -42,7 +42,9 @@ const comboRoutes = require('../modules/menu/router/combos.routes');
 const categoryRoutes = require('../modules/menu/router/categories.routes');
 
 // ── Order Domain ──────────────────────────────────────────────────────────────
-const orderRoutes = require('../modules/orders/orders.routes');
+const orderRoutes = require('../modules/order/orders.routes');
+const orderFlowConfigRoutes = require('../modules/order-flow-config/order-flow-config.routes');
+const paymentVerificationRoutes = require('../modules/payment-verification/payment-verification.routes');
 
 // ── Kitchen / KDS Domain ─────────────────────────────────────────────────────
 const kitchenRoutes = require('../modules/kitchen/kitchen.routes');
@@ -70,6 +72,9 @@ const reportRoutes = require('../modules/reports/reports.routes');
 
 // ── Audit Logging (PHASE 2) ──────────────────────────────────────────────────
 const auditRoutes = require('../modules/audit/audit.routes');
+
+// ── Monitoring & Metrics ─────────────────────────────────────────────────────
+const monitoringRoutes = require('../modules/monitoring/monitoring.routes');
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
 const telegramWebhookRoutes = require('../modules/telegram/routes/telegramWebhookRoute'); // public
@@ -125,7 +130,9 @@ router.use('/api/v1/combo', comboRoutes);
 router.use('/api/v1/categories', categoryRoutes);
 
 // ── 13. Orders ────────────────────────────────────────────────────────────────
-router.use('/api/v1/order', orderRoutes);
+router.use('/api/v1/orders', orderRoutes);
+router.use('/api/v1/order-flow-config', orderFlowConfigRoutes);
+router.use('/api/v1/payment-verification', paymentVerificationRoutes);
 
 // ── 13.5. Kitchen / KDS ──────────────────────────────────────────────────────
 router.use('/api/v1/kitchen', kitchenRoutes);
@@ -161,5 +168,8 @@ router.use('/api/v1/reports', reportRoutes);
 
 // ── 22. Audit Logs (PHASE 2) ──────────────────────────────────────────────────
 router.use('/api/v1/audit-logs', auditRoutes);
+
+// ── 23. Monitoring & Metrics ──────────────────────────────────────────────────
+router.use('/api/v1/monitoring', monitoringRoutes);
 
 module.exports = router;

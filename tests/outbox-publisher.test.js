@@ -1,9 +1,9 @@
-jest.mock('../socket', () => ({
+jest.mock('../src/infrastructure/websocket/socket-server', () => ({
   getIo: jest.fn(),
 }));
 
 const { publishOutboxEvent } = require('../src/infrastructure/outbox/outbox-publisher');
-const { getIo } = require('../socket');
+const { getIo } = require('../src/infrastructure/websocket/socket-server');
 
 describe('publishOutboxEvent', () => {
   beforeEach(() => {

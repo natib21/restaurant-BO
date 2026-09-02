@@ -1,6 +1,7 @@
 // modules/files/file.controller.js
 
 const multer = require('multer');
+const mongoose = require('mongoose');
 const catchAsync = require('../../../utils/catchAsync');
 const AppError = require('../../../utils/appError');
 const { FileManagementService } = require('./file-management.service');
@@ -32,6 +33,17 @@ exports.uploadFile = catchAsync(async (req, res) => {
     throw new AppError('entityType is required', 400);
   }
 
+  // ✅ Validate entityId - must be valid ObjectId or null
+  let validatedEntityId = null;
+  if (entityId) {
+    if (mongoose.Types.ObjectId.isValid(entityId)) {
+      validatedEntityId = entityId;
+    } else {
+      // If not a valid ObjectId, set to null (allows "manual-order" to pass through as null)
+      validatedEntityId = null;
+    }
+  }
+
   const file = await FileManagementService.registerUpload({
     merchantId,
     branchId: branchId || req.ctx?.branchId,
@@ -39,7 +51,7 @@ exports.uploadFile = catchAsync(async (req, res) => {
     originalName: req.file.originalname,
     mimeType: req.file.mimetype,
     entityType,
-    entityId,
+    entityId: validatedEntityId,
     purpose,
     uploadedBy: req.user?._id,
   });

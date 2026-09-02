@@ -96,7 +96,7 @@ const addItemToOrderSchema = z.object({
  */
 const orderFiltersSchema = z.object({
   status: z
-    .enum(['pending', 'accepted', 'preparing', 'ready', 'served', 'completed', 'canceled'])
+    .enum(['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'served', 'completed', 'canceled'])
     .optional(),
   page: z
     .string()

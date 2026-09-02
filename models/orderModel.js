@@ -9,11 +9,55 @@ const auditPlugin = require('../utils/auditPlugin');
 const orderItemSchema = new Schema(
   {
     menuItem: { type: Schema.Types.ObjectId, ref: 'Menu', required: true },
+    name: { type: String, trim: true }, // snapshot of menu item name (primary locale) at order time
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
     unitCost: { type: Number, min: 0, default: null }, // COGS per unit — null if no recipe/inventory tracking
     totalPrice: { type: Number, required: true, min: 0 },
     notes: { type: String, trim: true },
+    
+    // ✅ Item-level workflow fields (snapshotted from MenuItem at order creation)
+    requiresKitchen: { 
+      type: Boolean, 
+      default: true,
+      comment: 'Snapshotted from MenuItem.requiresKitchen - determines if item generates kitchen tickets'
+    },
+    
+    // ✅ Item status tracking
+    status: {
+      type: String,
+      enum: ['pending', 'in_progress', 'ready', 'served', 'void'],
+      default: 'pending',
+      index: true,
+      comment: 'Item-level status independent of order status'
+    },
+    
+    // ✅ Served tracking
+    servedAt: { type: Date, default: null },
+    servedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    servedVia: {
+      type: String,
+      enum: ['auto', 'manual'],
+      default: null,
+      comment: 'auto = system auto-served (e.g., non-cooked dine-in items), manual = staff explicitly served'
+    },
+    
+    // ✅ Void tracking
+    voidedAt: { type: Date, default: null },
+    voidedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    voidReason: { type: String, trim: true, default: null },
+    
+    // ✅ Replacement tracking
+    replacementItemId: { 
+      type: Schema.Types.ObjectId, 
+      default: null,
+      comment: 'If this item was voided and replaced, points to the replacement item'
+    },
+    replacedItemId: { 
+      type: Schema.Types.ObjectId, 
+      default: null,
+      comment: 'If this item is a replacement, points to the original voided item'
+    },
   },
   { _id: true } // ✅ PHASE 0: Enable _id for KDS ticket item tracking
 );
@@ -113,7 +157,7 @@ deliveryFee: {
 },
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'preparing', 'ready', 'served', 'completed', 'canceled'],
+      enum: ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'served', 'completed', 'canceled'],
       default: 'pending',
       index: true,
     },
@@ -226,45 +270,15 @@ deliveryFee: {
   }
 );
 
-/* -----------------------------------------------------
-   Auto-generate Professional Order Number
+/* ✅ FIXED: Order number generation moved to OrderTransactionService
+   (lines in transaction context). This prevents race condition where
+   order number could be generated twice (once pre-validate, once in transaction).
+   
    Format examples:
    - #T5-467      (dine-in with table T5)
    - #TAKE-120    (takeaway)
    - #DEL-980     (delivery)
 ------------------------------------------------------ */
-/* -----------------------------------------------------
-   Auto-generate Professional Order Number
------------------------------------------------------- */
-// CHANGE 'save' TO 'validate'
-orderSchema.pre('validate', async function (next) {
-  if (!this.isNew || this.orderNumber) return next();
-  if (!this.merchant || !this.branch) return next();
-
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    let prefix = 'POS';
-
-    if (this.orderType === 'dine_in' && this.tableNumber) {
-      prefix = this.tableNumber.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'POS';
-    } else if (this.orderType === 'delivery') prefix = 'DEL';
-    else if (this.orderType === 'takeaway') prefix = 'TAKE';
-
-    const counter = await Counter.findOneAndUpdate(
-      { merchantId: this.merchant, branchId: this.branch, date: today, prefix },
-      { $inc: { seq: 1 }, $setOnInsert: { prefix } },
-
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-
-    // Append milliseconds to ensure uniqueness if race conditions occur
-    const millis = Date.now() % 1000;
-    this.orderNumber = `#${prefix}-${counter.seq}-${millis}`;
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
 
 orderSchema.pre('validate', function (next) {
      if (this.orderType === 'delivery') {

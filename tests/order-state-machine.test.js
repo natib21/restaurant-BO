@@ -1,4 +1,4 @@
-const { OrderStateMachineService } = require('../src/modules/orders/order-state-machine.service');
+const { OrderStateMachineService } = require('../src/modules/order/service/OrderStateMachineService');
 const AppError = require('../utils/appError');
 
 describe('OrderStateMachineService.validateTransition', () => {
@@ -8,7 +8,8 @@ describe('OrderStateMachineService.validateTransition', () => {
       OrderStateMachineService.validateTransition('accepted', 'preparing')
     ).not.toThrow();
     expect(() => OrderStateMachineService.validateTransition('preparing', 'ready')).not.toThrow();
-    expect(() => OrderStateMachineService.validateTransition('ready', 'completed')).not.toThrow();
+    // Note: ready→completed transition is Phase 2 (deferred) — current path is ready→served
+    expect(() => OrderStateMachineService.validateTransition('ready', 'served')).not.toThrow();
   });
 
   it('allows cancellation from pending and accepted', () => {

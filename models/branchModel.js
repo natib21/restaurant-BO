@@ -46,6 +46,17 @@ const branchSchema = new mongoose.Schema(
     shortCode: { type: String, length: 6, uppercase: true, unique: true, sparse: true },
     // Partial override of merchant settings
     settings: { type: mongoose.Schema.Types.Mixed, default: {} },
+    
+    // ✅ Branch-specific configuration
+    config: {
+      orderNumberStart: {
+        type: Number,
+        default: 1,
+        min: 1,
+        comment: 'Starting number for order sequence in this branch (default: 1)'
+      }
+      // Future: Add more config options (table number format, receipt settings, etc.)
+    },
   },
   {
     timestamps: true,

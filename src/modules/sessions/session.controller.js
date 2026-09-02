@@ -43,7 +43,23 @@ exports.freeTable = catchAsync(async (req, res, next) => {
   if (!merchantId) return next(new AppError('Merchant context required', 403));
 
   const branchId = resolveStaffBranchId(req);
-  const data = await BranchService.freeTable({ tableId: req.params.id, merchantId, branchId });
+  
+  // ✅ FIX: Look up session first to get tableId (req.params.id is sessionId, not tableId)
+  const session = await CustomerSession.findOne({
+    _id: req.params.id,
+    merchant: merchantId,
+    isActive: true
+  }).select('table branch');
+  
+  if (!session) {
+    return next(new AppError('Session not found or already expired', 404));
+  }
+  
+  const data = await BranchService.freeTable({ 
+    tableId: session.table, 
+    merchantId, 
+    branchId: session.branch 
+  });
 
   res.status(200).json({ status: 'success', message: 'Table freed', data });
 });

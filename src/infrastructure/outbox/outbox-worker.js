@@ -1,14 +1,17 @@
 const OutboxEvent = require('../../../models/OutboxEvent');
 const logger = require('../../../utils/logger');
 const { publishWithLogging } = require('./outbox-publisher');
+const { setBackgroundWorkerContext, captureException } = require('../monitoring/sentry');
 
 // ✅ PHASE 1: Domain-specific event handlers registry
 const { handleOrderPreparing } = require('./handlers/kds-handler');
 const { handleAllTicketsReady } = require('./handlers/order-ready-handler');
+const { handleTicketCompleted } = require('./handlers/ticket-completed-handler');
 
 const EVENT_HANDLERS = {
   'order:preparing': handleOrderPreparing,
   'kitchen:all_tickets_ready': handleAllTicketsReady,
+  'ticket:completed': handleTicketCompleted,
 };
 
 const DEFAULT_POLL_MS = 1000;
@@ -153,6 +156,16 @@ class OutboxWorker {
       retryCount: event.retryCount,
     };
 
+    // Set Sentry context so background worker errors are tagged properly
+    setBackgroundWorkerContext({
+      worker: 'outbox',
+      action: 'process_event',
+      event_type: event.eventType,
+      event_id: event._id.toString(),
+      merchant_id: event.merchant?.toString(),
+      retry_count: event.retryCount,
+    });
+
     try {
       // ✅ PHASE 1: Execute domain-specific handler if registered
       const handler = EVENT_HANDLERS[event.eventType];
@@ -180,6 +193,23 @@ class OutboxWorker {
       const nextRetry = event.retryCount + 1;
       const maxRetries = getMaxRetries();
       const isFinal = nextRetry >= maxRetries;
+
+      // Capture to Sentry for monitoring (only on final failure to avoid spam)
+      if (isFinal) {
+        captureException(error, {
+          tags: {
+            worker: 'outbox',
+            event_type: event.eventType,
+            status: 'dead_letter',
+          },
+          extra: {
+            event_id: event._id.toString(),
+            retry_count: event.retryCount,
+            merchant_id: event.merchant?.toString(),
+            order_id: event.aggregateType === 'order' ? event.aggregateId?.toString() : undefined,
+          },
+        });
+      }
 
       await OutboxEvent.updateOne(
         { _id: event._id },

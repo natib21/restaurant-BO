@@ -32,11 +32,16 @@ const kitchenTicketItemSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'in_progress', 'ready'],
+      enum: ['pending', 'in_progress', 'ready', 'completed'],
       default: 'pending',
     },
     startedAt: Date,
     completedAt: Date,
+    completedServingAt: {
+      type: Date,
+      default: null,
+      comment: 'When this specific ticket item was marked as served to the customer (reverse sync from order item)',
+    },
   },
   { _id: true }
 );

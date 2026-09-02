@@ -1,4 +1,4 @@
-const { buildCustomerPlaceOrderEvents } = require('../src/modules/orders/order-realtime-events');
+const { buildCustomerPlaceOrderEvents } = require('../src/modules/notifications/events/order-realtime-events');
 
 describe('buildCustomerPlaceOrderEvents', () => {
   it('includes order:create, notification, new-order, and inventory events', () => {

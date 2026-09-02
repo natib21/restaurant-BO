@@ -1,5 +1,7 @@
 const { NotificationService } = require('../../notifications');
 const { InventoryRepository } = require('../repository/InventoryRepository');
+const Ingredient = require('../../../../models/Ingredient');
+const logger = require('../../../../utils/logger');
 
 class InventoryService {
   static async getInventoryValuation(merchantId) {
@@ -219,7 +221,9 @@ class InventoryService {
     cost = 0
   ) {
     if (type === 'out' || type === 'waste' || type === 'adjustment') {
-      const result = await InventoryRepository.updateIngredient(
+      // ✅ FIXED: Use findOneAndUpdate instead of updateOne to trigger Mongoose hooks
+      // This ensures alertStatus is recalculated after deduction
+      const ingredient = await Ingredient.findOneAndUpdate(
         {
           _id: ingredientId,
           merchant: merchantId,
@@ -228,17 +232,12 @@ class InventoryService {
         {
           $inc: { currentStock: -quantity },
         },
-        { session }
+        { new: true, session }
       );
 
-      if (result.modifiedCount === 0) {
+      if (!ingredient) {
         throw new Error('Insufficient stock or ingredient not found');
       }
-
-      const ingredient = await InventoryRepository.findIngredientOne(
-        { _id: ingredientId, merchant: merchantId },
-        { session }
-      );
 
       await InventoryRepository.createStockMovements(
         [
@@ -295,12 +294,45 @@ class InventoryService {
     return ingredient;
   }
 
+  /**
+   * Get ingredient usage for a menu item from its recipe
+   * 
+   * Feature-flag aware:
+   * - If merchant has inventory module disabled: Returns empty array (no deduction)
+   * - If merchant has inventory module enabled: Recipe is REQUIRED
+   * 
+   * @param {string} menuItemId - Menu item ID
+   * @param {string} merchantId - Merchant ID
+   * @returns {Promise<Array>} Array of ingredient usage objects
+   */
   static async getIngredientUsageForMenuItem(menuItemId, merchantId) {
+    // Check if merchant has inventory module enabled
+    const Merchant = require('../../../../models/merchantModel');
+    const merchant = await Merchant.findById(merchantId);
+
+    if (!merchant) {
+      throw new Error(`Merchant ${merchantId} not found`);
+    }
+
+    const hasInventoryModule = merchant.hasFeature('inventory');
+
+    // If inventory module is disabled, return empty (no inventory deduction)
+    if (!hasInventoryModule) {
+      logger.info('inventory.recipe.skipped', {
+        menuItemId,
+        merchantId,
+        reason: 'Inventory module not enabled for merchant',
+      });
+      return []; // No ingredients to deduct
+    }
+
+    // Inventory module is enabled - recipe is REQUIRED
     const recipe = await InventoryRepository.findActiveRecipeForMenuItem(menuItemId, merchantId);
 
     if (!recipe || !recipe.items || recipe.items.length === 0) {
       throw new Error(
-        `No active recipe found for menu item ${menuItemId}. Cannot place order without recipe.`
+        `Inventory module is enabled but no active recipe found for menu item ${menuItemId}. ` +
+        `Please create a recipe in the inventory system or disable the inventory module.`
       );
     }
 

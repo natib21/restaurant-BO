@@ -79,6 +79,7 @@ const TRANSITION_ROLE_PERMISSIONS = {
     'waiter',
     'admin',
     'superAdmin',
+    'system', // Automated order routing (Step 3)
   ],
 
   'pending->canceled': [
@@ -93,6 +94,7 @@ const TRANSITION_ROLE_PERMISSIONS = {
     'kitchen',
     'admin',
     'superAdmin',
+    'system', // Automated order routing (Step 3)
   ],
 
   'accepted->canceled': [
@@ -649,7 +651,55 @@ class OrderStateMachineService {
           }
 
           /**
-           * 10. Cancellation
+           * 10. Table availability (dine-in orders)
+           * 
+           * Free table when order reaches terminal status (completed or canceled).
+           * This ensures tables are returned to 'available' status regardless of
+           * which path the order took to completion (payment or state machine).
+           */
+          if (
+            (toStatus === 'completed' || toStatus === 'canceled') &&
+            order.orderType === 'dine_in' &&
+            order.table
+          ) {
+            const Table = require('../../../../models/tabelModel');
+            const CustomerSession = require('../../../../models/customerSessionModule');
+
+            // End active customer session for this table
+            await CustomerSession.updateMany(
+              {
+                merchant: order.merchant,
+                tableId: order.table,
+                isActive: true,
+              },
+              {
+                $set: { isActive: false },
+              },
+              { session }
+            );
+
+            // Free the table
+            const table = await Table.findOne({
+              _id: order.table,
+              merchant: order.merchant,
+            }).session(session);
+
+            if (table) {
+              table.status = 'available';
+              await table.save({ session });
+
+              logger.info('order.table.freed', {
+                orderId: order._id.toString(),
+                orderNumber: order.orderNumber,
+                tableId: table._id.toString(),
+                tableNumber: table.tableNumber,
+                toStatus,
+              });
+            }
+          }
+
+          /**
+           * 11. Cancellation
            */
           if (
             toStatus === 'canceled'
@@ -660,6 +710,25 @@ class OrderStateMachineService {
 
             order.canceledBy =
               userId;
+
+            // Cancel all non-terminal KDS tickets for this order inside
+            // the same transaction so the KDS screen reflects the cancellation.
+            const KitchenTicket = require('../../../../models/KitchenTicket');
+            await KitchenTicket.updateMany(
+              {
+                order: order._id,
+                status: { $nin: ['completed', 'canceled'] },
+              },
+              {
+                $set: {
+                  status: 'canceled',
+                  canceledAt: new Date(),
+                  canceledBy: userId || null,
+                  canceledReason: `Order ${order.orderNumber} was canceled`,
+                },
+              },
+              { session }
+            );
           }
 
           /**
@@ -685,31 +754,47 @@ class OrderStateMachineService {
            * ✅ PHASE 1: Queue KDS ticket creation when order enters 'preparing'
            */
           if (toStatus === 'preparing') {
+
             const OutboxEvent = require('../../../../models/OutboxEvent');
             
-            await OutboxEvent.create(
-              [
-                {
-                  aggregateId: order._id,
-                  aggregateType: 'order',
-                  eventType: 'order:preparing',
-                  merchant: order.merchant,
-                  payload: {
-                    target: 'room',
-                    room: `branch:${order.branch}`,
-                    data: {
-                      orderId: order._id,
-                      orderNumber: order.orderNumber,
-                      orderType: order.orderType,
-                    },
-                  },
+            const eventData = {
+              aggregateId: order._id,
+              aggregateType: 'order',
+              eventType: 'order:preparing',
+              merchant: order.merchant,
+              payload: {
+                target: 'room',
+                room: `branch:${order.branch}`,
+                data: {
+                  orderId: order._id,
+                  orderNumber: order.orderNumber,
+                  orderType: order.orderType,
                 },
-              ],
-              { session }
-            );
+              },
+            };
+
+            logger.info('kds.transition.BEFORE-CREATE', {
+              orderId: order._id.toString(),
+              hasSession: !!session,
+              eventData: JSON.stringify(eventData),
+            });
+
+            // Create event with or without session
+            if (session) {
+              await OutboxEvent.create([eventData], { session });
+              logger.info('kds.transition.CREATED-WITH-SESSION', {
+                orderId: order._id.toString(),
+              });
+            } else {
+              await OutboxEvent.create(eventData);
+              logger.info('kds.transition.CREATED-WITHOUT-SESSION', {
+                orderId: order._id.toString(),
+              });
+            }
 
             logger.info('kds.outbox.order-preparing.queued', {
               orderId: order._id.toString(),
+              hasSession: !!session,
             });
           }
 
@@ -718,6 +803,41 @@ class OrderStateMachineService {
             previousStatus,
             noop: false,
           };
+
+          /**
+           * ✅ Item Status Integration: Auto-serve non-cooked items on acceptance
+           * 
+           * After successful pending → accepted transition:
+           * - For dine-in orders only
+           * - Auto-serve items with requiresKitchen=false (e.g., bottled drinks)
+           * - Items marked as served immediately (servedVia='auto')
+           */
+          if (toStatus === 'accepted') {
+            const { ItemStatusService } = require('./ItemStatusService');
+            await ItemStatusService.autoServeNonCookedItems(order, session);
+          }
+
+          /**
+           * ✅ CRITICAL BUG FIX: DO NOT recompute order status after state machine transitions!
+           * 
+           * REMOVED: ItemStatusService.recomputeOrderStatus(order, session)
+           * 
+           * WHY: This caused a race condition bug where:
+           * 1. Auto-routing transitions order: pending → accepted (status explicitly set)
+           * 2. Recompute sees all items still "pending" → derives status as "preparing"
+           * 3. Order saved with status="preparing" instead of "accepted"
+           * 4. Next transition (accepted → preparing) becomes NOOP
+           * 5. order:preparing event never created → tickets never generated
+           * 
+           * CORRECT BEHAVIOR:
+           * - State machine transitions (accept, cancel, etc.) = EXPLICIT status setting
+           * - Item status changes (KDS updates, void, etc.) = IMPLICIT status derivation
+           * - Item changes trigger recomputation via ItemStatusService/StatusSyncService
+           * - Order transitions should NOT be overridden by item-derived status
+           */
+          // REMOVED FOR BUG FIX:
+          // const { ItemStatusService } = require('./ItemStatusService');
+          // await ItemStatusService.recomputeOrderStatus(order, session);
         }
       );
 
@@ -754,21 +874,24 @@ class OrderStateMachineService {
       /**
        * Task 16.3: Send status update email after successful transition
        * 
-       * Send email notifications for important status transitions:
+       * ✅ FIXED: Email sending is NOW truly asynchronous and non-blocking.
+       * Email is queued for background processing after transaction commits,
+       * and response is sent immediately without waiting for email completion.
+       * 
+       * Important status transitions that trigger email:
        * - ready: Order is ready for pickup/delivery
        * - served: Order has been served (dine-in)
        * - out_for_delivery: Order is on its way
        * - delivered: Order has been delivered
        * - completed: Order is complete
-       * 
-       * Email sending happens after transaction commit and is non-blocking.
        */
       if (!result.noop && toStatus) {
         const statusesWithEmail = ['ready', 'served', 'out_for_delivery', 'delivered', 'completed'];
         
         if (statusesWithEmail.includes(toStatus)) {
-          // Run email sending asynchronously without blocking response
-          setImmediate(async () => {
+          // Queue email for background processing (fire-and-forget)
+          // This ensures email failures don't affect order status transition
+          process.nextTick(async () => {
             try {
               const order = result.order;
               
@@ -796,10 +919,10 @@ class OrderStateMachineService {
                   message: statusMessages[toStatus] || 'Your order status has been updated.'
                 };
 
-                // Send status update email (non-blocking)
+                // Send status update email (completely non-blocking)
                 await mailerService.sendOrderStatusUpdate(order.customer.email, statusData);
 
-                logger.info('Order status update email sent', {
+                logger.info('order.email.status_update.sent', {
                   orderId: order._id,
                   orderNumber: order.orderNumber,
                   customerEmail: order.customer.email,
@@ -808,12 +931,12 @@ class OrderStateMachineService {
               }
             } catch (emailError) {
               // Log error but don't fail the status transition
-              logger.error('Failed to send order status update email', {
+              // Email errors are non-critical and don't block order processing
+              logger.error('order.email.status_update.failed', {
                 orderId: result.order?._id,
                 orderNumber: result.order?.orderNumber,
                 status: toStatus,
                 error: emailError.message,
-                stack: emailError.stack,
               });
             }
           });

@@ -159,7 +159,7 @@ class MenuItemService {
     // ✅ Auto-add to default menu group (system behavior)
     try {
       const MenuGroup = require('../model/MenuGroup.model');
-      
+
       const updateResult = await MenuGroup.findOneAndUpdate(
         { 
           merchant: merchantId, 

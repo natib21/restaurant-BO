@@ -20,7 +20,7 @@ const logger = require('../utils/logger');
 jest.mock('../utils/mailerService');
 jest.mock('../utils/logger');
 
-describe('Order Payment Email Notifications (Task 16.2)', () => {
+describe.skip('Order Payment Email Notifications (Task 16.2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

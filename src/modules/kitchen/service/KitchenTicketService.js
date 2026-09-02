@@ -6,7 +6,7 @@ const KitchenStation = require('../../../../models/KitchenStation');
 const Order = require('../../../../models/orderModel');
 const AppError = require('../../../../utils/appError');
 const logger = require('../../../../utils/logger');
-const { getIo } = require('../../../../socket');
+const { getIo } = require('../../../infrastructure/websocket/socket-server');
 
 /**
  * Valid ticket status transitions (mirrors Order state machine pattern)
@@ -66,15 +66,13 @@ class KitchenTicketService {
     if (!order) {
       throw new AppError('Order not found', 404);
     }
-    console.log('DEBUG order.items[0]:', JSON.stringify(order.items[0]));
-console.log('DEBUG order.items[0]._id:', order.items[0]?._id);
-console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
 
-    // Group items by kitchen station
+    // Group items by kitchen station (or null for items without station assignment)
     const itemsByStation = new Map();
+    let unassignedItems = [];  // Items without kitchen station assigned
 
     for (const orderItem of order.items) {
-      const menuItem = orderItem.menuItem; // Now correctly references the populated menuItem
+      const menuItem = orderItem.menuItem;
       
       if (!menuItem) {
         logger.warn('kds.create-tickets.missing-menu-item', {
@@ -84,47 +82,75 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
         continue;
       }
 
-      const stationId = menuItem.kitchenStation;
-
-      // Skip items that don't require kitchen prep (e.g., bottled drinks)
-      if (!stationId) {
-        logger.debug('kds.create-tickets.skip-no-station', {
+      // Skip items that don't require kitchen prep
+      if (orderItem.requiresKitchen === false) {
+        logger.debug('kds.create-tickets.skip-no-kitchen', {
           orderId,
           menuItemId: menuItem._id,
           menuItemName: menuItem.name,
+          requiresKitchen: false
         });
         continue;
       }
 
-      if (!itemsByStation.has(stationId.toString())) {
-        itemsByStation.set(stationId.toString(), []);
-      }
+      const stationId = menuItem.kitchenStation;
 
-      itemsByStation.get(stationId.toString()).push({
-        orderItemId: orderItem._id,
-        menuItem: menuItem._id,
-        menuItemName: menuItem.name,
-        quantity: orderItem.quantity,
-        notes: orderItem.specialInstructions || orderItem.notes,
-        status: 'pending',
-      });
+      if (stationId) {
+        // Item has a kitchen station assigned
+        if (!itemsByStation.has(stationId.toString())) {
+          itemsByStation.set(stationId.toString(), []);
+        }
+
+        itemsByStation.get(stationId.toString()).push({
+          orderItemId: orderItem._id,
+          menuItem: menuItem._id,
+          menuItemName: menuItem.name?.en || menuItem.name,  // Extract English name from localized object
+          quantity: orderItem.quantity,
+          notes: orderItem.specialInstructions || orderItem.notes,
+          status: 'pending',
+        });
+      } else {
+        // Item requires kitchen but has NO station assigned
+        // Add to unassigned pool
+        logger.debug('kds.create-tickets.unassigned-item', {
+          orderId,
+          menuItemId: menuItem._id,
+          menuItemName: menuItem.name,
+        });
+
+        unassignedItems.push({
+          orderItemId: orderItem._id,
+          menuItem: menuItem._id,
+          menuItemName: menuItem.name?.en || menuItem.name,  // Extract English name from localized object
+          quantity: orderItem.quantity,
+          notes: orderItem.specialInstructions || orderItem.notes,
+          status: 'pending',
+        });
+      }
     }
 
-    // No kitchen items? Log and return empty
-    if (itemsByStation.size === 0) {
+    // No kitchen items at all? Return empty
+    if (itemsByStation.size === 0 && unassignedItems.length === 0) {
       logger.info('kds.create-tickets.no-kitchen-items', { orderId });
       return [];
     }
 
-    // Create one ticket per station
     const tickets = [];
 
+    // Create tickets for assigned stations
     for (const [stationId, items] of itemsByStation) {
-      const ticketNumber = await this._getNextTicketNumber(stationId, order.branch, session);
+      const station = await KitchenStation.findById(stationId).select('branch').session(session);
+      
+      if (!station) {
+        logger.warn('kds.create-tickets.station-not-found', { stationId });
+        continue;
+      }
+
+      const ticketNumber = await this._getNextTicketNumber(stationId, station.branch, session);
 
       const ticketData = {
         merchant: order.merchant,
-        branch: order.branch,
+        branch: station.branch,
         order: order._id,
         station: stationId,
         ticketNumber,
@@ -151,8 +177,71 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
       });
     }
 
+    // Create fallback ticket for unassigned items
+    // Find the first/default kitchen station for the branch
+    if (unassignedItems.length > 0) {
+      logger.info('kds.create-tickets.creating-fallback-ticket', {
+        orderId,
+        itemCount: unassignedItems.length,
+      });
+
+      const defaultStation = await KitchenStation.findOne({
+        branch: order.branch,
+        isActive: true,
+      })
+        .sort({ displayOrder: 1, createdAt: 1 })  // Get first station by display order
+        .session(session);
+
+      if (defaultStation) {
+        const ticketNumber = await this._getNextTicketNumber(defaultStation._id, order.branch, session);
+
+        const ticketData = {
+          merchant: order.merchant,
+          branch: order.branch,
+          order: order._id,
+          station: defaultStation._id,
+          ticketNumber,
+          orderNumber: order.orderNumber,
+          orderType: order.orderType,
+          tableNumber: order.table?.tableNumber || null,
+          items: unassignedItems,
+          status: 'pending',
+          priority: this._calculatePriority(order),
+        };
+
+        const ticket = session
+          ? await KitchenTicket.create([ticketData], { session }).then(docs => docs[0])
+          : await KitchenTicket.create(ticketData);
+
+        tickets.push(ticket);
+
+        logger.info('kds.ticket.created-fallback', {
+          ticketId: ticket._id,
+          orderId: order._id,
+          stationId: defaultStation._id,
+          stationName: defaultStation.name,
+          ticketNumber: ticket.ticketNumber,
+          itemCount: unassignedItems.length,
+        });
+      } else {
+        logger.error('kds.create-tickets.no-default-station', {
+          orderId,
+          branch: order.branch,
+          unassignedItemCount: unassignedItems.length,
+        });
+
+        throw new AppError(
+          'No kitchen stations found for branch. Please create at least one kitchen station.',
+          500
+        );
+      }
+    }
+
     // Emit Socket.IO events for real-time KDS updates
     this._emitTicketEvents('ticket:created', tickets, order.branch);
+
+    // Update order items to 'in_progress' after tickets created
+    await this._updateOrderItemsOnTicketCreation(order, tickets, session);
 
     return tickets;
   }
@@ -263,6 +352,9 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
         // 7. Save ticket
         await ticket.save({ session });
 
+        // ✅ 8. Update order item statuses based on ticket transition
+        await this._updateOrderItemStatuses(ticket, toStatus, session);
+
         logger.info('kds.transition.success', {
           ticketId,
           fromStatus,
@@ -276,7 +368,7 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
           noop: false,
         };
 
-        // 8. Check if all tickets for this order are ready → transition order
+        // 9. Check if all tickets for this order are ready → transition order
         if (toStatus === 'ready') {
           await this._checkOrderReadyRollup(ticket.order, session);
         }
@@ -298,6 +390,150 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
       if (shouldCommit) {
         await session.endSession();
       }
+    }
+  }
+
+  /**
+   * Update order item statuses to 'in_progress' when tickets are created
+   * 
+   * @private
+   */
+  static async _updateOrderItemsOnTicketCreation(order, tickets, session) {
+    const { ItemStatusService } = require('../../order/service/ItemStatusService');
+
+    // Collect all order item IDs referenced by tickets
+    const ticketItemIds = new Set();
+    for (const ticket of tickets) {
+      for (const ticketItem of ticket.items) {
+        ticketItemIds.add(ticketItem.orderItemId.toString());
+      }
+    }
+
+    let updatedCount = 0;
+
+    // Update matching order items to 'in_progress'
+    for (const orderItem of order.items) {
+      if (ticketItemIds.has(orderItem._id.toString())) {
+        try {
+          const { noop } = ItemStatusService.validateTransition(orderItem.status, 'in_progress');
+          
+          if (!noop) {
+            orderItem.status = 'in_progress';
+            updatedCount++;
+          }
+        } catch (err) {
+          logger.warn('kds.ticket-creation.invalid-transition', {
+            orderItemId: orderItem._id.toString(),
+            currentStatus: orderItem.status,
+            error: err.message,
+          });
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      await order.save({ session });
+
+      logger.info('kds.ticket-creation.items-updated', {
+        orderId: order._id.toString(),
+        updatedCount,
+      });
+
+      // Recompute order status
+      await ItemStatusService.recomputeOrderStatus(order, session);
+    }
+  }
+
+  /**
+   * Update order item statuses based on ticket transition
+   * 
+   * When ticket moves to:
+   * - in_progress: Set all ticket items in order to 'in_progress'
+   * - ready: Set all ticket items in order to 'ready' (NOT auto-served)
+   * 
+   * Then recompute overall order status
+   * 
+   * @private
+   */
+  static async _updateOrderItemStatuses(ticket, toStatus, session) {
+    // Only update item status for these transitions
+    if (toStatus !== 'in_progress' && toStatus !== 'ready') {
+      return;
+    }
+
+    const Order = require('../../../../models/orderModel');
+    const { ItemStatusService } = require('../../order/service/ItemStatusService');
+
+    // Fetch order with session lock
+    const order = await Order.findById(ticket.order).session(session);
+
+    if (!order) {
+      logger.warn('kds.update-item-statuses.order-not-found', {
+        ticketId: ticket._id,
+        orderId: ticket.order,
+      });
+      return;
+    }
+
+    let updatedCount = 0;
+
+    // Map of ticket item ObjectIds for fast lookup
+    const ticketItemIds = new Set(ticket.items.map(ti => ti.orderItemId.toString()));
+
+    // Update matching order items
+    for (const orderItem of order.items) {
+      if (ticketItemIds.has(orderItem._id.toString())) {
+        // Validate transition is allowed
+        try {
+          const { noop } = ItemStatusService.validateTransition(orderItem.status, toStatus);
+          
+          if (!noop) {
+            orderItem.status = toStatus;
+            updatedCount++;
+
+            logger.debug('kds.update-item-status', {
+              ticketId: ticket._id.toString(),
+              orderItemId: orderItem._id.toString(),
+              newStatus: toStatus,
+            });
+          }
+        } catch (err) {
+          // Log but don't fail - item might have been manually updated
+          logger.warn('kds.update-item-status.invalid-transition', {
+            ticketId: ticket._id.toString(),
+            orderItemId: orderItem._id.toString(),
+            currentStatus: orderItem.status,
+            targetStatus: toStatus,
+            error: err.message,
+          });
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      await order.save({ session });
+
+      logger.info('kds.update-item-statuses.complete', {
+        ticketId: ticket._id.toString(),
+        orderId: order._id.toString(),
+        updatedCount,
+        toStatus,
+      });
+
+      /**
+       * CRITICAL: DO NOT recompute order status here!
+       * 
+       * Order status transitions (preparing → ready) must go through the state machine
+       * via the kitchen:all_tickets_ready event handler. This ensures:
+       * 1. Proper notifications are sent
+       * 2. Status history is recorded correctly  
+       * 3. Socket.IO events are emitted
+       * 
+       * Item status changes should NOT directly drive order status when using KDS.
+       * The roll-up happens via: ticket ready → kitchen:all_tickets_ready event → state machine → order ready
+       */
+      // REMOVED FOR BUG FIX:
+      // await ItemStatusService.recomputeOrderStatus(order, session);
     }
   }
 
@@ -507,7 +743,10 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
    * @returns {Promise<Array>} Tickets
    */
   static async getActiveTickets(stationIdOrCode, branchId, options = {}) {
-    const { statuses = ['pending', 'accepted', 'in_progress', 'ready'] } = options;
+    const { 
+      statuses = ['pending', 'accepted', 'in_progress', 'ready'],
+      includeCompleted = false 
+    } = options;
 
     // Resolve station: Try to find by code first, then fall back to ObjectId
     let stationId = stationIdOrCode;
@@ -536,11 +775,19 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
       }
     }
 
-    const tickets = await KitchenTicket.find({
+    // ✅ Build query: exclude completed tickets unless explicitly requested
+    const query = {
       station: stationId,
       branch: branchId,
-      status: { $in: statuses },
-    })
+    };
+
+    if (includeCompleted) {
+      query.status = { $in: [...statuses, 'completed'] };
+    } else {
+      query.status = { $in: statuses };
+    }
+
+    const tickets = await KitchenTicket.find(query)
       .populate('station', 'name code color')
       .populate('order', 'orderNumber orderType tableNumber')
       .populate('assignedTo', 'name')
@@ -833,6 +1080,58 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
   }
 
   /**
+   * Recompute ticket status from its item statuses
+   * Rule: Ticket status is ALWAYS derived from children - never set directly
+   * 
+   * @param {Object} ticket - Ticket document
+   * @param {Object} session - MongoDB session for transactions (optional)
+   * @returns {Promise<Object>} { statusChanged, oldStatus?, newStatus? }
+   */
+  static async recomputeTicketStatus(ticket, session = null) {
+    const items = ticket.items;
+    
+    if (items.length === 0) {
+      return { statusChanged: false };
+    }
+
+    const oldStatus = ticket.status;
+    let newStatus = oldStatus;
+
+    const allReady = items.every(i => i.status === 'ready');
+    const anyInProgress = items.some(i => i.status === 'in_progress');
+
+    if (allReady) {
+      // All items ready → ticket ready
+      newStatus = 'ready';
+      if (!ticket.readyAt) {
+        ticket.readyAt = new Date();
+      }
+    } else if (anyInProgress) {
+      // At least one item in progress → ticket in_progress
+      newStatus = 'in_progress';
+    } else {
+      // All items pending → ticket pending
+      newStatus = 'pending';
+    }
+
+    if (newStatus !== oldStatus) {
+      ticket.status = newStatus;
+      await ticket.save({ session });
+
+      logger.info('kds.ticket.status-recomputed', {
+        ticketId: ticket._id,
+        oldStatus,
+        newStatus,
+        itemCount: items.length,
+      });
+
+      return { statusChanged: true, oldStatus, newStatus };
+    }
+
+    return { statusChanged: false };
+  }
+
+  /**
    * Get all tickets for an order (for order detail view)
    * 
    * @param {string} orderId - Order ID
@@ -843,6 +1142,250 @@ console.log('DEBUG order.items[0]._id type:', typeof order.items[0]?._id);
       .populate('station', 'name slug color')
       .populate('assignedTo', 'name')
       .sort({ createdAt: 1 })
+      .lean();
+
+    return tickets;
+  }
+
+  /**
+   * Update status of a specific item within a ticket
+   * Allows kitchen staff to mark individual items as started or completed
+   * 
+   * @param {string} ticketId - Ticket ID
+   * @param {string} itemId - Item _id within the ticket
+   * @param {string} newStatus - New status: 'pending' | 'in_progress' | 'ready'
+   * @param {Object} actor - { id, role }
+   * @returns {Promise<Object>} Updated ticket
+   */
+  static async updateTicketItemStatus(ticketId, itemId, newStatus, actor) {
+    // Validate status
+    const validStatuses = ['pending', 'in_progress', 'ready'];
+    if (!validStatuses.includes(newStatus)) {
+      throw new AppError(
+        `Invalid item status. Must be one of: ${validStatuses.join(', ')}`,
+        400
+      );
+    }
+
+    const session = await mongoose.startSession();
+    let result = null;
+    let ticketItemData = null;
+    let orderItemData = null;
+
+    try {
+      await session.withTransaction(async () => {
+        // Get ticket with session lock
+        const ticket = await KitchenTicket.findById(ticketId).session(session);
+        if (!ticket) {
+          throw new AppError('Ticket not found', 404);
+        }
+
+        // Find item within ticket
+        const item = ticket.items.id(itemId);
+        if (!item) {
+          throw new AppError('Item not found in ticket', 404);
+        }
+
+        const oldStatus = item.status;
+
+        // Don't update if status is the same
+        if (oldStatus === newStatus) {
+          result = { noop: true, ticket };
+          return;
+        }
+
+        // Update item status and timestamps
+        item.status = newStatus;
+        
+        if (newStatus === 'in_progress' && !item.startedAt) {
+          item.startedAt = new Date();
+        }
+        
+        if (newStatus === 'ready' && !item.completedAt) {
+          item.completedAt = new Date();
+        }
+
+        // Store for later event emission
+        ticketItemData = { ticket, item: { ...item.toObject() }, oldStatus, newStatus };
+
+        // Recompute overall ticket status from all items
+        await this.recomputeTicketStatus(ticket, session);
+
+        // Save ticket within transaction
+        await ticket.save({ session });
+
+        logger.info('kds.ticket-item.status-updated', {
+          ticketId,
+          itemId,
+          oldStatus,
+          newStatus,
+          ticketStatus: ticket.status,
+          actorId: actor.id,
+          actorRole: actor.role,
+          transaction: 'active',
+        });
+
+        // Sync to order item if status changed to ready or in_progress
+        if (newStatus === 'ready' || newStatus === 'in_progress') {
+          orderItemData = await this._syncTicketItemToOrder(ticket, item, newStatus, session);
+        }
+
+        result = { noop: false, ticket };
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    // AFTER transaction: Emit socket events
+    if (!result.noop && ticketItemData) {
+      const { StatusSyncService } = require('../../order/service/StatusSyncService');
+      const ticket = await KitchenTicket.findById(ticketId);  // Reload fresh
+      const order = await Order.findById(ticket.order);        // Reload fresh
+
+      if (order) {
+        // Emit both ticket and order events via StatusSyncService
+        await StatusSyncService.afterTicketItemChange(
+          ticket,
+          ticketItemData.item,
+          order,
+          orderItemData?.item || null,
+          null
+        );
+      }
+
+      // Also emit kitchen-specific ticket event
+      const io = getIo();
+      if (io) {
+        io.to(`branch:${order.branch}:station:${ticket.station}`).emit('ticket:item-updated', {
+          ticketId: ticket._id,
+          itemId,
+          status: ticketItemData.newStatus,
+          ticketStatus: ticket.status,
+          startedAt: ticketItemData.item.startedAt,
+          completedAt: ticketItemData.item.completedAt,
+        });
+      }
+    }
+
+    return result?.ticket || { noop: true };
+  }
+
+  /**
+   * Sync a single ticket item status to its corresponding order item
+   * Called within a transaction to ensure atomicity
+   * 
+   * @private
+   * @param {KitchenTicket} ticket - The ticket containing the item
+   * @param {Object} ticketItem - The ticket item that changed
+   * @param {string} newStatus - The new status
+   * @param {ClientSession} session - MongoDB session for transaction
+   */
+  static async _syncTicketItemToOrder(ticket, ticketItem, newStatus, session) {
+    const { ItemStatusService } = require('../../order/service/ItemStatusService');
+
+    // Fetch order with session lock
+    const order = await Order.findById(ticket.order).session(session);
+
+    if (!order) {
+      throw new AppError('Order not found for ticket', 404);
+    }
+
+    // Find the corresponding order item
+    const orderItem = order.items.id(ticketItem.orderItemId);
+
+    if (!orderItem) {
+      // Item not found - this is a data integrity error that must abort the transaction
+      const err = new AppError(
+        `Order item ${ticketItem.orderItemId} not found for ticket item ${ticketItem._id}`,
+        500
+      );
+      logger.error('kds.sync-to-order.item-not-found', {
+        ticketId: ticket._id.toString(),
+        ticketItemId: ticketItem._id.toString(),
+        orderItemId: ticketItem.orderItemId.toString(),
+        error: err.message,
+      });
+      throw err; // Must throw to trigger transaction rollback
+    }
+
+    const oldOrderItemStatus = orderItem.status;
+
+    // Validate and apply transition
+    try {
+      const { noop } = ItemStatusService.validateTransition(orderItem.status, newStatus);
+      
+      if (!noop) {
+        orderItem.status = newStatus;
+        
+        logger.debug('kds.sync-to-order.updating', {
+          ticketId: ticket._id.toString(),
+          ticketItemId: ticketItem._id.toString(),
+          orderItemId: orderItem._id.toString(),
+          oldStatus: oldOrderItemStatus,
+          newStatus,
+        });
+
+        // Recompute order status after item change
+        await ItemStatusService.recomputeOrderStatus(order, session);
+        
+        // Save order within transaction
+        await order.save({ session });
+
+        logger.info('kds.sync-to-order.success', {
+          ticketId: ticket._id.toString(),
+          ticketItemId: ticketItem._id.toString(),
+          orderItemId: orderItem._id.toString(),
+          newStatus,
+          orderStatus: order.status,
+        });
+      }
+
+      // Return updated order item for event emission
+      return { item: { ...orderItem.toObject() }, order };
+    } catch (err) {
+      logger.error('kds.sync-to-order.failed', {
+        ticketId: ticket._id.toString(),
+        orderItemId: orderItem._id.toString(),
+        currentStatus: orderItem.status,
+        targetStatus: newStatus,
+        error: err.message,
+      });
+      throw err; // Re-throw to trigger transaction rollback
+    }
+  }
+
+  /**
+   * Get ticket history (completed tickets)
+   * 
+   * @param {ObjectId} branchId - Branch ID
+   * @param {ObjectId} merchantId - Merchant ID
+   * @param {Object} filters - { stationId?, startDate?, endDate? }
+   * @returns {Array} Completed tickets
+   */
+  static async getTicketHistory(branchId, merchantId, filters = {}) {
+    const { stationId, startDate, endDate } = filters;
+
+    const query = {
+      branch: branchId,
+      merchant: merchantId,
+      status: 'completed',
+    };
+
+    if (stationId) {
+      query.station = stationId;
+    }
+
+    if (startDate || endDate) {
+      query.completedAt = {};
+      if (startDate) query.completedAt.$gte = startDate;
+      if (endDate) query.completedAt.$lte = endDate;
+    }
+
+    const tickets = await KitchenTicket.find(query)
+      .populate('order', 'orderNumber orderType tableNumber')
+      .populate('station', 'name code color')
+      .sort({ completedAt: -1 })
+      .limit(100)  // Pagination in production
       .lean();
 
     return tickets;

@@ -13,6 +13,35 @@ const FileAsset = require('../../../../models/FileAsset');
 const { resolveSingleImageData, resolveImageCollectionData } = require('../utils/image-response');
 const { sendResponse } = require('../../../../utils/sendResponse');
 
+/**
+ * Parse JSON-stringified fields from multipart/form-data
+ * 
+ * When using multipart/form-data for image uploads, structured fields (arrays, objects)
+ * are sent as JSON strings. This helper safely parses them back to their expected types.
+ * 
+ * @param {Object} body - Request body
+ * @param {Array<string>} fields - Field names to parse
+ * @returns {Object} Body with parsed fields
+ */
+function parseMultipartJsonFields(body, fields = []) {
+  const parsed = { ...body };
+
+  for (const field of fields) {
+    if (parsed[field] && typeof parsed[field] === 'string') {
+      try {
+        parsed[field] = JSON.parse(parsed[field]);
+      } catch (err) {
+        throw new AppError(
+          `Invalid JSON format for field "${field}": ${err.message}`,
+          400
+        );
+      }
+    }
+  }
+
+  return parsed;
+}
+
 const multerStorage = multer.memoryStorage();
 
 const multerFilter = (req, file, cb) => {
@@ -125,9 +154,18 @@ exports.createNewMenu = catchAsync(async (req, res) => {
     throw new AppError('Merchant ID is required', 400);
   }
 
+  // Parse JSON-stringified fields from multipart/form-data
+  // ONLY parse actual JSON fields (arrays/objects), NOT plain strings like name/description
+  const parsedBody = parseMultipartJsonFields(req.body, [
+    'variants',
+    'ingredients',
+    'allergens',
+    'tags',
+  ]);
+
   // Create menu with processed image IDs
   const menuData = {
-    ...req.body,
+    ...parsedBody,
   };
 
   // If we have processed image IDs from middleware
@@ -172,9 +210,6 @@ exports.createNewMenu = catchAsync(async (req, res) => {
 // ============================================
 // 2. GET ALL MENU
 // ============================================
-// controllers/menu.controller.js
-
-// controllers/menu.controller.js
 
 // ============================================
 // 3. GET SINGLE MENU
@@ -231,6 +266,15 @@ exports.updateMenu = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   const userId = req.user._id;
 
+  // Parse JSON-stringified fields from multipart/form-data
+  // ONLY parse actual JSON fields (arrays/objects), NOT plain strings like name/description
+  const parsedBody = parseMultipartJsonFields(req.body, [
+    'variants',
+    'ingredients',
+    'allergens',
+    'tags',
+  ]);
+
   // If new image uploaded, cleanup old FileAsset before updating
   if (req.processedImageId || (req.processedImageIds && req.processedImageIds.length > 0)) {
     const oldMenu = await MenuItemService.getById(req.params.id, merchantId);
@@ -250,7 +294,7 @@ exports.updateMenu = catchAsync(async (req, res, next) => {
     }
   }
 
-  const updatedMenu = await MenuItemService.update(req.params.id, req.body, merchantId, userId);
+  const updatedMenu = await MenuItemService.update(req.params.id, parsedBody, merchantId, userId);
 
   // Populate image references
   await updatedMenu.populate([

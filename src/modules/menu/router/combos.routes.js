@@ -11,12 +11,15 @@
 
 const express = require('express');
 const { protect, restrictTo } = require('../../../common/guards/auth.guard');
+const { protectTableSession } = require('../../customers/customer-session.guard');
 const comboController = require('../controller/combo.controller');
 
 const router = express.Router();
 
-// ── Public ────────────────────────────────────────────────────────────────────
-router.get('/active', comboController.getActiveCombos);
+// ── Public (table session) ────────────────────────────────────────────────────
+// merchantId and branchId are derived from the validated table session token,
+// never from client-supplied query params.
+router.get('/active', protectTableSession, comboController.getActiveCombos);
 
 // ── Protected ─────────────────────────────────────────────────────────────────
 router.use(protect);
@@ -27,7 +30,7 @@ router
   .get(comboController.getAllCombos)
   .post(
     comboController.uploadComboPhoto,
-    comboController.resizeComboPhoto,
+    comboController.resizeAndProcessImages, // FileAsset-based (replaces legacy resizeComboPhoto)
     comboController.createCombo
   );
 
@@ -36,7 +39,7 @@ router
   .get(comboController.getCombo)
   .patch(
     comboController.uploadComboPhoto,
-    comboController.resizeComboPhoto,
+    comboController.resizeAndProcessImages, // FileAsset-based (replaces legacy resizeComboPhoto)
     comboController.updateCombo
   )
   .delete(comboController.deleteCombo);

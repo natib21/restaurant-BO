@@ -1,4 +1,4 @@
-const { getIo } = require('../../../socket');
+const { getIo } = require('../websocket/socket-server');
 const logger = require('../../../utils/logger');
 
 /**

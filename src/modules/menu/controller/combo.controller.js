@@ -12,6 +12,35 @@ const { getMerchantId } = require('../../../common/utils/tenant-scope');
 const { resolveSingleImageData } = require('../utils/image-response');
 const { sendResponse } = require('../../../../utils/sendResponse');
 
+/**
+ * Parse JSON-stringified fields from multipart/form-data
+ * 
+ * When using multipart/form-data for image uploads, structured fields (arrays, objects)
+ * are sent as JSON strings. This helper safely parses them back to their expected types.
+ * 
+ * @param {Object} body - Request body
+ * @param {Array<string>} fields - Field names to parse
+ * @returns {Object} Body with parsed fields
+ */
+function parseMultipartJsonFields(body, fields = []) {
+  const parsed = { ...body };
+
+  for (const field of fields) {
+    if (parsed[field] && typeof parsed[field] === 'string') {
+      try {
+        parsed[field] = JSON.parse(parsed[field]);
+      } catch (err) {
+        throw new AppError(
+          `Invalid JSON format for field "${field}": ${err.message}`,
+          400
+        );
+      }
+    }
+  }
+
+  return parsed;
+}
+
 const multerStorage = multer.memoryStorage();
 
 const multerFilter = (req, file, cb) => {
@@ -66,27 +95,25 @@ exports.resizeAndProcessImages = catchAsync(async (req, res, next) => {
 });
 
 // ============================================
-// LEGACY RESIZE MIDDLEWARE
+// LEGACY RESIZE MIDDLEWARE — REMOVED
 // ============================================
-exports.resizeComboPhoto = catchAsync(async (req, res, next) => {
-  if (!req.file) {
-    delete req.body.image;
-    return next();
-  }
+// resizeComboPhoto (disk-based) has been replaced by resizeAndProcessImages (FileAsset-based).
+// It wrote files to uploads/img/combo/ as plain filename strings, which meant:
+//   - Images were never tracked in FileAsset
+//   - deleteCombo / updateCombo cleanup was silently skipped (typeof image === 'string')
+//   - Disk accumulated orphaned files on every update/delete
+//
+// ⚠️  DATA MIGRATION NOTE: Any existing combo documents whose `image` field holds a
+//     plain filename string (e.g. "combo-abc-burger-1234567890.jpeg") rather than a
+//     Mongoose ObjectId reference were created via the old middleware. Those files
+//     live in uploads/img/combo/ and are not tracked in FileAsset. A one-time backfill
+//     job should:
+//       1. Find combos where typeof image === 'string'
+//       2. Create a FileAsset record for each file (or mark as unmanaged)
+//       3. Update the combo.image field to the new FileAsset ObjectId
+//     Until that backfill runs, those images will not be served via the FileAsset URL
+//     resolver and will not be cleaned up by FileManagementService.softDelete.
 
-  const merchantId = req.user.merchant._id;
-  const comboName = (req.body.name || 'combo').replace(/\s+/g, '_').toLowerCase();
-  const filename = `combo-${merchantId}-${comboName}-${Date.now()}.jpeg`;
-
-  await sharp(req.file.buffer)
-    .resize(800, 800, { fit: 'cover', position: 'center' })
-    .toFormat('jpeg')
-    .jpeg({ quality: 92 })
-    .toFile(`uploads/img/combo/${filename}`);
-
-  req.body.image = filename;
-  next();
-});
 
 // ============================================
 // CONTROLLER METHODS
@@ -103,9 +130,20 @@ exports.createCombo = catchAsync(async (req, res) => {
     throw new AppError('Merchant ID is required', 400);
   }
 
+  // Parse JSON-stringified fields from multipart/form-data
+  // ONLY parse actual JSON fields (arrays/objects), NOT plain strings like name/description
+  const parsedBody = parseMultipartJsonFields(req.body, [
+    'items', // Array of combo items
+    'tags', // Array of tags
+    'branchOverrides', // Array of branch-specific overrides
+    'branches', // Array of branch IDs
+    'availableOnDays', // Array of days
+    'timeSlots', // Array of time slot objects
+  ]);
+
   // Create combo with processed image ID
   const comboData = {
-    ...req.body,
+    ...parsedBody,
   };
 
   if (req.processedImageId) {
@@ -148,10 +186,15 @@ exports.getAllCombos = catchAsync(async (req, res) => {
 // 3. GET ACTIVE COMBOS
 // ============================================
 exports.getActiveCombos = catchAsync(async (req, res) => {
-  // For public endpoint, try multiple sources for merchantId
-  const merchantId = req.query.merchantId || getMerchantId(req);
-  const branchId = req.query.branchId || null;
-  
+  // merchantId and branchId come exclusively from the validated table session
+  // (set by protectTableSession middleware). Never trust client-supplied query params.
+  const merchantId = req.merchantId;
+  const branchId = req.branchId || null;
+
+  if (!merchantId) {
+    throw new AppError('Merchant context is required', 400);
+  }
+
   const combos = await ComboService.getActive(merchantId, branchId);
 
   if (process.env.NODE_ENV === 'development') {
@@ -191,6 +234,17 @@ exports.updateCombo = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
   const userId = req.user._id;
 
+  // Parse JSON-stringified fields from multipart/form-data
+  // ONLY parse actual JSON fields (arrays/objects), NOT plain strings like name/description
+  const parsedBody = parseMultipartJsonFields(req.body, [
+    'items', // Array of combo items
+    'tags', // Array of tags
+    'branchOverrides', // Array of branch-specific overrides
+    'branches', // Array of branch IDs
+    'availableOnDays', // Array of days
+    'timeSlots', // Array of time slot objects
+  ]);
+
   // If new image was uploaded, cleanup old FileAsset before updating
   if (req.processedImageId) {
     const oldCombo = await ComboService.getById(req.params.id, merchantId);
@@ -200,10 +254,10 @@ exports.updateCombo = catchAsync(async (req, res) => {
       await FileManagementService.softDelete(oldCombo.image, merchantId);
     }
 
-    req.body.image = req.processedImageId;
+    parsedBody.image = req.processedImageId;
   }
 
-  const combo = await ComboService.update(req.params.id, req.body, merchantId, userId);
+  const combo = await ComboService.update(req.params.id, parsedBody, merchantId, userId);
 
   // Update FileAsset record with entityId after combo update
   if (combo.image && typeof combo.image !== 'string') {

@@ -83,12 +83,39 @@ function auditPlugin(schema, options = {}) {
           const oldVal = doc.$locals.auditOldDoc[field];
           const newVal = doc[field];
 
-          // Only log if changed (deep comparison for primitives)
-          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-            changes.push({
+          // ✅ Skip fields with type mismatches (e.g., old ObjectId vs new Object)
+          // This handles schema migrations gracefully
+          const oldType = oldVal?.constructor?.name || typeof oldVal;
+          const newType = newVal?.constructor?.name || typeof newVal;
+          
+          if (oldType !== newType && oldVal !== null && newVal !== null && oldVal !== undefined && newVal !== undefined) {
+            logger.warn('audit.plugin.type-mismatch', {
+              resource,
+              resourceId: doc._id,
               field,
-              oldValue: oldVal,
-              newValue: newVal,
+              oldType,
+              newType,
+              message: 'Skipping field comparison due to type mismatch (possible schema migration)',
+            });
+            continue;
+          }
+
+          // Only log if changed (deep comparison for primitives)
+          try {
+            if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+              changes.push({
+                field,
+                oldValue: oldVal,
+                newValue: newVal,
+              });
+            }
+          } catch (jsonError) {
+            // Skip fields that can't be stringified (circular references, etc.)
+            logger.warn('audit.plugin.stringify-failed', {
+              resource,
+              resourceId: doc._id,
+              field,
+              error: jsonError.message,
             });
           }
         }

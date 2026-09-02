@@ -40,6 +40,18 @@ const branchMenu = new mongoose.Schema(
     overrideImage: String,
     isHidden: { type: Boolean, default: false },
     isAvailable: { type: Boolean, default: true },
+
+    // === Stock availability & manual override ===
+    availability: {
+      // Manual override to allow ordering despite low/critical stock
+      manualOverride: {
+        enabled: { type: Boolean, default: false },
+        reason: String,
+        setBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        setAt: Date,
+        expiresAt: Date,
+      },
+    },
   },
   {
     timestamps: true,

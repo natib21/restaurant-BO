@@ -8,18 +8,23 @@
 const catchAsync = require('../../../../../utils/catchAsync');
 const { getMerchantId } = require('../../../../common/utils/tenant-scope');
 const { OrderService } = require('../../service/OrderService');
+const { sendResponse } = require('../../../../../utils/sendResponse');
 
 /**
  * GET /api/v1/orders/active (staff)
  * Get active orders for branch
  *
- * Query: { status?, tableNumber?, limit?, offset? }
- * Response: { success, message, data: { orders }, meta: { count } }
+ * Query: { status?, branchId?, page?, limit? }
+ * Response: { status: 'success', results, data: { orders } }
  */
 exports.getActiveOrders = catchAsync(async (req, res, next) => {
-  const orders = await OrderService.getActiveOrders(req);
-
-  res.sendList(orders, 'orders', 200, { count: orders.length });
+  const result = await OrderService.getActiveOrders(req);
+  sendResponse(res, 200, 'orders', result.orders, {
+    results: result.results,
+    total: result.total,
+    page: result.page,
+    pages: result.pages,
+  });
 });
 
 /**
@@ -28,7 +33,7 @@ exports.getActiveOrders = catchAsync(async (req, res, next) => {
  *
  * Params: id (order ID)
  * Body: { status, reason? }
- * Response: { success, message, data: { order } }
+ * Response: { status: 'success', message, data: { order } }
  */
 exports.updateOrderStatus = catchAsync(async (req, res, next) => {
   const validatedData = req.validatedBody || req.body;
@@ -38,77 +43,48 @@ exports.updateOrderStatus = catchAsync(async (req, res, next) => {
   const order = result.order;
   const noop = result.noop;
 
-  res.sendSuccess(
-    order,
-    200,
-    noop
+  sendResponse(res, 200, 'order', order, {
+    message: noop
       ? `Order already in status ${validatedData.status}`
-      : `Order updated to ${validatedData.status}`
-  );
+      : `Order updated to ${validatedData.status}`,
+  });
 });
 
 /**
- * Factory: Create status-specific handlers
- * Patterns: GET /pending, /accepted, /preparing, /ready, /served, /canceled, /completed
+ * Factory: Create status-specific list handlers.
+ * GET /pending, /accepted, /preparing, /ready, /served, /canceled
  */
 const createStatusEndpoint = status =>
   catchAsync(async (req, res) => {
-    const orders = await OrderService.getOrdersByStatus(req, status);
-    res.status(200).json({
-      status: 'success',
-      count: orders.length,
-      data: { orders },
+    const result = await OrderService.getOrdersByStatus(req, status);
+    sendResponse(res, 200, 'orders', result.orders, {
+      results: result.results,
+      total: result.total,
+      page: result.page,
+      pages: result.pages,
     });
   });
 
-/**
- * GET /api/v1/orders/pending
- * Get all pending orders (not yet accepted)
- */
-exports.getPendingOrders = createStatusEndpoint('pending');
-
-/**
- * GET /api/v1/orders/accepted
- * Get all accepted orders (kitchen has seen them)
- */
-exports.getAcceptedOrders = createStatusEndpoint('accepted');
-
-/**
- * GET /api/v1/orders/preparing
- * Get all orders being prepared
- */
+exports.getPendingOrders   = createStatusEndpoint('pending');
+exports.getAcceptedOrders  = createStatusEndpoint('accepted');
 exports.getPreparingOrders = createStatusEndpoint('preparing');
-
-/**
- * GET /api/v1/orders/ready
- * Get all ready-for-pickup orders
- */
-exports.getReadyOrders = createStatusEndpoint('ready');
-
-/**
- * GET /api/v1/orders/served
- * Get all served orders
- */
-exports.getServedOrders = createStatusEndpoint('served');
-
-/**
- * GET /api/v1/orders/canceled
- * Get all canceled orders
- */
-exports.getCanceledOrders = createStatusEndpoint('canceled');
+exports.getReadyOrders     = createStatusEndpoint('ready');
+exports.getServedOrders    = createStatusEndpoint('served');
+exports.getCanceledOrders  = createStatusEndpoint('canceled');
 
 /**
  * GET /api/v1/orders/completed
  * Get all completed orders with summary stats
  *
- * Response: { status, count, summary: { totalRevenue, avgValue }, data: { orders } }
+ * Response: { status: 'success', results, total, page, pages, summary, data: { orders } }
  */
 exports.getCompletedOrders = catchAsync(async (req, res) => {
   const result = await OrderService.getCompletedOrders(req);
-
-  res.status(200).json({
-    status: 'success',
-    ...result,
-    data: { orders: result.orders },
+  sendResponse(res, 200, 'orders', result.orders, {
+    results: result.orders.length,
+    total: result.total,
+    page: result.page,
+    pages: result.pages,
+    summary: result.summary,
   });
 });

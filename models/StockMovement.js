@@ -57,7 +57,8 @@ const stockMovementSchema = new Schema(
     performedBy: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false, // ✅ Allow null for customer/system actions (QR orders, automated processes)
+      default: null,
     },
     notes: String,
   },

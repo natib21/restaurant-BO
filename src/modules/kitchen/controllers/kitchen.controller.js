@@ -3,13 +3,14 @@
 const KitchenTicketService = require('../service/KitchenTicketService');
 const catchAsync = require('../../../../utils/catchAsync');
 const AppError = require('../../../../utils/appError');
+const { resolveStaffBranchId, getMerchantId } = require('../../../common/utils/tenant-scope');
 
 /**
  * GET /api/v1/kitchen/stations
  * Get all kitchen stations for the branch
  */
 exports.getAllStations = catchAsync(async (req, res, next) => {
-  const branchId = req.user.branch?._id || req.user.branch;
+  const branchId = resolveStaffBranchId(req);
 
   if (!branchId) {
     return next(new AppError('Branch context required', 400));
@@ -34,7 +35,7 @@ exports.getAllStations = catchAsync(async (req, res, next) => {
  */
 exports.getStationById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  const branchId = req.user.branch?._id || req.user.branch;
+  const branchId = resolveStaffBranchId(req);
 
   if (!branchId) {
     return next(new AppError('Branch context required', 400));
@@ -55,8 +56,8 @@ exports.getStationById = catchAsync(async (req, res, next) => {
  * Body: { name, code, description?, displayOrder? }
  */
 exports.createStation = catchAsync(async (req, res, next) => {
-  const branchId = req.user.branch?._id || req.user.branch;
-  const merchantId = req.user.merchant?._id || req.user.merchant;
+  const branchId = resolveStaffBranchId(req);
+  const merchantId = getMerchantId(req);
 
   if (!branchId || !merchantId) {
     return next(new AppError('Branch and merchant context required', 400));
@@ -88,7 +89,7 @@ exports.createStation = catchAsync(async (req, res, next) => {
  */
 exports.updateStation = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  const branchId = req.user.branch?._id || req.user.branch;
+  const branchId = resolveStaffBranchId(req);
 
   if (!branchId) {
     return next(new AppError('Branch context required', 400));
@@ -114,7 +115,7 @@ exports.updateStation = catchAsync(async (req, res, next) => {
  */
 exports.deleteStation = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  const branchId = req.user.branch?._id || req.user.branch;
+  const branchId = resolveStaffBranchId(req);
 
   if (!branchId) {
     return next(new AppError('Branch context required', 400));
@@ -138,8 +139,8 @@ exports.assignMenuItemStation = catchAsync(async (req, res, next) => {
   const { menuItemId } = req.params;
   const { stationId } = req.body;
   
-  const branchId = req.user.branch?._id || req.user.branch;
-  const merchantId = req.user.merchant?._id || req.user.merchant;
+  const branchId = resolveStaffBranchId(req);
+  const merchantId = getMerchantId(req);
 
   if (!branchId || !merchantId) {
     return next(new AppError('Branch and merchant context required', 400));
@@ -161,16 +162,54 @@ exports.assignMenuItemStation = catchAsync(async (req, res, next) => {
 /**
  * GET /api/v1/kitchen/stations/:stationId/tickets
  * Get active tickets for a station (KDS dashboard)
+ * 
+ * Query params:
+ * - includeCompleted: 'true' to include completed tickets (default: false - active board only)
  */
 exports.getStationTickets = catchAsync(async (req, res, next) => {
   const { stationId } = req.params;
-  const branchId = req.user.branch?._id || req.user.branch;
+  const { includeCompleted = 'false' } = req.query;
+  const branchId = resolveStaffBranchId(req);
 
   if (!branchId) {
     return next(new AppError('Branch context required', 400));
   }
 
-  const tickets = await KitchenTicketService.getActiveTickets(stationId, branchId);
+  // ✅ Active board: exclude completed tickets by default
+  const tickets = await KitchenTicketService.getActiveTickets(stationId, branchId, {
+    includeCompleted: includeCompleted === 'true',
+  });
+
+  res.status(200).json({
+    status: 'success',
+    results: tickets.length,
+    data: { tickets },
+  });
+});
+
+/**
+ * GET /api/v1/kitchen/tickets/history
+ * Get completed tickets (history view)
+ * 
+ * Query params:
+ * - stationId: filter by station (optional)
+ * - startDate: ISO date string (optional)
+ * - endDate: ISO date string (optional)
+ */
+exports.getTicketHistory = catchAsync(async (req, res, next) => {
+  const { stationId, startDate, endDate } = req.query;
+  const branchId = resolveStaffBranchId(req);
+  const merchantId = getMerchantId(req);
+
+  if (!branchId || !merchantId) {
+    return next(new AppError('Branch and merchant context required', 400));
+  }
+
+  const tickets = await KitchenTicketService.getTicketHistory(branchId, merchantId, {
+    stationId,
+    startDate: startDate ? new Date(startDate) : undefined,
+    endDate: endDate ? new Date(endDate) : undefined,
+  });
 
   res.status(200).json({
     status: 'success',
@@ -184,7 +223,7 @@ exports.getStationTickets = catchAsync(async (req, res, next) => {
  * Get all tickets with optional filters (cross-station view)
  */
 exports.getAllTickets = catchAsync(async (req, res, next) => {
-  const branchId = req.user.branch?._id || req.user.branch;
+  const branchId = resolveStaffBranchId(req);
   const { stationId, status } = req.query;
 
   if (!branchId) {
@@ -342,5 +381,36 @@ exports.cancelTicket = catchAsync(async (req, res, next) => {
       ticket: result.ticket,
       message: 'Ticket canceled successfully',
     },
+  });
+});
+
+/**
+ * PATCH /api/v1/kitchen/tickets/:ticketId/item/:itemId
+ * Update status of a specific item within a ticket
+ * Body: { status: 'pending' | 'in_progress' | 'ready' }
+ */
+exports.updateTicketItemStatus = catchAsync(async (req, res, next) => {
+  const { ticketId, itemId } = req.params;
+  const { status } = req.body;
+
+  if (!status) {
+    return next(new AppError('Status is required', 400));
+  }
+
+  const actor = {
+    id: req.user._id,
+    role: req.user.role?.name || 'unknown',
+  };
+
+  const ticket = await KitchenTicketService.updateTicketItemStatus(
+    ticketId,
+    itemId,
+    status,
+    actor
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: { ticket },
   });
 });

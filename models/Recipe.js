@@ -66,13 +66,27 @@ const recipeSchema = new Schema(
 recipeSchema.index({ merchant: 1, menuItem: 1 }, { unique: true });
 recipeSchema.index({ merchant: 1, isActive: 1 });
 
-// Pre-save: Calculate total cost
+// Pre-save: Validate units and calculate total cost
 recipeSchema.pre('save', async function (next) {
   let totalCost = 0;
 
   for (const item of this.items) {
     const ingredient = await mongoose.model('Ingredient').findById(item.ingredient);
-    if (ingredient && ingredient.costPerUnit) {
+    
+    if (!ingredient) {
+      return next(new Error(`Ingredient ${item.ingredient} not found`));
+    }
+
+    // STAGE 7: Unit conversion validation
+    // Ensure recipe item unit matches ingredient unit (no conversion yet)
+    if (item.unit !== ingredient.unit) {
+      return next(new Error(
+        `Unit mismatch: Recipe uses ${item.unit} but ingredient "${ingredient.name}" is stocked in ${ingredient.unit}. ` +
+        `Please use matching units or convert manually.`
+      ));
+    }
+
+    if (ingredient.costPerUnit) {
       totalCost += item.quantity * ingredient.costPerUnit;
     }
   }

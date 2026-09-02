@@ -75,6 +75,27 @@ const menuIngredientSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Static ingredient schema (for display when inventory module is disabled)
+const staticIngredientSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 100,
+    },
+    quantity: {
+      type: Number,
+      min: 0,
+    },
+    unit: {
+      type: String,
+      enum: ['kg', 'g', 'liter', 'ml', 'pieces', 'cups', 'tbsp', 'tsp', 'pinch', 'boxes', 'cans'],
+    },
+  },
+  { _id: false }
+);
+
 // ══════════════════════════════════════════════════════════════════════════
 // MAIN SCHEMA
 // ══════════════════════════════════════════════════════════════════════════
@@ -173,6 +194,15 @@ const menuItemSchema = new mongoose.Schema(
       default: [],
     },
     price: { type: Number, min: 0 },
+    
+    // Cost of Goods Sold (simple fallback for non-inventory merchants)
+    // Used when inventory module is disabled or no recipe exists
+    costPrice: { 
+      type: Number, 
+      min: 0,
+      default: 0,
+      comment: 'Simple COGS - used when inventory module is disabled'
+    },
 
     // Images
     image: {
@@ -192,12 +222,19 @@ const menuItemSchema = new mongoose.Schema(
 
     // Recipe and allergens
     recipe: {
-      ingredients: {
-        type: [menuIngredientSchema],
-        default: [],
-      },
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Recipe',
+      default: null,
+      comment: 'Reference to Recipe model (inventory-enabled merchants only)'
     },
     allergens: [String],
+
+    // ✅ NEW: Static ingredients for display (when inventory module disabled)
+    staticIngredients: {
+      type: [staticIngredientSchema],
+      default: [],
+      comment: 'For merchants without inventory module - display-only ingredient list for customers'
+    },
 
     // Availability
     available: { type: Boolean, default: true },
@@ -217,6 +254,14 @@ const menuItemSchema = new mongoose.Schema(
       ref: 'KitchenStation',
       default: null,
       index: true,
+    },
+
+    // Item-level workflow control
+    requiresKitchen: {
+      type: Boolean,
+      default: true,
+      index: true,
+      comment: 'If false, item does not generate kitchen tickets (e.g., bottled drinks, packaged items)'
     },
 
     // Ratings

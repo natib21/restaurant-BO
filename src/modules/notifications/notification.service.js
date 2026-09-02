@@ -43,7 +43,9 @@ class NotificationService {
   }
 
   static async notifyOrderStatusUpdated(ctx, session) {
-    return NotificationService.queueEvents(buildOrderStatusUpdatedEvents(ctx), {
+    const events = buildOrderStatusUpdatedEvents(ctx);
+    
+    return NotificationService.queueEvents(events, {
       session,
       category: 'order',
     });

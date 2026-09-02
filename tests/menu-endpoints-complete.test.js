@@ -27,6 +27,8 @@ const Branch = require('../models/branchModel');
 const User = require('../models/userModel');
 const Role = require('../models/roleModel');
 const Task = require('../models/taskModel');
+const Table = require('../models/tabelModel');
+const CustomerSession = require('../models/customerSessionModule');
 
 let app;
 let testData = {};
@@ -46,6 +48,8 @@ describe('Menu Module - Complete Endpoint Tests', () => {
     await Branch.deleteMany({});
     await Role.deleteMany({});
     await Task.deleteMany({});
+    await Table.deleteMany({});
+    await CustomerSession.deleteMany({});
 
     // ========================================
     // MERCHANT 1 SETUP (Primary Test Merchant)
@@ -654,7 +658,7 @@ describe('Menu Module - Complete Endpoint Tests', () => {
       expect(res.body.data.combos).toBeDefined();
     });
 
-    test('GET /api/v1/combo/active - Get active combos (public)', async () => {
+    test('GET /api/v1/combo/active - Get active combos (table session)', async () => {
       const item = await MenuItem.create({
         name: { en: 'Item', am: 'ዕቃ' },
         categoryId: testData.category._id,
@@ -676,11 +680,36 @@ describe('Menu Module - Complete Endpoint Tests', () => {
         updatedBy: testData.user._id
       });
 
+      // Build a table session for testData.merchant (same pattern as getPublicMenu).
+      // protectTableSession reads the session from DB by token — create it directly.
+      const table = await Table.create({
+        merchant: testData.merchant._id,
+        branch: testData.branch._id,
+        tableNumber: ('A' + Date.now()).slice(-10),
+        capacity: 4,
+        isActive: true,
+      });
+
+      const sessionToken = 'test-session-token-combos-' + Date.now();
+      await CustomerSession.create({
+        token: sessionToken,
+        table: table._id,
+        merchant: testData.merchant._id,
+        branch: testData.branch._id,
+        isActive: true,
+        expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours
+      });
+
       const res = await request(app)
-        .get(`/api/v1/combo/active?merchantId=${testData.merchant._id}`);
+        .get('/api/v1/combo/active')
+        .set('Authorization', `Bearer ${sessionToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('success');
+
+      // Clean up
+      await Table.deleteOne({ _id: table._id });
+      await CustomerSession.deleteOne({ token: sessionToken });
     });
 
     test('GET /api/v1/combo/:id - Get single combo', async () => {
@@ -1516,13 +1545,24 @@ describe('Menu Module - Complete Endpoint Tests', () => {
   // PUBLIC ENDPOINT EDGE CASES
   // ========================================
   describe('Public Combo Endpoint Security', () => {
-    test('GET /api/v1/combo/active without merchantId returns 400', async () => {
+    test('GET /api/v1/combo/active without a valid table session returns 401', async () => {
+      // No Authorization header → protectTableSession rejects with 401.
+      // Previously returned 400 "merchant context required" when the endpoint
+      // had no auth guard and relied on a query param for merchantId (Fix 2).
       const res = await request(app).get('/api/v1/combo/active');
-      expect(res.status).toBe(400);
-      expect(res.body.message).toMatch(/merchant/i);
+      expect(res.status).toBe(401);
     });
 
-    test('GET /api/v1/combo/active with merchantId only returns that merchant combos', async () => {
+    test('GET /api/v1/combo/active: ?merchantId query param is ignored — session merchant wins', async () => {
+      // Regression test for the vulnerability fixed in Fix 2:
+      // A customer must not be able to fetch another merchant's combos by
+      // passing ?merchantId=<other> in the query string.
+      //
+      // Setup: create one combo for merchant1 and one for merchant2.
+      // Use a session scoped to merchant1.
+      // Pass ?merchantId=<merchant2._id> in the query string.
+      // Assert: only merchant1's combo is returned — the query param has no effect.
+
       const item1 = await MenuItem.create({
         name: { en: 'Item1', am: 'ዕቃ1' },
         categoryId: testData.category._id,
@@ -1545,10 +1585,10 @@ describe('Menu Module - Complete Endpoint Tests', () => {
         updatedBy: testData.user2._id
       });
 
-      // Create combos for both merchants
       await Combo.create({
         name: { en: 'Merchant1 Combo', am: 'ነጋዴ1 ኮምቦ' },
         merchant: testData.merchant._id,
+        branches: [testData.branch._id],
         items: [{ menuItem: item1._id, quantity: 1, nameFallback: 'Item1' }],
         comboPrice: 9.00,
         isActive: true,
@@ -1559,6 +1599,7 @@ describe('Menu Module - Complete Endpoint Tests', () => {
       await Combo.create({
         name: { en: 'Merchant2 Combo', am: 'ነጋዴ2 ኮምቦ' },
         merchant: testData.merchant2._id,
+        branches: [testData.branch2._id],
         items: [{ menuItem: item2._id, quantity: 1, nameFallback: 'Item2' }],
         comboPrice: 8.00,
         isActive: true,
@@ -1566,18 +1607,42 @@ describe('Menu Module - Complete Endpoint Tests', () => {
         updatedBy: testData.user2._id
       });
 
-      // Query for merchant1 only
+      // Create a table session for merchant1
+      const table = await Table.create({
+        merchant: testData.merchant._id,
+        branch: testData.branch._id,
+        tableNumber: ('B' + Date.now()).slice(-10),
+        capacity: 2,
+        isActive: true,
+      });
+
+      const sessionToken = 'test-session-token-security-' + Date.now();
+      await CustomerSession.create({
+        token: sessionToken,
+        table: table._id,
+        merchant: testData.merchant._id,
+        branch: testData.branch._id,
+        isActive: true,
+        expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      });
+
+      // Pass merchant2's ID as query param — must be completely ignored
       const res = await request(app)
-        .get(`/api/v1/combo/active?merchantId=${testData.merchant._id}`)
+        .get(`/api/v1/combo/active?merchantId=${testData.merchant2._id}`)
+        .set('Authorization', `Bearer ${sessionToken}`)
         .expect(200);
 
       expect(res.body.data.combos).toBeDefined();
-      
-      // Should only return merchant1's combos
-      res.body.data.combos.forEach(combo => {
-        expect(combo.merchant.toString()).toBe(testData.merchant._id.toString());
-        expect(combo.name.en).toBe('Merchant1 Combo');
-      });
+      const names = res.body.data.combos.map(c => c.name?.en);
+
+      // merchant1's combo must be present
+      expect(names).toContain('Merchant1 Combo');
+      // merchant2's combo must NOT appear despite the query param
+      expect(names).not.toContain('Merchant2 Combo');
+
+      // Clean up
+      await Table.deleteOne({ _id: table._id });
+      await CustomerSession.deleteOne({ token: sessionToken });
     });
   });
 });

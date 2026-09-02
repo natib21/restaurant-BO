@@ -4,6 +4,7 @@ const MenuItem = require('../../menu/model/MenuItem.model');
 const Ingredient = require('../../../../models/Ingredient');
 const Table = require('../../../../models/tabelModel');
 const CustomerSession = require('../../../../models/customerSessionModule');
+const Customer = require('../../../../models/customerModule');
 const ApiFeatures = require('../../../../utils/apiFeatures');
 const {
   merchantScopedQuery,
@@ -19,24 +20,54 @@ const {
   assertDineInTableId,
 } = require('../validators/order.validators');
 const { OrderStateMachineService } = require('./OrderStateMachineService');
+const { OrderTransactionService } = require('./OrderTransactionService');
+const { InventoryService } = require('../../inventory');
+const logger = require('../../../../utils/logger');
 
 class OrderService {
   static VALID_TRANSITIONS = OrderStateMachineService.TRANSITIONS;
   /**
-   * Calculate COGS (Cost of Goods Sold) for a menu item based on its recipe.
-   * Returns null if the menu item has no recipe or ingredients aren't tracked.
+   * Calculate COGS (Cost of Goods Sold) for a menu item.
    * 
-   * @param {Object} menuItem - The menu item with populated recipe.ingredients
-   * @returns {Promise<Number|null>} - Unit cost or null if not trackable
+   * Feature-flag aware:
+   * - If inventory module enabled: Calculate from recipe ingredients
+   * - If inventory module disabled: Use simple costPrice field
+   * 
+   * @param {Object} menuItem - The menu item document
+   * @param {string} merchantId - Merchant ID for feature flag check
+   * @returns {Promise<Number|null>} - Unit cost or null if not calculable
    */
-  static async calculateMenuItemCost(menuItem) {
-    // No recipe or ingredients means no COGS tracking
-    if (!menuItem.recipe || !menuItem.recipe.ingredients || menuItem.recipe.ingredients.length === 0) {
-      return null;
-    }
-
+  static async calculateMenuItemCost(menuItem, merchantId) {
     try {
+      // Check if merchant has inventory module enabled
+      const Merchant = require('../../../../models/merchantModel');
+      const merchant = await Merchant.findById(merchantId);
+
+      if (!merchant) {
+        logger.warn('order.cogs.merchant_not_found', { merchantId });
+        return null;
+      }
+
+      const hasInventoryModule = merchant.hasFeature('inventory');
+
+      // If inventory module is disabled, use simple costPrice field
+      if (!hasInventoryModule) {
+        return menuItem.costPrice || 0; // Return 0 if costPrice not set
+      }
+
+      // Inventory module enabled - calculate from recipe
+      if (!menuItem.recipe || !menuItem.recipe.ingredients || menuItem.recipe.ingredients.length === 0) {
+        logger.warn('order.cogs.no_recipe', { 
+          menuItemId: menuItem._id,
+          merchantId,
+          message: 'Inventory module enabled but no recipe found'
+        });
+        // Fallback to costPrice even with inventory module
+        return menuItem.costPrice || 0;
+      }
+
       // Get all ingredient IDs from the recipe
+      const Ingredient = require('../../inventory/model/Ingredient');
       const ingredientIds = menuItem.recipe.ingredients.map(ri => ri.ingredient);
       
       // Fetch all ingredients with their current costPerUnit
@@ -64,16 +95,28 @@ class OrderService {
           break;
         }
 
-        // Add (quantity � costPerUnit) to total
+        // Add (quantity × costPerUnit) to total
         totalCost += recipeIngredient.quantity * costPerUnit;
       }
 
-      // Return null if we couldn't calculate complete cost
-      return hasAllCosts ? totalCost : null;
+      // Return calculated cost or fallback to costPrice
+      if (hasAllCosts) {
+        return totalCost;
+      } else {
+        logger.warn('order.cogs.incomplete_ingredient_costs', {
+          menuItemId: menuItem._id,
+          merchantId
+        });
+        return menuItem.costPrice || 0;
+      }
     } catch (error) {
       // Log error but don't fail order placement
-      console.error('Error calculating menu item cost:', error);
-      return null;
+      logger.error('order.cogs.calculation_failed', { 
+        message: error.message,
+        menuItemId: menuItem._id,
+        merchantId
+      });
+      return menuItem.costPrice || 0; // Fallback to simple cost
     }
   }
 
@@ -127,22 +170,107 @@ class OrderService {
       filter.branch = req.query.branchId;
     }
 
-    const orders = await OrderRepository.find(filter)
+    const baseQuery = OrderRepository.find(filter)
       .populate('table', 'tableNumber')
       .populate('assignedWaiter', 'fullName')
       .populate('assignedKitchenStaff', 'fullName')
       .select(
         'orderNumber status tableNumber totalAmount placedAt readyAt items assignedWaiter assignedKitchenStaff'
-      )
-      .sort({ placedAt: 1 })
-      .lean();
+      );
 
-    return orders.map(order => ({
+    // Apply ApiFeatures for search, sort, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['orderNumber', 'customerName', 'customerPhone'])
+      .sort()
+      .paginate();
+
+    const total = await OrderRepository.countDocuments(filter);
+    const orders = await features.query.lean();
+
+    const enrichedOrders = orders.map(order => ({
       ...order,
       itemCount: order.items.reduce((s, i) => s + i.quantity, 0),
       elapsed: OrderService.formatElapsed(order.placedAt),
       urgency: OrderService.getUrgency(order.placedAt),
     }));
+
+    const page = req.query.page * 1 || 1;
+    const limit = Math.min(req.query.limit * 1 || 100, 100);
+
+    return {
+      orders: enrichedOrders,
+      results: enrichedOrders.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get review queue - pending orders that require review by the requesting user's role
+   * 
+   * Returns orders where:
+   * - status = 'pending'
+   * - OrderFlowConfig.channels[order.source].reviewerRole matches user's role
+   * 
+   * Role matching:
+   * - If user role name includes 'WAITER' → matches reviewerRole='waiter'
+   * - If user role name includes 'SUPPORT' → matches reviewerRole='support'
+   * 
+   * @param {Object} req - Express request with req.user (from JWT auth)
+   * @returns {Promise<Object>} { orders: Array }
+   */
+  static async getReviewQueue(req) {
+    const merchantId = OrderService.getMerchantId(req);
+    const { OrderFlowConfigService } = require('../../order-flow-config');
+
+    // Determine reviewer role from user's role name
+    const userRoleName = req.user?.role?.name || '';
+    let reviewerRole = null;
+
+    if (userRoleName.includes('WAITER')) {
+      reviewerRole = 'waiter';
+    } else if (userRoleName.includes('SUPPORT')) {
+      reviewerRole = 'support';
+    } else {
+      // User role doesn't match any reviewer role
+      return { orders: [] };
+    }
+
+    // Get all pending orders for this merchant
+    const pendingOrders = await OrderRepository.find({
+      merchant: merchantId,
+      status: 'pending',
+    })
+      .populate('table', 'tableNumber')
+      .populate('assignedWaiter', 'fullName')
+      .select('orderNumber source status tableNumber customerName totalAmount placedAt items')
+      .sort({ placedAt: 1 }) // Oldest first
+      .lean();
+
+    // Filter orders by channel config
+    const filteredOrders = [];
+    for (const order of pendingOrders) {
+      const channelConfig = await OrderFlowConfigService.getChannelConfig(
+        merchantId,
+        order.source
+      );
+
+      // Include if:
+      // 1. requiresReview is true (needs manual review)
+      // 2. reviewerRole matches user's role
+      if (channelConfig.requiresReview && channelConfig.reviewerRole === reviewerRole) {
+        filteredOrders.push({
+          ...order,
+          itemCount: order.items.reduce((s, i) => s + i.quantity, 0),
+          elapsed: OrderService.formatElapsed(order.placedAt),
+          urgency: OrderService.getUrgency(order.placedAt),
+          reviewerRole: channelConfig.reviewerRole, // Include for transparency
+        });
+      }
+    }
+
+    return { orders: filteredOrders };
   }
 
   static async buildOrderItems(items, merchantId) {
@@ -175,16 +303,22 @@ class OrderService {
       const totalPrice = quantity * unitPrice;
 
       // Calculate COGS (Cost of Goods Sold) per unit
-      const unitCost = await OrderService.calculateMenuItemCost(menuItem);
+      const unitCost = await OrderService.calculateMenuItemCost(menuItem, merchantId);
 
       orderItems.push({
         menuItem: menuItem._id,
-        name: menuItem.name,
+        // Snapshot the primary-locale name as a plain string.
+        // menuItem.name is a localizedTextSchema object { en, am } — we store the English
+        // variant (falling back to a string coercion) so the field is always a plain String.
+        name: menuItem.name?.en || String(menuItem.name),
         quantity,
         unitPrice,
         unitCost, // Will be null if no recipe or ingredient costs unavailable
         totalPrice,
         notes: item.notes || '',
+        // ✅ Snapshot requiresKitchen from MenuItem (prevents retroactive menu changes from affecting historical orders)
+        requiresKitchen: menuItem.requiresKitchen !== false, // Default to true if undefined
+        // ✅ Item status starts at 'pending' (set by schema default)
       });
 
       subtotal += totalPrice;
@@ -203,68 +337,248 @@ class OrderService {
       orderType,
       customerName,
       customerPhone,
-      subtotal,
       notes,
       branchId,
       location,
+      deliveryFee,
+      deliveryNotes,
       performedBy,
       performedByName,
       merchantId,
+      source, // explicit source parameter ('waiter' | 'admin')
     } = data;
+    // Note: client-supplied `subtotal` and per-item `unitPrice` are intentionally
+    // ignored — prices are always resolved server-side from the MenuItem documents.
+
+    // Build the delivery sub-document from the validated `location` field.
+    // The Zod validator accepts location.coordinates as [longitude, latitude] (GeoJSON order).
+    // The Order model's delivery sub-schema stores { location: { lat, lng }, phone, fee }.
+    // These are two distinct fields: top-level `location` (GeoJSON) and `delivery` (sub-doc).
+    let deliverySubDoc = undefined;
+    if (orderType === 'delivery') {
+      const coords = location?.coordinates; // [longitude, latitude]
+      deliverySubDoc = {
+        location: {
+          lat: coords?.[1] ?? null,
+          lng: coords?.[0] ?? null,
+        },
+        phone: customerPhone || null,
+        fee: deliveryFee || 0,
+        addressNote: deliveryNotes || undefined,
+      };
+    }
 
     assertValidStaffOrderType(orderType);
     assertDineInTableId(orderType, tableId);
 
-    let tableNumber = null;
-    if (orderType === 'dine_in') {
-      const table = await Table.findOne({ branch: branchId, _id: tableId });
-      if (!table) throw new AppError('Table not found', 404);
-      tableNumber = table.tableNumber;
+    // Phase 0 — pre-transaction validation (read-only, fast-fail before opening a session)
+    const { orderItems, subtotal } = await OrderService.buildOrderItems(items, merchantId);
+    const deductionPlan = await InventoryService.resolveDeductionPlan(orderItems, merchantId);
+
+    const session = await mongoose.startSession();
+    let createdOrder;
+
+    try {
+      await session.withTransaction(async () => {
+        // Table validation — merchant-scoped to prevent cross-tenant table use
+        let tableNumber = null;
+        if (orderType === 'dine_in') {
+          const table = await Table.findOne({
+            _id: tableId,
+            merchant: merchantId,
+            branch: branchId,
+          }).session(session);
+          if (!table) throw new AppError('Table not found', 404);
+          tableNumber = table.tableNumber;
+        }
+
+        // Generate orderNumber inside the transaction so the Counter update is
+        // session-aware. This causes the pre-validate hook's early-exit guard
+        // (`if (!this.isNew || this.orderNumber) return next()`) to skip its own
+        // un-sessioned Counter call, matching OrderTransactionService.executePlaceOrder.
+        const orderNumber = await OrderTransactionService.generateOrderNumber(
+          { merchant: merchantId, branch: branchId, orderType }, // ✅ Pass orderType for prefix
+          session
+        );
+
+        // Create order using server-computed prices only
+        const [order] = await OrderRepository.create(
+          [
+            {
+              merchant: merchantId,
+              branch: branchId,
+              customerName: customerName || 'Walk-in Customer',
+              customerPhone: customerPhone || null,
+              table: orderType === 'dine_in' ? tableId : null,
+              tableNumber: orderType === 'dine_in' ? tableNumber : null,
+              orderType,
+              orderNumber,
+              source, // explicit source ('waiter' | 'admin')
+              items: orderItems,     // prices from buildOrderItems — never from client
+              subtotal,              // computed server-side — never from client
+              totalAmount: subtotal, // same
+              paymentStatus: 'unpaid',
+              status: 'pending',
+              notes: notes || '',
+              location,
+              delivery: deliverySubDoc,
+              deliveryFee: deliveryFee || 0,
+              deliveryNotes: deliveryNotes || undefined,
+              placedBy: performedBy,
+            },
+          ],
+          { session }
+        );
+        createdOrder = order;
+
+        // Mark table occupied
+        if (orderType === 'dine_in') {
+          await Table.findByIdAndUpdate(tableId, { status: 'occupied' }, { session });
+        }
+
+        // Deduct inventory inside the same transaction
+        await InventoryService.deductForOrder(
+          {
+            merchantId,
+            orderId: createdOrder._id,
+            orderNumber: createdOrder.orderNumber,
+            plan: deductionPlan,
+            performedBy,
+          },
+          session
+        );
+
+        await NotificationService.notifyStaffOrderPlaced(
+          {
+            order: createdOrder,
+            branchId,
+            merchantId: createdOrder.merchant,
+            tableNumber,
+            placedByName: performedByName,
+          },
+          session
+        );
+      });
+
+      // ──────────────────────────────────────────────────────────────────
+      // Step 3: Auto-routing based on OrderFlowConfig
+      // (Must happen AFTER transaction commits, since transitionOrderStatus
+      // creates its own transaction)
+      // ──────────────────────────────────────────────────────────────────
+      const { OrderFlowConfigService } = require('../../order-flow-config');
+      const { OrderStateMachineService } = require('./OrderStateMachineService');
+
+      const channelConfig = await OrderFlowConfigService.getChannelConfig(
+        merchantId,
+        createdOrder.source
+      );
+
+      if (channelConfig.requiresReview === false) {
+        // Auto-route: pending → accepted → preparing
+        // Use actorType: 'system' for automated transitions
+
+        // Transition 1: pending → accepted
+        await OrderStateMachineService.transitionOrderStatus({
+          orderId: createdOrder._id,
+          toStatus: 'accepted',
+          merchantQuery: { merchant: merchantId },
+          user: null,
+          actorType: 'system',
+          reason: 'Auto-accepted: channel requires no review',
+        });
+
+        // Transition 2: accepted → preparing
+        await OrderStateMachineService.transitionOrderStatus({
+          orderId: createdOrder._id,
+          toStatus: 'preparing',
+          merchantQuery: { merchant: merchantId },
+          user: null,
+          actorType: 'system',
+          reason: 'Auto-sent to kitchen: channel requires no review',
+        });
+
+        // Refresh order to get updated status
+        await createdOrder.populate([
+          { path: 'items.menuItem', select: 'name price kitchenStation' },
+          { path: 'customer', select: 'name phone' },
+          { path: 'table', select: 'number' },
+        ]);
+
+        logger.info('order.auto-routed.staff', {
+          orderId: createdOrder._id.toString(),
+          source: createdOrder.source,
+          finalStatus: createdOrder.status,
+        });
+      }
+
+      logger.info('staff.order.place.success', {
+        orderId: createdOrder._id.toString(),
+        merchantId: merchantId.toString(),
+        branchId: branchId.toString(),
+        orderNumber: createdOrder.orderNumber,
+      });
+
+      // ✅ Emit real-time socket event to staff (after DB transaction committed)
+      try {
+        const { getIo } = require('../../../infrastructure/websocket/socket-server');
+        const io = getIo();
+        
+        // Broadcast to branch staff with ORDER_VIEW and ORDER_MANAGE permissions
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:new', {
+          _id: createdOrder._id,
+          orderNumber: createdOrder.orderNumber,
+          status: createdOrder.status,
+          source: createdOrder.source,
+          orderType: createdOrder.orderType,
+          tableNumber: createdOrder.tableNumber,
+          customerName: createdOrder.customerName,
+          totalAmount: createdOrder.totalAmount,
+          placedAt: createdOrder.placedAt,
+          branchId,
+        });
+        
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:new', {
+          _id: createdOrder._id,
+          orderNumber: createdOrder.orderNumber,
+          status: createdOrder.status,
+          source: createdOrder.source,
+          orderType: createdOrder.orderType,
+          tableNumber: createdOrder.tableNumber,
+          customerName: createdOrder.customerName,
+          totalAmount: createdOrder.totalAmount,
+          placedAt: createdOrder.placedAt,
+          branchId,
+        });
+      } catch (socketError) {
+        // Don't fail the order if socket broadcast fails
+        logger.warn('staff.order.place.socket_emit_failed', {
+          orderId: createdOrder._id.toString(),
+          error: socketError.message,
+        });
+      }
+
+      return createdOrder;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+
+      if (OrderTransactionService.isInventoryError(error)) {
+        logger.warn('staff.order.place.inventory_failed', {
+          merchantId: merchantId.toString(),
+          message: error.message,
+        });
+        throw new AppError('Insufficient inventory for this order', 400);
+      }
+
+      logger.error('staff.order.place.failed', {
+        merchantId: merchantId.toString(),
+        error: error.message,
+        errorName: error.constructor.name,
+        stack: error.stack,
+      });
+      throw new AppError('Failed to create staff order', 500);
+    } finally {
+      await session.endSession();
     }
-
-    const totalAmount = subtotal;
-    const enrichedItems = items.map(item => {
-      const unitPrice = item.unitPrice || 0;
-      return {
-        menuItem: item.menuItemId,
-        quantity: item.quantity,
-        unitPrice,
-        totalPrice: unitPrice * item.quantity,
-        notes: item.notes || '',
-      };
-    });
-    const order = OrderRepository.newOrder({
-      merchant: merchantId,
-      branch: branchId,
-      customerName: customerName || 'Walk-in Customer',
-      customerPhone: customerPhone || null,
-      table: orderType === 'dine_in' ? tableId : null,
-      tableNumber: orderType === 'dine_in' ? tableNumber : null,
-      orderType,
-      items: enrichedItems,
-      subtotal,
-      totalAmount,
-      paymentStatus: 'unpaid',
-      status: 'pending',
-      notes: notes || '',
-      location,
-      placedBy: performedBy,
-    });
-    await order.save();
-
-    if (orderType === 'dine_in') {
-      await Table.findByIdAndUpdate(tableId, { status: 'occupied' });
-    }
-
-    await NotificationService.notifyStaffOrderPlaced({
-      order,
-      branchId,
-      merchantId: order.merchant,
-      tableNumber,
-      placedByName: performedByName,
-    });
-
-    return order;
   }
 
   static async getMyActiveOrder(req) {
@@ -290,20 +604,39 @@ class OrderService {
 
   static async getActiveOrders(req) {
     const { branchId, status } = req.query || {};
-    const statusList = status ? [status] : ['pending', 'accepted', 'preparing', 'ready'];
+    const statusList = status ? [status] : ['pending', 'accepted', 'preparing', 'ready', 'served'];
 
     const query = { status: statusList };
     if (branchId) {
       query.branch = branchId;
     }
 
-    const orders = await OrderRepository.find(merchantScopedQuery(query, req))
+    const baseQuery = OrderRepository.find(merchantScopedQuery(query, req))
       .populate('table', 'tableNumber')
       .populate('items.menuItem', 'name')
-      .populate('branch', 'name')
-      .sort({ placedAt: 1 });
+      .populate('branch', 'name');
 
-    return orders.map(order => attachPaymentImage(order, req));
+    // Apply ApiFeatures for search, sort, pagination
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['orderNumber', 'customerName', 'customerPhone'])
+      .sort()
+      .paginate();
+
+    const total = await OrderRepository.countDocuments(merchantScopedQuery(query, req));
+    const orders = await features.query.lean();
+
+    const enrichedOrders = orders.map(order => attachPaymentImage(order, req));
+
+    const page = req.query.page * 1 || 1;
+    const limit = Math.min(req.query.limit * 1 || 100, 100);
+
+    return {
+      orders: enrichedOrders,
+      results: enrichedOrders.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
   }
 
   static async updateOrderStatus(req) {
@@ -332,119 +665,139 @@ class OrderService {
     const { paymentMethod, bankName, image } = req.body;
 
     const session = await mongoose.startSession();
-    session.startTransaction();
+    let order;
 
     try {
-      const order = await OrderRepository.findOne(merchantScopedQuery({ _id: id }, req)).session(
-        session
-      );
-
-      if (!order) {
-        await session.abortTransaction();
-        throw new AppError('Order not found', 404);
-      }
-
-      if (order.paymentStatus === 'paid') {
-        await session.abortTransaction();
-        throw new AppError('Order already paid', 400);
-      }
-
-      order.paymentStatus = 'paid';
-      order.paidAt = new Date();
-
-      order.paymentDetails = {
-        method: paymentMethod || 'cash',
-        bankName: bankName || null,
-        paidAt: new Date(),
-        receiptImage: image || null,
-      };
-
-      await order.save({ session });
-
-      const wasCompleted = order.status === 'completed';
-
-      if (!wasCompleted) {
-        order.status = 'completed';
-        order.completedAt = new Date();
-
-        await order.save({ session });
-      }
-
-      if (req.customer) {
-        const points = Math.floor(order.totalAmount);
-
-        req.customer.loyalty.points += points;
-        req.customer.loyalty.totalPointsEarned += points;
-
-        const tiers = {
-          bronze: 0,
-          silver: 5000,
-          gold: 20000,
-          platinum: 50000,
-        };
-
-        const newTier = Object.keys(tiers)
-          .reverse()
-          .find(tier => req.customer.loyalty.totalPointsEarned >= tiers[tier]);
-
-        if (newTier && newTier !== req.customer.loyalty.tier) {
-          req.customer.loyalty.tier = newTier;
-        }
-
-        req.customer.history.push({
-          action: 'award_points',
-          details: `Earned ${points} points from order ${order.orderNumber} (${paymentMethod})`,
-          order: order._id,
-          addedAt: new Date(),
-        });
-
-        await req.customer.save({
-          session,
-          validateBeforeSave: false,
-        });
-      }
-
-      if (order.table) {
-        await CustomerSession.updateOne(
-          merchantScopedQuery(
-            {
-              tableId: order.table,
-              isActive: true,
-            },
-            req
-          ),
-          { isActive: false },
-          { session }
-        );
-
-        const table = await Table.findOne(merchantScopedQuery({ _id: order.table }, req)).session(
+      await session.withTransaction(async () => {
+        order = await OrderRepository.findOne(merchantScopedQuery({ _id: id }, req)).session(
           session
         );
 
-        if (table) {
-          table.status = 'available';
-          await table.save({ session });
+        if (!order) {
+          throw new AppError('Order not found', 404);
         }
-      }
 
-      await NotificationService.notifyOrderPaid(
-        {
-          order,
-          paymentMethod,
-          bankName,
-          image,
-        },
-        session
-      );
+        if (order.paymentStatus === 'paid') {
+          throw new AppError('Order already paid', 400);
+        }
 
-      await session.commitTransaction();
+        if (order.status === 'canceled') {
+          throw new AppError('Cannot mark a canceled order as paid', 400);
+        }
+
+        // ✅ GUARD: Dine-in orders must have all items served before payment completes them
+        if (order.orderType === 'dine_in' && order.status !== 'served') {
+          throw new AppError(
+            'Cannot complete a dine-in order before all items have been served',
+            400
+          );
+        }
+
+        order.paymentStatus = 'paid';
+        order.paidAt = new Date();
+
+        order.paymentDetails = {
+          method: paymentMethod || 'cash',
+          bankName: bankName || null,
+          paidAt: new Date(),
+          receiptImage: image || null,
+        };
+
+        await order.save({ session });
+
+        // ✅ COMPLETION LOGIC: Only complete if not already completed
+        // For dine-in: guard above ensures status === 'served', so this always succeeds
+        // For takeaway/delivery: payment does NOT complete the order (stays in current status)
+        if (order.status !== 'completed') {
+          // Only dine-in orders reach here (takeaway/delivery require separate pickup/delivery completion)
+          if (order.orderType === 'dine_in') {
+            order.status = 'completed';
+            order.completedAt = new Date();
+            await order.save({ session });
+
+            // ✅ TABLE CLEANUP: Only runs when order actually completes
+            if (order.table) {
+              await CustomerSession.updateOne(
+                merchantScopedQuery({ tableId: order.table, isActive: true }, req),
+                { isActive: false },
+                { session }
+              );
+
+              const table = await Table.findOne(
+                merchantScopedQuery({ _id: order.table }, req)
+              ).session(session);
+
+              if (table) {
+                table.status = 'available';
+                await table.save({ session });
+              }
+            }
+          }
+          // else: takeaway/delivery payment does NOT complete order - separate endpoint needed
+        }
+
+        if (req.customer) {
+          const points = Math.floor(order.totalAmount);
+          const customerId = req.customer._id;
+
+          // Atomic increment — safe under withTransaction retries because
+          // each retry issues a fresh $inc against the DB value rather than
+          // reading a stale in-memory snapshot and adding to it again.
+          await Customer.findByIdAndUpdate(
+            customerId,
+            {
+              $inc: {
+                'loyalty.points': points,
+                'loyalty.totalPointsEarned': points,
+              },
+              $push: {
+                history: {
+                  action: 'award_points',
+                  details: `Earned ${points} points from order ${order.orderNumber} (${paymentMethod || 'cash'})`,
+                  order: order._id,
+                  addedAt: new Date(),
+                },
+              },
+            },
+            { session, new: true }
+          );
+
+          // Re-fetch after $inc to get the authoritative totalPointsEarned
+          // for tier threshold comparison — in-memory snapshot is no longer valid.
+          const updatedCustomer = await Customer.findById(customerId)
+            .select('loyalty.totalPointsEarned loyalty.tier')
+            .session(session)
+            .lean();
+
+          const tiers = {
+            platinum: 50000,
+            gold: 20000,
+            silver: 5000,
+            bronze: 0,
+          };
+
+          const newTier = Object.keys(tiers).find(
+            tier => updatedCustomer.loyalty.totalPointsEarned >= tiers[tier]
+          );
+
+          if (newTier && newTier !== updatedCustomer.loyalty.tier) {
+            await Customer.findByIdAndUpdate(
+              customerId,
+              { $set: { 'loyalty.tier': newTier } },
+              { session }
+            );
+          }
+        }
+
+        await NotificationService.notifyOrderPaid(
+          { order, paymentMethod, bankName, image },
+          session
+        );
+      });
 
       return order;
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
     } finally {
-      session.endSession();
+      await session.endSession();
     }
   }
 
@@ -509,12 +862,13 @@ class OrderService {
   static async getAllOrders(req) {
     let queryObj = { merchant: OrderService.getMerchantId(req) };
 
-    const { tableNumber, customerPhone, dateFrom, dateTo, search } = req.query;
+    const { tableNumber, customerPhone, dateFrom, dateTo } = req.query;
 
-    if (tableNumber) queryObj.tableNumber = { $regex: tableNumber, $options: 'i' };
+    // ✅ FIXED: Use exact match instead of unescaped $regex to prevent injection
+    if (tableNumber) queryObj.tableNumber = tableNumber.trim();
 
     if (customerPhone) {
-      queryObj.customerPhone = { $regex: customerPhone.trim(), $options: 'i' };
+      queryObj.customerPhone = customerPhone.trim();
     }
 
     if (dateFrom || dateTo) {
@@ -527,12 +881,9 @@ class OrderService {
       }
     }
 
-    if (search) {
-      const searchRegex = { $regex: search.trim(), $options: 'i' };
-      queryObj.$or = [{ orderNumber: searchRegex }, { customerName: searchRegex }];
-    }
-
+    // Don't manually build $or for search — ApiFeatures.search() handles it
     const features = new ApiFeatures(OrderRepository.getOrderModel().find(queryObj), req.query)
+      .search(['orderNumber', 'customerName', 'customerPhone'])
       .filter()
       .sort()
       .limitFields()
@@ -577,10 +928,13 @@ class OrderService {
       avgOrderValue: 0,
     };
 
+    const page = req.query.page * 1 || 1;
+    const limit = Math.min(req.query.limit * 1 || 40, 100);
+
     return {
       total,
-      page: req.query.page * 1 || 1,
-      pages: Math.ceil(total / (req.query.limit * 1 || 40)),
+      page,
+      pages: Math.ceil(total / limit),
       summary: {
         totalRevenue: summary.totalRevenue,
         totalOrders: summary.totalOrders,
@@ -596,15 +950,7 @@ class OrderService {
 
     let queryObj = { merchant: merchantId, status: 'completed', paymentStatus: 'paid' };
 
-    const {
-      branchId,
-      dateFrom,
-      dateTo,
-      search,
-      page = 1,
-      limit = 20,
-      sort = '-placedAt',
-    } = req.query;
+    const { branchId, dateFrom, dateTo } = req.query;
 
     if (branchId) queryObj.branch = branchId;
 
@@ -618,34 +964,31 @@ class OrderService {
       }
     }
 
-    if (search) {
-      const searchRegex = { $regex: search.trim(), $options: 'i' };
-      queryObj.$or = [
-        { orderNumber: searchRegex },
-        { customerName: searchRegex },
-        { customerPhone: searchRegex },
-      ];
-    }
-
-    const total = await OrderRepository.countDocuments(queryObj);
-
-    const orders = await OrderRepository.find(queryObj)
+    const baseQuery = OrderRepository.find(queryObj)
       .populate('branch', 'name')
       .populate('table', 'tableNumber')
       .populate('customer', 'fullName phone')
       .populate('assignedWaiter', 'fullName')
-      .populate('assignedKitchenStaff', 'fullName')
-      .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .lean();
+      .populate('assignedKitchenStaff', 'fullName');
+
+    // Apply ApiFeatures for search, sort, pagination (max limit 100)
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['orderNumber', 'customerName', 'customerPhone'])
+      .sort()
+      .paginate();
+
+    const total = await OrderRepository.countDocuments(queryObj);
+    const orders = await features.query.lean();
 
     const totalRevenue = orders.reduce((s, o) => s + o.totalAmount, 0);
 
+    const page = req.query.page * 1 || 1;
+    const limit = Math.min(req.query.limit * 1 || 20, 100);
+
     return {
       total,
-      page: page * 1,
-      pages: Math.ceil(total / (limit * 1 || 20)),
+      page,
+      pages: Math.ceil(total / limit),
       summary: {
         totalRevenue,
         totalOrders: orders.length,
@@ -684,8 +1027,9 @@ class OrderService {
       targetOrder.notes += ` | MERGED FROM ${sourceOrder.orderNumber}`;
 
       sourceOrder.status = 'canceled';
-      sourceOrder.paymentStatus = 'paid';
-      sourceOrder.canceledReason = 'Merged into another order';
+      // paymentStatus intentionally left as 'unpaid' — the source order was never paid.
+      // status:'canceled' prevents any future markAsPaid attempt on this order.
+      sourceOrder.canceledReason = `Merged into order ${targetOrder.orderNumber}`;
       await sourceOrder.save({ validateBeforeSave: false });
 
       await CustomerSession.updateOne(
@@ -714,21 +1058,23 @@ class OrderService {
     const existing = await OrderRepository.findOne(merchantScopedQuery({ _id: orderId }, req));
     if (!existing) throw new AppError('Order not found', 404);
 
-    if (!req.user && existing.status !== 'pending') {
-      throw new AppError('Customers can only cancel orders while they are still pending', 400);
-    }
-
-    if (!['pending', 'accepted'].includes(existing.status) && req.user) {
-      throw new AppError(`Order cannot be canceled once it is ${existing.status}`, 400);
-    }
-
+    // Terminal states — check first for clean early exits
     if (existing.status === 'canceled') {
       return { order: existing, alreadyCanceled: true };
     }
 
     if (existing.status === 'completed') {
-      throw new AppError('Order is already completed', 400);
+      throw new AppError('Order is already completed and cannot be canceled', 400);
     }
+
+    // Customer path (no req.user): only allowed while still pending
+    if (!req.user && existing.status !== 'pending') {
+      throw new AppError('Customers can only cancel orders while they are still pending', 400);
+    }
+
+    // Staff path: state machine enforces per-status role permissions.
+    // No additional status gate here — preparing/ready/out_for_delivery cancellations
+    // are legitimate for the appropriate roles as defined in TRANSITION_ROLE_PERMISSIONS.
 
     const result = await OrderStateMachineService.transitionOrderStatus({
       orderId,
@@ -743,16 +1089,12 @@ class OrderService {
     return { order: result.order, alreadyCanceled: false };
   }
 
-  static async addItemToOrder(req) {
-    const { orderId } = req.params;
-    const { items } = req.body;
-
-    const order = await OrderRepository.findOne(
-      merchantScopedQuery(
-        { _id: orderId, status: { $in: ['pending', 'accepted', 'preparing'] } },
-        req
-      )
-    );
+  static async addItemToOrder(orderId, items, merchantId, userId) {
+    const order = await OrderRepository.findOne({
+      _id: orderId,
+      merchant: merchantId,
+      status: { $in: ['pending', 'accepted', 'preparing'] },
+    });
 
     if (!order) {
       throw new AppError('Active order not found or cannot be modified', 404);
@@ -760,7 +1102,7 @@ class OrderService {
 
     const { orderItems: newItems, subtotal: newSubtotal } = await OrderService.buildOrderItems(
       items,
-      req.merchant._id
+      merchantId
     );
 
     order.items.push(...newItems);
@@ -783,18 +1125,7 @@ class OrderService {
 
     let queryObj = { merchant: merchantId };
 
-    const {
-      status,
-      paymentStatus,
-      orderType,
-      branchId,
-      dateFrom,
-      dateTo,
-      search,
-      page = 1,
-      limit = 20,
-      sort = '-placedAt',
-    } = req.query;
+    const { status, paymentStatus, orderType, branchId, dateFrom, dateTo } = req.query;
 
     if (branchId) queryObj.branch = branchId;
 
@@ -812,18 +1143,7 @@ class OrderService {
       }
     }
 
-    if (search) {
-      const searchRegex = { $regex: search.trim(), $options: 'i' };
-      queryObj.$or = [
-        { orderNumber: searchRegex },
-        { customerName: searchRegex },
-        { customerPhone: searchRegex },
-      ];
-    }
-
-    const total = await OrderRepository.countDocuments(queryObj);
-
-    const orders = await OrderRepository.find(queryObj)
+    const baseQuery = OrderRepository.find(queryObj)
       .populate('branch', 'name')
       .populate('table', 'tableNumber')
       .populate('customer', 'fullName phone')
@@ -831,11 +1151,16 @@ class OrderService {
       .populate('assignedKitchenStaff', 'fullName')
       .select(
         'orderNumber status paymentStatus totalAmount placedAt branch tableNumber customerName orderType items'
-      )
-      .sort(sort)
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .lean();
+      );
+
+    // Apply ApiFeatures for search, sort, pagination (max limit 100)
+    const features = new ApiFeatures(baseQuery, req.query)
+      .search(['orderNumber', 'customerName', 'customerPhone'])
+      .sort()
+      .paginate();
+
+    const total = await OrderRepository.countDocuments(queryObj);
+    const orders = await features.query.lean();
 
     const ordersWithSummary = orders.map(order => {
       const withImage = attachPaymentImage(order, req);
@@ -860,10 +1185,13 @@ class OrderService {
 
     const summary = stats[0] || { totalRevenue: 0, totalOrders: 0, paidOrders: 0 };
 
+    const page = req.query.page * 1 || 1;
+    const limit = Math.min(req.query.limit * 1 || 20, 100);
+
     return {
       orders: ordersWithSummary,
       total,
-      page: parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
       summary: {
         totalRevenue: summary.totalRevenue,
@@ -889,7 +1217,7 @@ class OrderService {
       branch: branchId,
     };
 
-    const { dateFrom, dateTo, search, page = 1, limit = 20 } = req.query;
+    const { dateFrom, dateTo } = req.query;
 
     if (dateFrom || dateTo) {
       queryObj.placedAt = {};
@@ -905,19 +1233,7 @@ class OrderService {
       }
     }
 
-    if (search) {
-      const searchRegex = {
-        $regex: search.trim(),
-        $options: 'i',
-      };
-
-      queryObj.$or = [
-        { orderNumber: searchRegex },
-        { customerName: searchRegex },
-        { customerPhone: searchRegex },
-      ];
-    }
-
+    // Don't manually build $or for search — ApiFeatures.search() handles it
     const features = new ApiFeatures(
       OrderRepository.find(queryObj)
         .populate('branch', 'name')
@@ -926,6 +1242,7 @@ class OrderService {
         .populate('assignedWaiter', 'fullName'),
       req.query
     )
+      .search(['orderNumber', 'customerName', 'customerPhone'])
       .filter()
       .sort()
       .limitFields()
@@ -980,10 +1297,12 @@ class OrderService {
       };
     });
 
+    const page = req.query.page * 1 || 1;
+    const limit = Math.min(req.query.limit * 1 || 20, 100);
+
     return {
-      orders: ordersWithItemCount,
       total,
-      page: parseInt(page),
+      page,
       pages: Math.ceil(total / limit),
       summary: {
         totalRevenue: summary.totalRevenue,
@@ -991,8 +1310,10 @@ class OrderService {
         paidOrders: summary.paidOrders,
         avgOrderValue: Math.round(summary.avgOrderValue || 0),
       },
+      orders: ordersWithItemCount,
     };
   }
+
   static async getOrderById(req) {
     const { id } = req.params;
 
@@ -1011,6 +1332,52 @@ class OrderService {
 
     if (!order) {
       throw new AppError('Order not found', 404);
+    }
+
+    return attachPaymentImage(order, req);
+  }
+
+  /**
+   * Get order by ID with dual authentication support
+   * 
+   * Staff (JWT) → Can view any order in their merchant
+   * Customer (Session) → Can only view orders associated with their table's session
+   */
+  static async getOrderByIdDualAuth(req) {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new AppError('Order ID is required', 400);
+    }
+
+    let order = await OrderRepository.findById(id)
+      .populate('items.menuItem', 'name price')
+      .populate('table', 'tableNumber')
+      .populate('assignedWaiter', 'fullName')
+      .populate('branch', 'name')
+      .populate('assignedKitchenStaff', 'fullName')
+      .populate('placedBy', 'firstName lastName')
+      .lean();
+
+    if (!order) {
+      throw new AppError('Order not found', 404);
+    }
+
+    // Verify merchant access first
+    if (order.merchant?.toString() !== req.merchantId?.toString()) {
+      throw new AppError('Order not found', 404);
+    }
+
+    // If customer session auth (not JWT), verify they can access this order
+    if (req.tableSession) {
+      // Customer can only view orders from their session's table
+      // ✅ FIX: Compare string representations (order.table is populated object with _id)
+      const orderTableId = order.table?._id?.toString() || order.table?.toString();
+      const sessionTableId = req.tableId?.toString();
+      
+      if (orderTableId !== sessionTableId) {
+        throw new AppError('You do not have access to this order', 403);
+      }
     }
 
     return attachPaymentImage(order, req);

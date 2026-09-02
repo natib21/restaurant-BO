@@ -6,6 +6,7 @@
  *  1. Trust proxy
  *  2. CORS
  *  3. Helmet
+ *  3.5. Sentry request handler (captures request context)
  *  4. Rate limiters
  *  5. Static files
  *  6. Webhook raw-body (MUST be before express.json)
@@ -15,10 +16,11 @@
  * 10. Request context (requestId, actorType, merchantId, branchId)
  * 11. Branch context enrichment
  * 12. Response helpers (res.sendSuccess / res.sendError)
- * 13. Morgan logging
+ * 13. Morgan logging (structured JSON via Winston)
  * 14. All API routes (src/routes/index.js)
  * 15. 404 catch-all
- * 16. Global error handler
+ * 16. Sentry error handler
+ * 17. Global error handler
  */
 
 const express = require('express');
@@ -33,12 +35,14 @@ const cookieParser = require('cookie-parser');
 
 const { loadEnv, getCorsOrigins } = require('../config/env');
 const { morganStream } = require('../../utils/logger');
+const { sentryRequestHandler, sentryErrorHandler } = require('../infrastructure/monitoring/sentry');
 const {
   initRequestContext,
   syncRequestContext,
 } = require('../common/middleware/request-context.middleware');
 const { enrichBranchContext } = require('../common/middleware/branch-context.middleware');
 const responseMiddleware = require('../common/middleware/response.middleware');
+const { metricsMiddleware } = require('../common/middleware/metrics.middleware');
 const AppError = require('../../utils/appError');
 const GlobalErrorHandler = require('../../utils/globalErrorHandler');
 
@@ -71,6 +75,11 @@ function createApp() {
 
   // ── 3. Helmet ─────────────────────────────────────────────────────────────
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+  // ── 3.5. Sentry request handler ───────────────────────────────────────────
+  // Captures request context for error tracking. Must be EARLY (after helmet)
+  // but BEFORE all routes, so errors in handlers get request context attached.
+  app.use(sentryRequestHandler);
 
   // ── 4. Rate limiters ──────────────────────────────────────────────────────
   const authLimiter = rateLimit({
@@ -123,7 +132,8 @@ function createApp() {
   // ── 12. Response helpers ──────────────────────────────────────────────────
   app.use(responseMiddleware);
 
-  // ── 13. Logging ───────────────────────────────────────────────────────────
+  // ── 13. Morgan logging (structured JSON via Winston) ───────────────────────
+  // Pipes all HTTP logs to Winston for structured JSON output in production
   morgan.token('reqId', req => req.ctx?.requestId || '-');
   morgan.token('userId', req => req.user?._id?.toString() || req.ctx?.actorId?.toString() || '-');
   morgan.token('merchantId', req => {
@@ -152,7 +162,12 @@ function createApp() {
     next(new AppError(`Cannot find ${req.originalUrl} on this server`, 404));
   });
 
-  // ── 16. Global error handler ──────────────────────────────────────────────
+  // ── 16. Sentry error handler ──────────────────────────────────────────────
+  // Captures any unhandled errors and sends them to Sentry. Must be AFTER
+  // all routes but BEFORE the GlobalErrorHandler.
+  app.use(sentryErrorHandler);
+
+  // ── 17. Global error handler ──────────────────────────────────────────────
   app.use(GlobalErrorHandler);
 
   return app;

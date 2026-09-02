@@ -1,4 +1,4 @@
-const { IdempotencyService } = require('../src/modules/orders/idempotency.service');
+const { IdempotencyService } = require('../src/modules/order/service/idempotency.service');
 
 describe('IdempotencyService.normalizeKey', () => {
   it('returns null when header is absent', () => {

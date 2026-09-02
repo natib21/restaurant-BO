@@ -9,9 +9,7 @@ const AppError = require('../../../../utils/appError');
 const ApiFeatures = require('../../../../utils/apiFeatures');
 const { normalizeName, normalizeDescription, getMenuName, getMenuDescription, getMenuGroupName } = require('../../../../utils/localization-helper');
 const { resolveSingleImageData } = require('../utils/image-response');
-const Merchant = require('../../../../models/merchantModel');
-const Table = require('../../../../models/tabelModel');
-
+    const Merchant = require('../../../../models/merchantModel');
 class MenuGroupService {
   /**
    * Get public menu for customers
@@ -32,6 +30,7 @@ class MenuGroupService {
 
     // Validate table if provided
     if (tableId) {
+      const Table = require('../../../../models/tabelModel');
       const table = await Table.findOne({
         _id: tableId,
         merchant: merchantId,
@@ -137,12 +136,21 @@ class MenuGroupService {
           publishStatus: 'published',
           deletedAt: null // Exclude soft-deleted items
         },
-        select: 'name description image variants price type isVeg isSpicy isAlcoholic prepTime tags recipe allergens ratingAverage',
+        select: 'name description image variants price type isVeg isSpicy isAlcoholic prepTime tags recipe allergens ratingAverage ratingCount staticIngredients options categoryId nutritionInfo isAvailable',
+        populate: {
+          path: 'categoryId',
+          select: 'name description icon color'
+        }
       });
 
     const origin = `${req.protocol}://${req.get('host')}`;
     const seenItemIds = new Set();
     const finalItems = [];
+
+    // Check if merchant has inventory module enabled
+
+    const fullMerchant = await Merchant.findById(merchantId).select('features').lean();
+    const hasInventory = fullMerchant?.features?.inventory?.enabled;
 
     // Flatten menu items from all active groups
     for (const group of activeGroups) {
@@ -160,23 +168,38 @@ class MenuGroupService {
           origin,
         });
 
+        // ✅ Resolve ingredients from dual sources
+        const ingredients = await MenuGroupService.resolveMenuIngredients(menu, hasInventory);
+
         finalItems.push({
           _id: menu._id,
-          name: item.customName || getMenuName(menu),
-          description: item.customDescription || getMenuDescription(menu) || '',
+          // ✅ Return FULL localized names (both en and am)
+          name: menu.name, // { en: "...", am: "..." }
+          // ✅ Return FULL localized descriptions (both en and am)
+          description: menu.description, // { en: "...", am: "..." }
           image: imageData?.url || null,
+          imagePath: imageData?.path || null, // Also return relative path
           price: defaultPrice,
           variants: menu.variants || [],
+          options: menu.options || [], // ✅ Add customization options
           type: menu.type,
+          category: menu.categoryId, // ✅ Add category reference
           isVeg: menu.isVeg,
           isSpicy: menu.isSpicy,
           isAlcoholic: !!menu.isAlcoholic || group.isAlcoholMenu,
           prepTime: menu.prepTime || '15-25 min',
           tags: menu.tags || [],
-          ingredients: menu.recipe?.ingredients || [],
+          ingredients,
           allergens: menu.allergens || [],
+          nutritionInfo: menu.nutritionInfo, // ✅ Add nutrition info
           rating: menu.ratingAverage || 4.5,
-          displayedIn: getMenuGroupName(group, 'en'),
+          ratingCount: menu.ratingCount || 0,
+          isAvailable: menu.isAvailable !== false, // ✅ Add availability
+          displayedIn: group.name, // ✅ Return full localized group name
+          displayedInGroupId: group._id, // ✅ Add group ID reference
+          customName: item.customName, // ✅ Custom override name if set
+          customDescription: item.customDescription, // ✅ Custom override description
+          overridePrice: item.overridePrice, // ✅ Price override if set
         });
       }
     }
@@ -204,24 +227,36 @@ class MenuGroupService {
       totalItems: filteredItems.length,
       menus: filteredItems.map(i => ({
         id: i._id,
-        name: i.name,
-        description: i.description,
+        name: i.name, // ✅ Full localized object { en, am }
+        description: i.description, // ✅ Full localized object { en, am }
         image: i.image,
+        imagePath: i.imagePath, // ✅ Add relative path
         price: i.price,
         variants: i.variants,
-        type: i.type, // Add type field
+        options: i.options, // ✅ Add customization options
+        type: i.type,
+        category: i.category, // ✅ Add category
         isVeg: i.isVeg,
         isSpicy: i.isSpicy,
         isAlcoholic: i.isAlcoholic,
+        isAvailable: i.isAvailable, // ✅ Add availability
         prepTime: i.prepTime,
+        tags: i.tags, // ✅ Add tags array
         ingredients: i.ingredients,
         allergens: i.allergens,
+        nutritionInfo: i.nutritionInfo, // ✅ Add nutrition
         rating: i.rating,
-        displayedIn: i.displayedIn,
+        ratingCount: i.ratingCount, // ✅ Add rating count
+        displayedIn: i.displayedIn, // ✅ Full localized group name
+        displayedInGroupId: i.displayedInGroupId, // ✅ Group ID
+        customName: i.customName, // ✅ Custom overrides
+        customDescription: i.customDescription,
+        overridePrice: i.overridePrice,
       })),
       specialOffers: specialOffers.map(i => ({
         id: i._id,
-        name: i.name,
+        name: i.name, // ✅ Full localized object
+        description: i.description, // ✅ Full localized object
         image: i.image,
         price: i.price,
         tag: i.tags.find(t => ['chef-special', 'trending', 'bestseller', 'limited'].includes(t)),
@@ -254,6 +289,7 @@ class MenuGroupService {
     const host = req.get('host');
 
     // Verify merchant is active
+    const Merchant = require('../../../../models/merchantModel');
     const merchant = await Merchant.findById(merchantId).select('businessName isActive');
     if (!merchant || !merchant.isActive) {
       throw new AppError('Restaurant not found or closed.', 404);
@@ -560,13 +596,21 @@ class MenuGroupService {
     }).select('_id name publishStatus');
 
     const missing = [];
+    // Single batch query — fetch all active recipes for these menu items at once,
+    // then compute missing in memory. Replaces the previous per-item findOne loop
+    // that issued N sequential DB round-trips (one per menu item).
+    const activeRecipes = await Recipe.find({
+      menuItem: { $in: menus.map(m => m._id) },
+      merchant: merchantId,
+      isActive: true,
+    }).select('menuItem');
+
+    const menuIdsWithRecipe = new Set(
+      activeRecipes.map(r => r.menuItem.toString())
+    );
+
     for (const menu of menus) {
-      const recipe = await Recipe.findOne({
-        menuItem: menu._id,
-        merchant: merchantId,
-        isActive: true,
-      }).select('_id');
-      if (!recipe) {
+      if (!menuIdsWithRecipe.has(menu._id.toString())) {
         missing.push({ menuItemId: menu._id, name: menu.name });
       }
     }
@@ -735,6 +779,36 @@ class MenuGroupService {
     }
 
     return publication;
+  }
+
+  /**
+   * Resolve ingredients from dual sources:
+   * 1. If inventory enabled: Get from Recipe → Ingredient table
+   * 2. If inventory disabled: Get from MenuItem.staticIngredients
+   * 
+   * @param {Object} menu - MenuItem object
+   * @param {Boolean} hasInventory - Whether merchant has inventory module enabled
+   * @returns {Array} Ingredients array with { name, quantity, unit }
+   */
+  static async resolveMenuIngredients(menu, hasInventory) {
+    if (hasInventory && menu.recipe) {
+      // Inventory enabled: Get from Recipe + populate Ingredient names
+      const Recipe = require('../../../../models/Recipe');
+      const recipe = await Recipe.findById(menu.recipe)
+        .populate('ingredients.ingredient', 'name')
+        .lean();
+      
+      if (!recipe || !recipe.ingredients) return [];
+      
+      return recipe.ingredients.map(ing => ({
+        name: ing.ingredient?.name || 'Unknown',
+        quantity: ing.quantity,
+        unit: ing.unit
+      }));
+    }
+    
+    // Inventory disabled OR no recipe: Get from static field
+    return menu.staticIngredients || [];
   }
 }
 

@@ -21,8 +21,16 @@ class MenuRepository {
     return MenuItem.findOne(filter);
   }
 
-  static findMenuById(id) {
-    return MenuItem.findById(id);
+  /**
+   * Find a menu item by ID, scoped to a merchant.
+   * Replaces the unscoped `MenuItem.findById(id)` to prevent cross-tenant data access.
+   *
+   * @param {string} id - Menu item ObjectId
+   * @param {ObjectId} merchantId - Merchant ObjectId (required)
+   * @returns {Query}
+   */
+  static findMenuById(id, merchantId) {
+    return MenuItem.findOne({ _id: id, merchant: merchantId });
   }
 
   static createMenu(doc) {
@@ -77,8 +85,16 @@ class MenuRepository {
     return Combo.findOne(filter);
   }
 
-  static findComboById(id) {
-    return Combo.findById(id);
+  /**
+   * Find a combo by ID, scoped to a merchant.
+   * Replaces the unscoped `Combo.findById(id)` to prevent cross-tenant data access.
+   *
+   * @param {string} id - Combo ObjectId
+   * @param {ObjectId} merchantId - Merchant ObjectId (required)
+   * @returns {Query}
+   */
+  static findComboById(id, merchantId) {
+    return Combo.findOne({ _id: id, merchant: merchantId });
   }
 
   static createCombo(doc) {

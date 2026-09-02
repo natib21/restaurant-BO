@@ -25,6 +25,17 @@ router.get(
   kitchenController.getAllTickets
 );
 
+/**
+ * GET /api/v1/kitchen/tickets/history
+ * Get completed tickets (history view)
+ * Access: kitchen, waiter, admin, superAdmin
+ */
+router.get(
+  '/tickets/history',
+  restrictTo('kitchen', 'waiter', 'admin', 'superAdmin'),
+  kitchenController.getTicketHistory
+);
+
 // ══════════════════════════════════════════════════════════════════════════
 // KITCHEN STATIONS MANAGEMENT (CRUD)
 // ══════════════════════════════════════════════════════════════════════════
@@ -188,6 +199,23 @@ router.patch(
   '/tickets/:ticketId/cancel',
   restrictTo('kitchen', 'waiter', 'admin', 'superAdmin'),
   kitchenController.cancelTicket
+);
+
+// ══════════════════════════════════════════════════════════════════════════
+// TICKET ITEM STATUS (Individual Item Updates)
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * PATCH /api/v1/kitchen/tickets/:ticketId/item/:itemId
+ * Update status of a specific item within a ticket
+ * Access: kitchen, admin, superAdmin
+ * 
+ * Body: { status: 'pending' | 'in_progress' | 'ready' }
+ */
+router.patch(
+  '/tickets/:ticketId/item/:itemId',
+  restrictTo('kitchen', 'admin', 'superAdmin'),
+  kitchenController.updateTicketItemStatus
 );
 
 module.exports = router;

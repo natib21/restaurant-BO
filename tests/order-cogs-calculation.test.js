@@ -1,5 +1,5 @@
 const { OrderService } = require('../src/modules/order/service/OrderService');
-const MenuItem = require('../models/menuModel');
+const MenuItem = require('../src/modules/menu/model/MenuItem.model');
 const Ingredient = require('../models/Ingredient');
 
 describe('OrderService - COGS Calculation', () => {
@@ -210,7 +210,8 @@ describe('OrderService - COGS Calculation', () => {
         },
       };
 
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      const logger = require('../utils/logger');
+      const loggerErrorSpy = jest.spyOn(logger, 'error').mockImplementation();
       jest.spyOn(Ingredient, 'find').mockReturnValueOnce({
         select: jest.fn().mockReturnThis(),
         lean: jest.fn().mockRejectedValueOnce(new Error('Database connection failed')),
@@ -219,12 +220,12 @@ describe('OrderService - COGS Calculation', () => {
       const unitCost = await OrderService.calculateMenuItemCost(menuItem);
       
       expect(unitCost).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error calculating menu item cost:',
-        expect.any(Error)
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        'order.cogs.calculation_failed',
+        expect.objectContaining({ message: 'Database connection failed' })
       );
       
-      consoleErrorSpy.mockRestore();
+      loggerErrorSpy.mockRestore();
     });
 
     test('handles zero cost ingredients correctly', async () => {

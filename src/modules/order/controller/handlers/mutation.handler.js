@@ -12,6 +12,7 @@
 const catchAsync = require('../../../../../utils/catchAsync');
 const { getMerchantId } = require('../../../../common/utils/tenant-scope');
 const { OrderService } = require('../../service/OrderService');
+const { sendResponse } = require('../../../../../utils/sendResponse');
 
 /**
  * PATCH /api/v1/orders/:id/add-items (staff)
@@ -33,7 +34,7 @@ exports.addItemToOrder = catchAsync(async (req, res, next) => {
     req.user?._id
   );
 
-  res.sendSuccess(order, 200, `Items added to order ${order.orderNumber}`);
+  sendResponse(res, 200, 'order', order, { message: `Items added to order ${order.orderNumber}` });
 });
 
 /**
@@ -48,17 +49,13 @@ exports.cancelOrder = catchAsync(async (req, res) => {
   const { order, alreadyCanceled } = await OrderService.cancelOrder(req);
 
   if (alreadyCanceled) {
-    return res.status(200).json({
-      status: 'success',
+    return sendResponse(res, 200, 'order', order, {
       message: `Order ${order.orderNumber} already canceled`,
-      data: { order },
     });
   }
 
-  res.status(200).json({
-    status: 'success',
+  sendResponse(res, 200, 'order', order, {
     message: `Order ${order.orderNumber} successfully canceled`,
-    data: { order },
   });
 });
 
@@ -72,10 +69,8 @@ exports.cancelOrder = catchAsync(async (req, res) => {
 exports.mergeOrders = catchAsync(async (req, res) => {
   const targetOrder = await OrderService.mergeOrders(req);
 
-  res.status(200).json({
-    status: 'success',
+  sendResponse(res, 200, 'order', targetOrder, {
     message: `Orders successfully merged into ${targetOrder.orderNumber}`,
-    data: { order: targetOrder },
   });
 });
 
@@ -91,9 +86,7 @@ exports.mergeOrders = catchAsync(async (req, res) => {
 exports.markAsPaid = catchAsync(async (req, res) => {
   const order = await OrderService.markAsPaid(req);
 
-  res.status(200).json({
-    status: 'success',
+  sendResponse(res, 200, 'order', order, {
     message: `Order ${order.orderNumber} marked as paid`,
-    data: { order },
   });
 });

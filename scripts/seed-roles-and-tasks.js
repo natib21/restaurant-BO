@@ -5,20 +5,29 @@
  * - SUPER-ADMIN: isSystemRole=true, no tasks (relies on bypass)
  * - SUPER-MERCHANT-ADMIN: isSystemRole=false, all merchant-scoped tasks (isMerchant: true)
  * 
- * Total: 209 fine-grained tasks
- * - 184 merchant-scoped (isMerchant: true) - assigned to SUPER-MERCHANT-ADMIN
+ * Total: 224 fine-grained tasks
+ * - 199 merchant-scoped (isMerchant: true) - assigned to SUPER-MERCHANT-ADMIN
  * - 25 system-wide (isMerchant: false) - SUPER-ADMIN only (accessed via bypass)
  * 
- * Phase 1 KDS: Added 15 kitchen display system tasks (all merchant-scoped)
+ * Phase 1 KDS: Added 16 kitchen display system tasks (all merchant-scoped)
  *   - 5 station management (CRUD)
  *   - 1 menu-station assignment
- *   - 9 ticket operations
+ *   - 10 ticket operations (including item status update + ticket history)
  * 
  * Phase 2 Audit: Added 6 audit logging tasks (all merchant-scoped)
  *   - Query, view, resource history, correlation, export, stats
  * 
  * Phase 3 Categories: Added 7 category management tasks (all merchant-scoped)
  *   - List active, CRUD operations, soft delete, restore
+ * 
+ * Phase 4 Item Status: Added 3 item-level status tasks (all merchant-scoped)
+ *   - Update item status, bulk serve ready items, void with replacement
+ * 
+ * Phase 5 Order Flow: Added 4 order flow configuration tasks (all merchant-scoped)
+ *   - Get config, update channel, update settings, reset to defaults
+ * 
+ * Phase 6 Payment Verification: Added 6 Ethiopian mobile payment verification tasks (all merchant-scoped)
+ *   - Initiate verification (Telebirr/CBE), confirm, reject, list, read, upload receipt photo
  * 
  * Idempotent: Safe to re-run (uses upsert)
  * Target: Production database only (not test)
@@ -31,7 +40,7 @@ const Role = require('../models/roleModel');
 const Task = require('../models/taskModel');
 
 /**
- * All 181 tasks with verified fields:
+ * All 217 tasks with verified fields:
  * - hidden: false (required Task schema field)
  * - isMerchant: true/false (verified from actual controller/service implementations)
  * - Correct endpoint paths (verified against src/routes/index.js)
@@ -189,22 +198,44 @@ const ALL_TASKS = [
   { name: 'merchants.updateSubscription', endpoint: '/api/v1/merchant/:id/subscription', method: 'PATCH', description: 'Update merchant subscription (system operation)', isMerchant: false, hidden: false },
   { name: 'merchants.getStats', endpoint: '/api/v1/merchant/:id/stats', method: 'GET', description: 'Get merchant stats (system-wide)', isMerchant: false, hidden: false },
 
-  // ========== ORDERS MODULE (15 tasks) ==========
-  { name: 'orders.placeStaff', endpoint: '/api/v1/order/staff', method: 'POST', description: 'Place order (staff)', isMerchant: true, hidden: false },
-  { name: 'orders.listActive', endpoint: '/api/v1/order/active', method: 'GET', description: 'List active orders', isMerchant: true, hidden: false },
-  { name: 'orders.listCompleted', endpoint: '/api/v1/order/completed', method: 'GET', description: 'List completed orders', isMerchant: true, hidden: false },
-  { name: 'orders.listPending', endpoint: '/api/v1/order/pending', method: 'GET', description: 'List pending orders', isMerchant: true, hidden: false },
-  { name: 'orders.listAccepted', endpoint: '/api/v1/order/accepted', method: 'GET', description: 'List accepted orders', isMerchant: true, hidden: false },
-  { name: 'orders.listPreparing', endpoint: '/api/v1/order/preparing', method: 'GET', description: 'List preparing orders', isMerchant: true, hidden: false },
-  { name: 'orders.listReady', endpoint: '/api/v1/order/ready', method: 'GET', description: 'List ready orders', isMerchant: true, hidden: false },
-  { name: 'orders.listServed', endpoint: '/api/v1/order/served', method: 'GET', description: 'List served orders', isMerchant: true, hidden: false },
-  { name: 'orders.listCanceled', endpoint: '/api/v1/order/canceled', method: 'GET', description: 'List canceled orders', isMerchant: true, hidden: false },
-  { name: 'orders.getByNumber', endpoint: '/api/v1/order/number/:orderNumber', method: 'GET', description: 'Get order by number', isMerchant: true, hidden: false },
-  { name: 'orders.markPaid', endpoint: '/api/v1/order/:id/pay', method: 'POST', description: 'Mark order as paid', isMerchant: true, hidden: false },
-  { name: 'orders.updateStatus', endpoint: '/api/v1/order/:id/status', method: 'PATCH', description: 'Update order status', isMerchant: true, hidden: false },
-  { name: 'orders.addItems', endpoint: '/api/v1/order/:id/add-items', method: 'PATCH', description: 'Add items to order', isMerchant: true, hidden: false },
-  { name: 'orders.read', endpoint: '/api/v1/order/:id', method: 'GET', description: 'Get order by ID', isMerchant: true, hidden: false },
-  { name: 'orders.listActiveDeliveries', endpoint: '/api/v1/order/deliveries/active', method: 'GET', description: 'List active deliveries', isMerchant: true, hidden: false },
+  // ========== ORDERS MODULE (18 tasks) ==========
+  { name: 'orders.placeStaff', endpoint: '/api/v1/orders/staff', method: 'POST', description: 'Place order (staff)', isMerchant: true, hidden: false },
+  { name: 'orders.listActive', endpoint: '/api/v1/orders/active', method: 'GET', description: 'List active orders', isMerchant: true, hidden: false },
+  { name: 'orders.listCompleted', endpoint: '/api/v1/orders/completed', method: 'GET', description: 'List completed orders', isMerchant: true, hidden: false },
+  { name: 'orders.listPending', endpoint: '/api/v1/orders/pending', method: 'GET', description: 'List pending orders', isMerchant: true, hidden: false },
+  { name: 'orders.listAccepted', endpoint: '/api/v1/orders/accepted', method: 'GET', description: 'List accepted orders', isMerchant: true, hidden: false },
+  { name: 'orders.listPreparing', endpoint: '/api/v1/orders/preparing', method: 'GET', description: 'List preparing orders', isMerchant: true, hidden: false },
+  { name: 'orders.listReady', endpoint: '/api/v1/orders/ready', method: 'GET', description: 'List ready orders', isMerchant: true, hidden: false },
+  { name: 'orders.listServed', endpoint: '/api/v1/orders/served', method: 'GET', description: 'List served orders', isMerchant: true, hidden: false },
+  { name: 'orders.listCanceled', endpoint: '/api/v1/orders/canceled', method: 'GET', description: 'List canceled orders', isMerchant: true, hidden: false },
+  { name: 'orders.getByNumber', endpoint: '/api/v1/orders/number/:orderNumber', method: 'GET', description: 'Get order by number', isMerchant: true, hidden: false },
+  { name: 'orders.getReviewQueue', endpoint: '/api/v1/orders/review-queue', method: 'GET', description: 'Get review queue (pending orders requiring manual review)', isMerchant: true, hidden: false },
+  { name: 'orders.markPaid', endpoint: '/api/v1/orders/:id/pay', method: 'POST', description: 'Mark order as paid', isMerchant: true, hidden: false },
+  { name: 'orders.updateStatus', endpoint: '/api/v1/orders/:id/status', method: 'PATCH', description: 'Update order status', isMerchant: true, hidden: false },
+  { name: 'orders.addItems', endpoint: '/api/v1/orders/:id/add-items', method: 'PATCH', description: 'Add items to order', isMerchant: true, hidden: false },
+  { name: 'orders.cancel', endpoint: '/api/v1/orders/:id/cancel', method: 'PATCH', description: 'Cancel order', isMerchant: true, hidden: false },
+  { name: 'orders.read', endpoint: '/api/v1/orders/:id', method: 'GET', description: 'Get order by ID', isMerchant: true, hidden: false },
+  { name: 'orders.listActiveDeliveries', endpoint: '/api/v1/orders/deliveries/active', method: 'GET', description: 'List active deliveries', isMerchant: true, hidden: false },
+  { name: 'orders.history', endpoint: '/api/v1/orders/:id/history', method: 'GET', description: 'Get order status history', isMerchant: true, hidden: false },
+
+  // ========== PAYMENT VERIFICATION MODULE (6 tasks - Ethiopian mobile payment verification) ==========
+  { name: 'paymentVerification.initiate', endpoint: '/api/v1/payment-verification/initiate', method: 'POST', description: 'Initiate payment verification (Telebirr/CBE)', isMerchant: true, hidden: false },
+  { name: 'paymentVerification.confirm', endpoint: '/api/v1/payment-verification/:id/confirm', method: 'POST', description: 'Confirm/approve payment verification', isMerchant: true, hidden: false },
+  { name: 'paymentVerification.reject', endpoint: '/api/v1/payment-verification/:id/reject', method: 'POST', description: 'Reject payment verification', isMerchant: true, hidden: false },
+  { name: 'paymentVerification.list', endpoint: '/api/v1/payment-verification', method: 'GET', description: 'List payment verifications (with filters)', isMerchant: true, hidden: false },
+  { name: 'paymentVerification.read', endpoint: '/api/v1/payment-verification/:id', method: 'GET', description: 'Get payment verification details', isMerchant: true, hidden: false },
+  { name: 'files.upload', endpoint: '/api/v1/files/upload', method: 'POST', description: 'Upload receipt photo', isMerchant: true, hidden: false },
+
+  // ========== ITEM STATUS WORKFLOW (3 tasks - Item-level status management) ==========
+  { name: 'orders.items.updateStatus', endpoint: '/api/v1/orders/:orderId/items/:itemId/status', method: 'PATCH', description: 'Update individual item status (manual override)', isMerchant: true, hidden: false },
+  { name: 'orders.items.serveReady', endpoint: '/api/v1/orders/:orderId/items/serve-ready', method: 'POST', description: 'Bulk serve all ready items (waiter picks up multiple dishes)', isMerchant: true, hidden: false },
+  { name: 'orders.items.void', endpoint: '/api/v1/orders/:orderId/items/:itemId/void', method: 'PATCH', description: 'Void item with reason (optional replacement)', isMerchant: true, hidden: false },
+
+  // ========== ORDER FLOW CONFIGURATION (4 tasks - Channel routing rules) ==========
+  { name: 'orderFlow.getConfig', endpoint: '/api/v1/order-flow-config', method: 'GET', description: 'Get current order flow configuration', isMerchant: true, hidden: false },
+  { name: 'orderFlow.updateChannel', endpoint: '/api/v1/order-flow-config/channels/:channel', method: 'PATCH', description: 'Update channel routing rules', isMerchant: true, hidden: false },
+  { name: 'orderFlow.updateGlobalSettings', endpoint: '/api/v1/order-flow-config/settings', method: 'PATCH', description: 'Update global order flow settings', isMerchant: true, hidden: false },
+  { name: 'orderFlow.reset', endpoint: '/api/v1/order-flow-config/reset', method: 'POST', description: 'Reset order flow config to defaults', isMerchant: true, hidden: false },
 
   // ========== INGREDIENTS MODULE (5 tasks) ==========
   { name: 'ingredients.list', endpoint: '/api/v1/ingredients', method: 'GET', description: 'List all ingredients', isMerchant: true, hidden: false },
@@ -275,7 +306,7 @@ const ALL_TASKS = [
   { name: 'roles.update', endpoint: '/api/v1/roles/:id', method: 'PATCH', description: 'Update role (system operation)', isMerchant: false, hidden: false },
   { name: 'roles.delete', endpoint: '/api/v1/roles/:id', method: 'DELETE', description: 'Delete role (system operation)', isMerchant: false, hidden: false },
 
-  // ========== KITCHEN DISPLAY SYSTEM (KDS) - PHASE 1 (15 tasks - ALL merchant-scoped) ==========
+  // ========== KITCHEN DISPLAY SYSTEM (KDS) - PHASE 1 (16 tasks - ALL merchant-scoped) ==========
   // Station Management (CRUD)
   { name: 'kitchen.stations.list', endpoint: '/api/v1/kitchen/stations', method: 'GET', description: 'Get all kitchen stations for branch', isMerchant: true, hidden: false },
   { name: 'kitchen.stations.read', endpoint: '/api/v1/kitchen/stations/:id', method: 'GET', description: 'Get single kitchen station', isMerchant: true, hidden: false },
@@ -288,6 +319,7 @@ const ALL_TASKS = [
   
   // Ticket Operations
   { name: 'kitchen.tickets.list', endpoint: '/api/v1/kitchen/tickets', method: 'GET', description: 'Get all tickets with optional filters (cross-station view)', isMerchant: true, hidden: false },
+  { name: 'kitchen.tickets.history', endpoint: '/api/v1/kitchen/tickets/history', method: 'GET', description: 'Get completed tickets (history view)', isMerchant: true, hidden: false },
   { name: 'kitchen.stations.tickets', endpoint: '/api/v1/kitchen/stations/:id/tickets', method: 'GET', description: 'Get active tickets for a station (KDS dashboard)', isMerchant: true, hidden: false },
   { name: 'kitchen.orders.tickets', endpoint: '/api/v1/kitchen/orders/:id/tickets', method: 'GET', description: 'Get all tickets for an order', isMerchant: true, hidden: false },
   { name: 'kitchen.tickets.updateStatus', endpoint: '/api/v1/kitchen/tickets/:id/status', method: 'PATCH', description: 'Update ticket status (generic)', isMerchant: true, hidden: false },
@@ -295,6 +327,7 @@ const ALL_TASKS = [
   { name: 'kitchen.tickets.start', endpoint: '/api/v1/kitchen/tickets/:id/start', method: 'PATCH', description: 'Start working on ticket', isMerchant: true, hidden: false },
   { name: 'kitchen.tickets.ready', endpoint: '/api/v1/kitchen/tickets/:id/ready', method: 'PATCH', description: 'Mark ticket as ready', isMerchant: true, hidden: false },
   { name: 'kitchen.tickets.cancel', endpoint: '/api/v1/kitchen/tickets/:id/cancel', method: 'PATCH', description: 'Cancel ticket', isMerchant: true, hidden: false },
+  { name: 'kitchen.tickets.updateItemStatus', endpoint: '/api/v1/kitchen/tickets/:ticketId/item/:itemId', method: 'PATCH', description: 'Update status of specific item within ticket', isMerchant: true, hidden: false },
 
   // ========== AUDIT LOGGING - PHASE 2 (6 tasks - ALL merchant-scoped) ==========
   { name: 'audit.logs.list', endpoint: '/api/v1/audit-logs', method: 'GET', description: 'Query audit logs with filters', isMerchant: true, hidden: false },

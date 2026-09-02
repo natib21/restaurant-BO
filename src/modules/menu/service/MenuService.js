@@ -487,7 +487,10 @@ class MenuService {
   }
 
   static async getActiveMenu(req) {
-    const merchantId = req.params.merchantId || req.user.merchant._id;
+    // merchantId must come exclusively from the authenticated user's merchant context.
+    // Never accept it from route params — a staff user must never be able to
+    // request another merchant's menu by manipulating the URL.
+    const merchantId = req.user.merchant._id ?? req.user.merchant;
     const now = new Date();
     const currentDay = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase();
 
@@ -1062,12 +1065,13 @@ class MenuService {
   }
 
   static async getCombo(req) {
-    const combo = await MenuRepository.findComboById(req.params.id).populate({
+    const merchantId = req.user.merchant._id;
+    const combo = await MenuRepository.findComboById(req.params.id, merchantId).populate({
       path: 'branches',
       select: 'name location.formattedAddress location.city location.code publicUrl',
     });
 
-    if (!combo || combo.merchant.toString() !== req.user.merchant._id.toString()) {
+    if (!combo) {
       throw new AppError('Combo not found', 404);
     }
 
@@ -1156,7 +1160,7 @@ class MenuService {
 
     await combo.save();
 
-    const refreshed = await MenuRepository.findComboById(comboId);
+    const refreshed = await MenuRepository.findComboById(comboId, req.user.merchant._id);
     return { combo: refreshed, message: 'Branch override updated' };
   }
 

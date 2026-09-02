@@ -11,6 +11,7 @@ const { getMerchantId, getBranchId } = require('../../../../common/utils/tenant-
 const { OrderService } = require('../../service/OrderService');
 const { OrderTransactionService } = require('../../service/OrderTransactionService');
 const { IdempotencyService } = require('../../service/IdempotencyService');
+const { sendResponse } = require('../../../../../utils/sendResponse');
 
 /**
  * POST /api/v1/orders (customer)
@@ -26,6 +27,7 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
   const items = req.validatedBody?.items || req.body.items;
   const tableId = req.tableId;
   const customerId = req.customerId;
+  const sessionToken = req.tableSession?.token; // ✅ Pass session token for notifications
 
   const merchantId = getMerchantId(req);
   const branchId = getBranchId(req) ?? req.tableSession?.branch;
@@ -46,6 +48,7 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
     customer: req.customer,
     customerName: req.customer?.fullName || 'Guest',
     customerPhone: req.customer?.phone || null,
+    sessionToken, // ✅ Pass session token to avoid re-querying
     items,
     performedBy: req.user?._id || null,
     idempotencyKey,
@@ -55,18 +58,13 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
     res.set('Idempotent-Replayed', 'true');
   }
 
-  // Use standardized response
-  res.sendSuccess(
-    {
-      _id: order._id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-      totalAmount: order.totalAmount,
-      placedAt: order.placedAt,
-    },
-    201,
-    `Order ${order.orderNumber} sent to kitchen!`
-  );
+  sendResponse(res, 201, 'order', {
+    _id: order._id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    totalAmount: order.totalAmount,
+    placedAt: order.placedAt,
+  }, { message: `Order ${order.orderNumber} sent to kitchen!` });
 });
 
 /**
@@ -79,29 +77,34 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
  * Response: { success, message, data: { order } }
  */
 exports.staffPlaceOrder = catchAsync(async (req, res, next) => {
-  console.log('staffPlaceOrder req', req.body, req.user, req.validatedBody);
   const validatedData = req.validatedBody || req.body;
+
+  // Determine source based on user's role
+  const roleName = (req.user?.role?.name || '').toUpperCase();
+  let source = 'admin'; // default for admin/merchant roles
+  
+  if (roleName.includes('WAITER')) {
+    source = 'waiter';
+  }
 
   const order = await OrderService.staffPlaceOrder({
     ...validatedData,
     performedBy: req.user?._id,
     performedByName: req.user.firstName || 'Staff',
     merchantId: getMerchantId(req),
+    source, // pass explicit source
   });
 
-  res.sendSuccess(
-    {
-      _id: order._id,
-      orderNumber: order.orderNumber,
-      orderType: order.orderType,
-      status: order.status,
-      totalAmount: order.totalAmount,
-      tableNumber: order.tableNumber,
-      customerName: order.customerName,
-      placedAt: order.placedAt,
-      items: order.items,
-    },
-    201,
-    `Order ${order.orderNumber} placed successfully!`
-  );
+  sendResponse(res, 201, 'order', {
+    _id: order._id,
+    orderNumber: order.orderNumber,
+    orderType: order.orderType,
+    source: order.source,
+    status: order.status,
+    totalAmount: order.totalAmount,
+    tableNumber: order.tableNumber,
+    customerName: order.customerName,
+    placedAt: order.placedAt,
+    items: order.items,
+  }, { message: `Order ${order.orderNumber} placed successfully!` });
 });

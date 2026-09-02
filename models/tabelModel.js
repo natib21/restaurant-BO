@@ -89,7 +89,8 @@ const tableSchema = new mongoose.Schema(
 );
 
 // ====================== INDEXES (Lightning Fast) ======================
-tableSchema.index({ merchant: 1, tableNumber: 1 }, { unique: true });
+// ✅ BRANCH-SPECIFIC: Table numbers unique per merchant + branch (not globally)
+tableSchema.index({ merchant: 1, branch: 1, tableNumber: 1 }, { unique: true });
 tableSchema.index({ branch: 1, status: 1 });
 tableSchema.index({ branch: 1, section: 1 });
 tableSchema.index({ branch: 1, isActive: 1 });
