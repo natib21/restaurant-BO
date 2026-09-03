@@ -943,6 +943,44 @@ class OrderStateMachineService {
         }
       }
 
+      // ✅ PHASE 2: Emit real-time WebSocket event to QR customers after status transition
+      if (!result.noop && toStatus && result.order) {
+        try {
+          const { getIo } = require('../../../infrastructure/websocket/socket-server');
+          const io = getIo();
+          
+          const order = result.order;
+          const orderId = order._id.toString();
+          const branchId = order.branch?.toString() || order.branch;
+          
+          // Emit to customers in this order's room (QR customers viewing this order)
+          io.to(`order:${orderId}`).emit('order:status_changed', {
+            orderId,
+            orderNumber: order.orderNumber,
+            previousStatus: result.previousStatus,
+            status: toStatus,
+            timestamp: new Date(),
+            orderType: order.orderType,
+            table: order.table?.toString(),
+          });
+          
+          logger.info('order.websocket.status_changed.emitted', {
+            orderId: orderId,
+            orderNumber: order.orderNumber,
+            previousStatus: result.previousStatus,
+            toStatus,
+            broadcastRoom: `order:${orderId}`,
+          });
+        } catch (socketError) {
+          // Don't fail the order status transition if WebSocket broadcast fails
+          logger.warn('order.websocket.status_changed.emit_failed', {
+            orderId: result.order?._id?.toString(),
+            orderNumber: result.order?.orderNumber,
+            error: socketError.message,
+          });
+        }
+      }
+
       return result;
     } finally {
       await session.endSession();

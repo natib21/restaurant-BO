@@ -43,13 +43,44 @@ class StatusSyncService {
 
     // 1. Always emit the granular item-level event
     if (io) {
-      io.to(`order:${order._id}`).emit('order:item-status-changed', {
+      const itemStatusEvent = {
         orderId: order._id.toString(),
         itemId: item._id.toString(),
         newStatus: item.status,
         servedAt: item.servedAt,
         servedVia: item.servedVia,
-      });
+      };
+      
+      // Emit to order room (customers subscribed to this order)
+      io.to(`order:${order._id}`).emit('order:item-status-changed', itemStatusEvent);
+      
+      // ✅ Emit to staff via branch + permission rooms
+      const branchId = order.branch?.toString() || order.branch;
+      if (branchId) {
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:item-status-changed', itemStatusEvent);
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:item-status-changed', itemStatusEvent);
+      }
+      
+      // ✅ ALSO emit to session rooms so customers get real-time updates
+      // Query all active sessions for this order's table
+      try {
+        const CustomerSession = require('../../../../models/customerSessionModule');
+        const sessions = await CustomerSession.find({
+          table: order.table,
+          merchant: order.merchant,
+          isActive: true,
+          expiresAt: { $gt: new Date() },
+        }).select('token').lean();
+        
+        sessions.forEach(s => {
+          io.to(`session:${s.token}`).emit('order:item-status-changed', itemStatusEvent);
+        });
+      } catch (err) {
+        logger.error('status-sync.session-query-error', { 
+          orderId: order._id.toString(),
+          error: err.message 
+        });
+      }
 
       logger.debug('status-sync.order-item-event-emitted', {
         orderId: order._id.toString(),
@@ -64,12 +95,42 @@ class StatusSyncService {
 
     // 3. Only emit order-level event if the derived status actually changed
     if (recomputeResult.statusChanged && io) {
-      io.to(`order:${order._id}`).emit('order:status-changed', {
+      const statusChangeEvent = {
         orderId: order._id.toString(),
         oldStatus: previousOrderStatus,
         newStatus: order.status,
         timestamp: new Date().toISOString(),
-      });
+      };
+      
+      // Emit to order room (customers subscribed to this order)
+      io.to(`order:${order._id}`).emit('order:status-changed', statusChangeEvent);
+      
+      // ✅ Emit to staff via branch + permission rooms
+      const branchId = order.branch?.toString() || order.branch;
+      if (branchId) {
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:status-changed', statusChangeEvent);
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:status-changed', statusChangeEvent);
+      }
+      
+      // ✅ ALSO emit to session rooms so customers get real-time updates
+      try {
+        const CustomerSession = require('../../../../models/customerSessionModule');
+        const sessions = await CustomerSession.find({
+          table: order.table,
+          merchant: order.merchant,
+          isActive: true,
+          expiresAt: { $gt: new Date() },
+        }).select('token').lean();
+        
+        sessions.forEach(s => {
+          io.to(`session:${s.token}`).emit('order:status-changed', statusChangeEvent);
+        });
+      } catch (err) {
+        logger.error('status-sync.session-query-error', { 
+          orderId: order._id.toString(),
+          error: err.message 
+        });
+      }
 
       logger.info('status-sync.order-status-changed', {
         orderId: order._id.toString(),
@@ -142,11 +203,41 @@ class StatusSyncService {
     // 3. Emit order-level item event (for POS waiter view)
     // The waiter sees individual item updates immediately, even if ticket not fully ready
     if (io) {
-      io.to(`order:${order._id}`).emit('order:item-status-changed', {
+      const itemStatusEvent = {
         orderId: order._id.toString(),
         itemId: orderItem._id.toString(),
         newStatus: orderItem.status,
-      });
+      };
+      
+      // Emit to order room (customers subscribed to this order)
+      io.to(`order:${order._id}`).emit('order:item-status-changed', itemStatusEvent);
+      
+      // ✅ Emit to staff via branch + permission rooms
+      const branchId = order.branch?.toString() || order.branch;
+      if (branchId) {
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:item-status-changed', itemStatusEvent);
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:item-status-changed', itemStatusEvent);
+      }
+      
+      // ✅ ALSO emit to session rooms so customers get real-time updates
+      try {
+        const CustomerSession = require('../../../../models/customerSessionModule');
+        const sessions = await CustomerSession.find({
+          table: order.table,
+          merchant: order.merchant,
+          isActive: true,
+          expiresAt: { $gt: new Date() },
+        }).select('token').lean();
+        
+        sessions.forEach(s => {
+          io.to(`session:${s.token}`).emit('order:item-status-changed', itemStatusEvent);
+        });
+      } catch (err) {
+        logger.error('status-sync.session-query-error', { 
+          orderId: order._id.toString(),
+          error: err.message 
+        });
+      }
     }
 
     // 4. Recompute order status and emit if changed
@@ -154,11 +245,41 @@ class StatusSyncService {
     const orderRecompute = await ItemStatusService.recomputeOrderStatus(order, session);
 
     if (orderRecompute.statusChanged && io) {
-      io.to(`order:${order._id}`).emit('order:status-changed', {
+      const statusChangeEvent = {
         orderId: order._id.toString(),
         oldStatus: previousOrderStatus,
         newStatus: order.status,
-      });
+      };
+      
+      // Emit to order room (customers subscribed to this order)
+      io.to(`order:${order._id}`).emit('order:status-changed', statusChangeEvent);
+      
+      // ✅ Emit to staff via branch + permission rooms
+      const branchId = order.branch?.toString() || order.branch;
+      if (branchId) {
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:status-changed', statusChangeEvent);
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:status-changed', statusChangeEvent);
+      }
+      
+      // ✅ ALSO emit to session rooms so customers get real-time updates
+      try {
+        const CustomerSession = require('../../../../models/customerSessionModule');
+        const sessions = await CustomerSession.find({
+          table: order.table,
+          merchant: order.merchant,
+          isActive: true,
+          expiresAt: { $gt: new Date() },
+        }).select('token').lean();
+        
+        sessions.forEach(s => {
+          io.to(`session:${s.token}`).emit('order:status-changed', statusChangeEvent);
+        });
+      } catch (err) {
+        logger.error('status-sync.session-query-error', { 
+          orderId: order._id.toString(),
+          error: err.message 
+        });
+      }
 
       logger.info('status-sync.order-status-changed-via-ticket', {
         orderId: order._id.toString(),
@@ -184,13 +305,43 @@ class StatusSyncService {
 
     // Emit individual item events
     for (const item of changedItems) {
-      io.to(`order:${order._id}`).emit('order:item-status-changed', {
+      const itemStatusEvent = {
         orderId: order._id.toString(),
         itemId: item._id.toString(),
         newStatus: item.status,
         servedAt: item.servedAt,
         servedVia: item.servedVia,
-      });
+      };
+      
+      // Emit to order room (customers subscribed to this order)
+      io.to(`order:${order._id}`).emit('order:item-status-changed', itemStatusEvent);
+      
+      // ✅ Emit to staff via branch + permission rooms
+      const branchId = order.branch?.toString() || order.branch;
+      if (branchId) {
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:item-status-changed', itemStatusEvent);
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:item-status-changed', itemStatusEvent);
+      }
+      
+      // ✅ ALSO emit to session rooms so customers get real-time updates
+      try {
+        const CustomerSession = require('../../../../models/customerSessionModule');
+        const sessions = await CustomerSession.find({
+          table: order.table,
+          merchant: order.merchant,
+          isActive: true,
+          expiresAt: { $gt: new Date() },
+        }).select('token').lean();
+        
+        sessions.forEach(s => {
+          io.to(`session:${s.token}`).emit('order:item-status-changed', itemStatusEvent);
+        });
+      } catch (err) {
+        logger.error('status-sync.session-query-error', { 
+          orderId: order._id.toString(),
+          error: err.message 
+        });
+      }
     }
 
     // Recompute order status once
@@ -199,12 +350,42 @@ class StatusSyncService {
 
     // Emit order-level event only if changed
     if (recomputeResult.statusChanged) {
-      io.to(`order:${order._id}`).emit('order:status-changed', {
+      const statusChangeEvent = {
         orderId: order._id.toString(),
         oldStatus: previousOrderStatus,
         newStatus: order.status,
         timestamp: new Date().toISOString(),
-      });
+      };
+      
+      // Emit to order room (customers subscribed to this order)
+      io.to(`order:${order._id}`).emit('order:status-changed', statusChangeEvent);
+      
+      // ✅ Emit to staff via branch + permission rooms
+      const branchId = order.branch?.toString() || order.branch;
+      if (branchId) {
+        io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:status-changed', statusChangeEvent);
+        io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:status-changed', statusChangeEvent);
+      }
+      
+      // ✅ ALSO emit to session rooms so customers get real-time updates
+      try {
+        const CustomerSession = require('../../../../models/customerSessionModule');
+        const sessions = await CustomerSession.find({
+          table: order.table,
+          merchant: order.merchant,
+          isActive: true,
+          expiresAt: { $gt: new Date() },
+        }).select('token').lean();
+        
+        sessions.forEach(s => {
+          io.to(`session:${s.token}`).emit('order:status-changed', statusChangeEvent);
+        });
+      } catch (err) {
+        logger.error('status-sync.session-query-error', { 
+          orderId: order._id.toString(),
+          error: err.message 
+        });
+      }
 
       logger.info('status-sync.bulk-order-status-changed', {
         orderId: order._id.toString(),

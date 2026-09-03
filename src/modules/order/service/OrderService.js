@@ -1345,7 +1345,7 @@ class OrderService {
    */
   static async getOrderByIdDualAuth(req) {
     const { id } = req.params;
-
+    console.log(req)
     if (!id) {
       throw new AppError('Order ID is required', 400);
     }

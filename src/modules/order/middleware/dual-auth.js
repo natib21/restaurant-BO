@@ -14,65 +14,45 @@
 const AppError = require('../../../../utils/appError');
 const { protect } = require('../../../common/guards/auth.guard');
 const { protectTableSession } = require('../../customers/customer-session.guard');
-const logger = require('../../../../utils/logger');
 
 /**
  * Middleware that supports BOTH JWT auth (staff) AND session auth (customers)
  * 
  * Authentication precedence:
- * 1. If Authorization: Bearer header present → try JWT (staff)
- *    - If JWT verification fails → fall back to session auth
+ * 1. If Authorization: Bearer header present → assume it's a session token, try session auth
  * 2. If jwt cookie present → try JWT (staff)
  * 3. Otherwise → try session auth (customer)
  * 
- * Error handling:
- * - If JWT attempted and fails → try session auth (critical for QR customers!)
- * - If both fail → return session error (more appropriate for customers)
+ * Note: We check for Bearer header FIRST to detect QR customers (their auth is session token in Bearer format)
+ * If both Bearer and jwt cookie exist, Bearer takes precedence (more specific to customer flow)
  * 
  * Usage:
  * router.get('/:id', dualAuth, handler);
  */
 const dualAuth = (req, res, next) => {
-  // 🔍 DEBUG LOGGING
-  console.log('🔍 DUALAUTH HIT', {
-    method: req.method,
-    url: req.originalUrl,
-    path: req.path,
-    hasBearer: !!req.headers.authorization?.startsWith('Bearer'),
-    hasJwtCookie: !!req.cookies?.jwt,
-    hasSessionToken: !!req.headers.authorization?.startsWith('Bearer'),
-  });
+  // Check what auth method is being attempted
+  const hasBearerToken = req.headers.authorization?.startsWith('Bearer');
+  const hasJwtCookie = req.cookies?.jwt;
 
-  // Check if JWT auth is being attempted (Bearer header or jwt cookie)
-  const hasJwtAuth = req.headers.authorization?.startsWith('Bearer') || req.cookies?.jwt;
-
-  if (hasJwtAuth) {
-    // JWT auth was attempted: try it first
-    console.log('🔍 Attempting JWT auth...');
-    return protect(req, res, (jwtErr) => {
-      if (jwtErr) {
-        // JWT auth failed - ALWAYS try session auth as fallback
-        console.log('🔍 JWT auth failed:', jwtErr.message);
-        console.log('🔍 Falling back to session auth...');
-        return protectTableSession(req, res, (sessionErr) => {
-          if (sessionErr) {
-            // Both JWT and session auth failed
-            console.log('🔍 Session auth also failed:', sessionErr.message);
-            console.log('🔍 Returning session error');
-            return next(sessionErr);
-          }
-          // Session auth succeeded - continue
-          console.log('🔍 Session auth succeeded!');
-          next();
-        });
+  // QR customers use Bearer token (session token), NOT jwt cookie
+  // JWT staff use jwt cookie
+  if (hasBearerToken) {
+    // Bearer token present - this is likely a QR customer session token
+    // Try session auth first (more common for customer QR flow)
+    return protectTableSession(req, res, (sessionErr) => {
+      if (sessionErr) {
+        // Session auth failed - fall back to JWT staff auth
+        // (in case Bearer token is actually a JWT from a third-party integration)
+        return protect(req, res, next);
       }
-      // JWT auth succeeded - continue
-      console.log('🔍 JWT auth succeeded!');
+      // Session auth succeeded
       next();
     });
+  } else if (hasJwtCookie) {
+    // JWT cookie present - this is staff authentication
+    return protect(req, res, next);
   } else {
-    // No JWT auth attempted - only try session auth (customer)
-    console.log('🔍 No JWT detected, attempting session auth directly...');
+    // No auth headers at all - try session auth (anonymous QR customer)
     return protectTableSession(req, res, next);
   }
 };
