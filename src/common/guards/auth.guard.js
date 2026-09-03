@@ -38,6 +38,12 @@ function syncStaffContext(req) {
   setUser(req.user);
 }
 
+function setSyncedAuthContext(req) {
+  // ✅ Set request-level properties for guards and handlers
+  req.merchantId = req.user.merchant?._id ?? req.user.merchant;
+  req.branchId = resolveBranchId(req.user.branch);
+}
+
 /**
  * Verify JWT and attach req.user
  */
@@ -102,6 +108,7 @@ const protect = catchAsync(async (req, res, next) => {
 
   req.user = currentUser;
   syncStaffContext(req);
+  setSyncedAuthContext(req);
   next();
 });
 

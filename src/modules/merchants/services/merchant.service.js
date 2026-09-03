@@ -2,28 +2,57 @@ const AppError = require('../../../../utils/appError');
 const merchantRepository = require('../repositories/merchant.repository');
 const mongoose = require('mongoose');
 
-class MerchantService {
-  async getAllMerchants(queryString, baseUrl) {
-    const merchants = await merchantRepository.findAll(queryString);
+function resolveMediaUrl(value, origin = '') {
+  if (!value) return null;
 
-    return merchants.map(m => ({
-      ...m,
-      logo: m.logo ? `${baseUrl}/${m.logo}` : null,
-      coverImage: m.coverImage ? `${baseUrl}/${m.coverImage}` : null,
-      documentCount: m.documents?.length || 0,
-      userCount: m.users?.length || 0,
-    }));
+  if (typeof value === 'string') {
+    if (/^[a-fA-F0-9]{24}$/.test(value)) {
+      return `${origin.replace(/\/$/, '')}/api/v1/files/${value}/content`;
+    }
+
+    return value.startsWith('http') ? value : `${origin.replace(/\/$/, '')}/${value}`;
   }
 
-  async getMerchantById(id, baseUrl) {
+  if (typeof value === 'object') {
+    if (value.getPublicUrl) {
+      return value.getPublicUrl();
+    }
+
+    if (value._id) {
+      return `${origin.replace(/\/$/, '')}/api/v1/files/${String(value._id)}/content`;
+    }
+  }
+
+  return null;
+}
+
+class MerchantService {
+  async getAllMerchants(queryString, origin) {
+    const merchants = await merchantRepository.findAll(queryString);
+
+    return merchants.map(m => {
+      const branches = Array.isArray(m.branches) ? m.branches : [];
+
+      return {
+        ...m,
+        branches,
+        logo: resolveMediaUrl(m.logo, origin),
+        coverImage: resolveMediaUrl(m.coverImage, origin),
+        documentCount: m.documents?.length || 0,
+        userCount: m.users?.length || 0,
+      };
+    });
+  }
+
+  async getMerchantById(id, origin) {
     const merchant = await merchantRepository.findById(id);
     if (!merchant) throw new AppError('Merchant not found', 404);
 
     const merchantObj = merchant.toObject();
     return {
       ...merchantObj,
-      logo: merchantObj.logo ? `${baseUrl}/${merchantObj.logo}` : null,
-      coverImage: merchantObj.coverImage ? `${baseUrl}/${merchantObj.coverImage}` : null,
+      logo: resolveMediaUrl(merchantObj.logo, origin),
+      coverImage: resolveMediaUrl(merchantObj.coverImage, origin),
     };
   }
 

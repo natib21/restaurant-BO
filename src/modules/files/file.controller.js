@@ -96,7 +96,7 @@ exports.getFileContent = catchAsync(async (req, res) => {
       _id: id,
       isDeleted: false,
       entityType: {
-        $in: ['menu', 'combo', 'branch', 'table', 'qr'],
+        $in: ['menu', 'combo', 'branch', 'table', 'qr', 'merchant'],
       },
     });
 

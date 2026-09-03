@@ -10,12 +10,24 @@ class MerchantRepository {
       .sort()
       .limitFields()
       .paginate();
-    return await features.query.populate('approvedBy', 'firstName lastName email').lean();
+
+    return await features.query
+      .populate('approvedBy', 'firstName lastName email')
+      .populate('logo', 'storageKey mimeType originalName createdAt')
+      .populate('coverImage', 'storageKey mimeType originalName createdAt')
+      .populate({
+        path: 'branches',
+        select: '_id name branchCode isMain isActive location city createdAt',
+        options: { sort: { isMain: -1, createdAt: 1 } },
+      })
+      .lean();
   }
 
   async findById(id) {
     return await Merchant.findById(id)
       .populate('approvedBy', 'firstName lastName email')
+      .populate('logo', 'storageKey mimeType originalName createdAt')
+      .populate('coverImage', 'storageKey mimeType originalName createdAt')
       .populate({
         path: 'users',
         select: 'firstName lastName phone email role isActive',

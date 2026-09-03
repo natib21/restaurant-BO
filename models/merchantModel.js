@@ -83,8 +83,16 @@ const merchantSchema = new mongoose.Schema(
       match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
       uppercase: true,
     },
-    logo: { url: String, public_id: String },
-    coverImage: { url: String, public_id: String },
+    logo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
+    coverImage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
 
     masterMenu: {
       type: mongoose.Schema.Types.ObjectId,

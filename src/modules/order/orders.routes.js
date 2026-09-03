@@ -1,11 +1,12 @@
 /**
  * Orders Module Routes
  *
- * Clean routing with:
- * - Centralized validation (Zod middleware)
- * - Consistent response format (via middleware)
- * - Clear separation of customer vs staff routes
- * - Backward compatible with legacy API
+ * CRITICAL: Route ordering matters!
+ * 
+ * 1. Customer routes (no auth required yet - protectTableSession is explicit)
+ * 2. Staff auth middleware (protect + requireFeature)
+ * 3. Named staff routes (before /:id catch-all)
+ * 4. Catch-all /:id route (MUST be last)
  */
 
 const express = require('express');
@@ -34,7 +35,6 @@ const {
 const { protect } = require('../../common/guards/auth.guard');
 const { requireFeature } = require('../../common/guards/feature.guard');
 const { protectTableSession } = require('../customers/customer-session.guard');
-const { dualAuth } = require('./middleware/dual-auth');
 const validate = require('../../common/middleware/validate.middleware');
 
 const {
@@ -67,13 +67,13 @@ router.get(
   require('./controller/handlers/customer.handler').getMyOrderHistory
 );
 
-// ✅ CATCH-ALL: Get order by ID (MUST be BEFORE router.use(protect))
-// Works for both staff JWT and customer session via dualAuth
+// ✅ Customer: Get specific order by ID (session auth)
+// GET /api/v1/orders/customer/:id
 router.get(
-  '/:id',
-  dualAuth,
+  '/customer/:id',
+  protectTableSession,
   requireFeature('orders'),
-  getOrderById
+  require('./controller/handlers/retrieval.handler').getOrderById
 );
 
 // ============================================================
@@ -83,15 +83,15 @@ router.get(
 router.use(protect);
 router.use(requireFeature('orders'));
 
-// ✅ NAMED ROUTES FIRST (must be before /:id)
+// ✅ NAMED ROUTES FIRST (must be before /:id catch-all)
 router.post('/staff', validate(placeOrderStaffSchema, 'body'), staffPlaceOrder);
 
 router.get('/active', validate(orderFiltersSchema, 'query'), getActiveOrders);
 
-// Review queue (must be before status-specific lists)
+// Review queue
 router.get('/review-queue', getReviewQueue);
 
-// Status-specific lists (must be registered before /:id)
+// Status-specific lists
 router.get('/completed', getCompletedOrders);
 router.get('/pending', getPendingOrders);
 router.get('/accepted', getAcceptedOrders);
@@ -102,7 +102,7 @@ router.get('/canceled', getCanceledOrders);
 
 router.get('/number/:orderNumber', getOrderByNumber);
 
-// ✅ Item-level status workflow routes (MUST be before /:id routes to avoid conflicts)
+// ✅ Item-level status workflow routes
 const itemStatusHandler = require('./controller/handlers/item-status.handler');
 
 router.patch(
@@ -127,5 +127,9 @@ router.patch('/:id/status', validate(updateOrderStatusSchema, 'body'), updateOrd
 router.patch('/:id/add-items', validate(addItemToOrderSchema, 'body'), addItemToOrder);
 
 router.patch('/:id/cancel', cancelOrder);
+
+// ✅ Staff: Get order by ID (MUST be LAST)
+// GET /api/v1/orders/:id
+router.get('/:id', getOrderById);
 
 module.exports = router;

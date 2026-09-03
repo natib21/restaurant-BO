@@ -214,6 +214,15 @@ class OrderTransactionService {
         const io = getIo();
         
         // Broadcast to branch staff with ORDER_VIEW and ORDER_MANAGE permissions
+        logger.info('order.socket_emit_to_staff', {
+          orderId: createdOrder._id.toString(),
+          branchId,
+          rooms: [
+            `branch:${branchId}:perm:ORDER_VIEW`,
+            `branch:${branchId}:perm:ORDER_MANAGE`
+          ],
+        });
+        
         io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:new', {
           _id: createdOrder._id,
           orderNumber: createdOrder.orderNumber,

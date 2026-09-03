@@ -16,15 +16,59 @@ const verifyJwt = promisify(jwt.verify) as unknown as (
 let io: SocketServer | null = null;
 
 /**
+ * Parse cookies from cookie header string
+ */
+function parseCookies(cookieHeader: string | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+  
+  cookieHeader.split(';').forEach(cookie => {
+    const [name, ...rest] = cookie.split('=');
+    if (name && rest.length) {
+      cookies[name.trim()] = rest.join('=').trim();
+    }
+  });
+  
+  return cookies;
+}
+
+/**
  * Authenticate staff socket connection via JWT token
+ * Supports token from:
+ * 1. socket.handshake.auth.token (client-provided)
+ * 2. Authorization header (Bearer token)
+ * 3. HttpOnly cookie (jwt or token)
  */
 async function authenticateStaffSocket(socket: import('socket.io').Socket, next: (err?: Error) => void) {
   try {
-    const token =
+    // Try multiple token sources
+    let token =
       socket.handshake.auth?.token ||
       (socket.handshake.headers.authorization as string | undefined)?.split(' ')?.[1];
 
+    // If no token in auth or header, check cookies (for HttpOnly cookies)
     if (!token) {
+      const cookieHeader = socket.handshake.headers.cookie;
+      const cookies = parseCookies(cookieHeader);
+      token = cookies.jwt || cookies.token; // Try both 'jwt' and 'token' cookie names
+      
+      if (token) {
+        logger.info('socket.auth.cookie', { 
+          socketId: socket.id,
+          cookieName: cookies.jwt ? 'jwt' : 'token',
+          tokenPreview: token.substring(0, 20) + '...'
+        });
+      }
+    }
+
+    if (!token) {
+      logger.warn('socket.auth.failed', {
+        socketId: socket.id,
+        reason: 'No token found in auth, header, or cookies',
+        hasAuth: !!socket.handshake.auth?.token,
+        hasAuthHeader: !!socket.handshake.headers.authorization,
+        hasCookie: !!socket.handshake.headers.cookie,
+      });
       return next(new Error('Authentication required'));
     }
 

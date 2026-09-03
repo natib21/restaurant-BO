@@ -18,10 +18,10 @@ async function test() {
     console.log('✅ Connected to MongoDB\n');
 
     // Create merchant
-    const uniqueId = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+    const uniqueId = Date.now().toString().slice(-6);
     const merchant = await Merchant.create({
       businessName: 'QR Test Restaurant',
-      slug: `qr-${uniqueId.slice(0, 10)}`,
+      slug: `qr-${uniqueId}`,
       email: `qr-${uniqueId}@test.com`,
       phone: '+251911223344',
       status: 'approved',

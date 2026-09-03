@@ -1,8 +1,19 @@
+const path = require('path');
 const multer = require('multer');
 const sharp = require('sharp');
 const fs = require('fs');
 const catchAsync = require('../../../../utils/catchAsync');
 const merchantService = require('../services/merchant.service');
+const { FileManagementService } = require('../../files/file-management.service');
+const { getMerchantId } = require('../../../common/utils/tenant-scope');
+
+const MERCHANT_UPLOAD_ROOT = path.join(process.cwd(), 'uploads', 'img', 'merchants');
+const MERCHANT_DOCUMENT_ROOT = path.join(process.cwd(), 'public', 'img', 'merchants', 'documents');
+
+function ensureMerchantUploadDirs() {
+  fs.mkdirSync(MERCHANT_UPLOAD_ROOT, { recursive: true });
+  fs.mkdirSync(MERCHANT_DOCUMENT_ROOT, { recursive: true });
+}
 
 const multerStorage = multer.memoryStorage();
 const multerFilter = (req, file, cb) => {
@@ -24,30 +35,81 @@ exports.uploadMerchantPhotos = upload.fields([
 ]);
 
 exports.processMerchantMedia = catchAsync(async (req, res, next) => {
-  if (req.files?.logo?.[0]) {
-    const logoFile = req.files.logo[0];
-    const logoFilename = `merchant-logo-${Date.now()}-${logoFile.originalname.split('.').slice(0, -1).join('.')}.jpeg`;
+  ensureMerchantUploadDirs();
+  const merchantId = getMerchantId(req);
 
-    await sharp(logoFile.buffer)
-      .resize(300, 300, { fit: 'cover' })
+  const resizeForLogo = async file =>
+    sharp(file.buffer)
+      .resize(300, 300, { fit: 'cover', position: 'center' })
       .toFormat('jpeg')
       .jpeg({ quality: 90 })
-      .toFile(`uploads/img/merchants/${logoFilename}`);
+      .toBuffer();
 
-    req.body.logo = logoFilename;
+  const resizeForCover = async file =>
+    sharp(file.buffer)
+      .resize(1200, 400, { fit: 'cover', position: 'center' })
+      .toFormat('jpeg')
+      .jpeg({ quality: 90 })
+      .toBuffer();
+
+  if (req.files?.logo?.[0]) {
+    if (merchantId) {
+      const file = await FileManagementService.registerUpload({
+        merchantId,
+        branchId: req.ctx?.branchId || null,
+        buffer: await resizeForLogo(req.files.logo[0]),
+        originalName: req.files.logo[0].originalname || 'merchant-logo.jpeg',
+        mimeType: 'image/jpeg',
+        entityType: 'merchant',
+        entityId: merchantId,
+        purpose: 'logo',
+        uploadedBy: req.user?._id || null,
+      });
+
+      req.body.logo = file._id;
+    } else {
+      const logoFile = req.files.logo[0];
+      const logoFilename = `merchant-logo-${Date.now()}-${logoFile.originalname.split('.').slice(0, -1).join('.')}.jpeg`;
+      const logoPath = path.join(MERCHANT_UPLOAD_ROOT, logoFilename);
+
+      await sharp(logoFile.buffer)
+        .resize(300, 300, { fit: 'cover' })
+        .toFormat('jpeg')
+        .jpeg({ quality: 90 })
+        .toFile(logoPath);
+
+      req.body.logo = logoFilename;
+    }
   }
 
   if (req.files?.coverImage?.[0]) {
-    const coverFile = req.files.coverImage[0];
-    const coverFilename = `merchant-cover-${Date.now()}-${coverFile.originalname.split('.').slice(0, -1).join('.')}.jpeg`;
+    if (merchantId) {
+      const file = await FileManagementService.registerUpload({
+        merchantId,
+        branchId: req.ctx?.branchId || null,
+        buffer: await resizeForCover(req.files.coverImage[0]),
+        originalName: req.files.coverImage[0].originalname || 'merchant-cover.jpeg',
+        mimeType: 'image/jpeg',
+        entityType: 'merchant',
+        entityId: merchantId,
+        purpose: 'image',
+        uploadedBy: req.user?._id || null,
+      });
 
-    await sharp(coverFile.buffer)
-      .resize(1200, 400, { fit: 'cover' })
-      .toFormat('jpeg')
-      .jpeg({ quality: 90 })
-      .toFile(`uploads/img/merchants/${coverFilename}`);
+      req.body.coverImage = file._id;
+    } else {
+      const coverFile = req.files.coverImage[0];
+      const coverFilename = `merchant-cover-${Date.now()}-${coverFile.originalname.split('.').slice(0, -1).join('.')}.jpeg`;
+      const coverPath = path.join(MERCHANT_UPLOAD_ROOT, coverFilename);
 
-    req.body.coverImage = coverFilename;
+      await sharp(coverFile.buffer)
+        .resize(1200, 400, { fit: 'cover' })
+        .toFormat('jpeg')
+        .jpeg({ quality: 90 })
+        .toFile(coverPath);
+
+      req.body.coverImage = coverFilename;
+    }
   }
 
   if (req.files?.documents) {
@@ -56,7 +118,7 @@ exports.processMerchantMedia = catchAsync(async (req, res, next) => {
 
     docs.forEach((file, index) => {
       const docFilename = `${Date.now()}-${file.originalname}`;
-      const docPath = `public/img/merchants/documents/${docFilename}`;
+      const docPath = path.join(MERCHANT_DOCUMENT_ROOT, docFilename);
       fs.writeFileSync(docPath, file.buffer);
 
       req.body.documents.push({
@@ -72,8 +134,8 @@ exports.processMerchantMedia = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllMerchants = catchAsync(async (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
-  const merchants = await merchantService.getAllMerchants(req.query, baseUrl);
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const merchants = await merchantService.getAllMerchants(req.query, origin);
 
   res.status(200).json({
     status: 'success',
@@ -83,8 +145,8 @@ exports.getAllMerchants = catchAsync(async (req, res) => {
 });
 
 exports.getMerchant = catchAsync(async (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
-  const merchant = await merchantService.getMerchantById(req.params.id, baseUrl);
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const merchant = await merchantService.getMerchantById(req.params.id, origin);
 
   res.status(200).json({
     status: 'success',
@@ -112,8 +174,8 @@ exports.updateMerchant = catchAsync(async (req, res) => {
 
 exports.getMe = catchAsync(async (req, res) => {
   const merchantId = req.user.merchant?._id || req.user.merchant;
-  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
-  const merchant = await merchantService.getMerchantById(merchantId, baseUrl);
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const merchant = await merchantService.getMerchantById(merchantId, origin);
 
   res.status(200).json({
     status: 'success',
@@ -123,7 +185,7 @@ exports.getMe = catchAsync(async (req, res) => {
 
 exports.updateMe = catchAsync(async (req, res) => {
   const merchantId = req.user.merchant?._id || req.user.merchant;
-  const baseUrl = `${req.protocol}://${req.get('host')}/img/merchants`;
+  const origin = `${req.protocol}://${req.get('host')}`;
 
   const updatedMerchant = await merchantService.updateMe(merchantId, req.body);
   const merchantObj = updatedMerchant.toObject();
@@ -133,8 +195,8 @@ exports.updateMe = catchAsync(async (req, res) => {
     data: {
       merchant: {
         ...merchantObj,
-        logo: merchantObj.logo ? `${baseUrl}/${merchantObj.logo}` : null,
-        coverImage: merchantObj.coverImage ? `${baseUrl}/${merchantObj.coverImage}` : null,
+        logo: merchantObj.logo ? `${origin}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${origin}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
       },
     },
   });

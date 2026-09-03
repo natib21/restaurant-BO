@@ -17,7 +17,8 @@ exports.getAllBranches = catchAsync(async (req, res) => {
 });
 
 exports.getBranch = catchAsync(async (req, res) => {
-  const branch = await BranchService.getBranch(req.params.id);
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const branch = await BranchService.getBranch(req.params.id, origin);
   res.status(200).json({ status: 'success', data: { branch } });
 });
 

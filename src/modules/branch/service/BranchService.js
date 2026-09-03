@@ -17,6 +17,55 @@ const TABLE_TRANSITIONS = {
   disabled: ['available'],
 };
 
+function resolveFileUrl(value, origin = '') {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    if (/^[a-fA-F0-9]{24}$/.test(value)) {
+      return `${origin.replace(/\/$/, '')}/api/v1/files/${value}/content`;
+    }
+    return value.startsWith('http') ? value : `${origin.replace(/\/$/, '')}/${value}`;
+  }
+
+  if (typeof value === 'object') {
+    if (value.getPublicUrl) {
+      return value.getPublicUrl();
+    }
+
+    if (value._id) {
+      return `${origin.replace(/\/$/, '')}/api/v1/files/${String(value._id)}/content`;
+    }
+  }
+
+  return null;
+}
+
+function enrichBranchWithMerchantMedia(branch, origin = '') {
+  if (!branch || !branch.merchant) return branch;
+
+  if (branch.merchant && typeof branch.merchant === 'object') {
+    // Strategy: Keep the Mongoose document but convert logo/coverImage IDs to URL strings
+    // Then use lean/toObject carefully to avoid schema defaults
+    const merchantDoc = branch.merchant;
+    
+    // Create a minimal plain object with only the fields that were actually populated
+    const merchant = {
+      _id: merchantDoc._id,
+      businessName: merchantDoc.businessName,
+      slug: merchantDoc.slug,
+      logo: resolveFileUrl(merchantDoc.logo, origin),
+      coverImage: resolveFileUrl(merchantDoc.coverImage, origin),
+      hasActiveAccess: merchantDoc.hasActiveAccess,
+      publicWebsite: merchantDoc.publicWebsite,
+      id: merchantDoc.id || merchantDoc._id.toString()
+    };
+    
+    branch.merchant = merchant;
+  }
+
+  return branch;
+}
+
 const REQUIRED_TASKS_FOR_TABLE_ASSIGNMENT = [
   'Accept Order',
   'View Order',
@@ -317,6 +366,7 @@ class BranchService {
 
   static async getAllBranches(req) {
     const merchantId = req.user.merchant?._id;
+    const origin = `${req.protocol}://${req.get('host')}`;
 
     if (!merchantId) {
       // If the user doesn't have a merchant, they might be a Super Admin
@@ -333,17 +383,42 @@ class BranchService {
       .limitFields()
       .paginate();
 
-    return features.query.select('-qrSecretKey').populate('merchant', 'businessName slug');
+    const branches = await features.query
+      .select('-qrSecretKey')
+      .populate('merchant', 'businessName slug logo coverImage');
+
+    return branches.map(branch => enrichBranchWithMerchantMedia(branch, origin));
   }
 
-  static async getBranch(id) {
+  static async getBranch(id, origin = '') {
     const query = id?.length === 6 ? { shortCode: id.toUpperCase() } : { _id: id };
 
     const branch = await BranchRepository.findBranchOne(query)
       .select('-qrSecretKey')
-      .populate('merchant', 'businessName slug brandColor');
+      .populate('merchant', 'businessName slug logo coverImage brandColor')
+      .lean(); // Get plain JavaScript object from the start
 
     if (!branch) throw new AppError('Branch not found', 404);
+    
+    // Enrich merchant with media URLs and virtuals
+    if (branch.merchant) {
+      branch.merchant.logo = resolveFileUrl(branch.merchant.logo, origin);
+      branch.merchant.coverImage = resolveFileUrl(branch.merchant.coverImage, origin);
+      
+      // Add virtuals manually since lean() doesn't include them
+      branch.merchant.hasActiveAccess = false; // TODO: Calculate based on subscription status
+      branch.merchant.publicWebsite = branch.merchant.customDomain && branch.merchant.customDomainVerified 
+        ? `https://${branch.merchant.customDomain}`
+        : `https://${branch.merchant.slug}.menuroom.et`;
+      branch.merchant.id = branch.merchant._id.toString();
+    }
+    
+    // Add branch virtuals
+    branch.publicUrl = branch.shortCode
+      ? `https://menuroom.et/b/${branch.shortCode}`
+      : `https://menuroom.et/branch/${branch._id}`;
+    branch.id = branch._id.toString();
+    
     return branch;
   }
 
