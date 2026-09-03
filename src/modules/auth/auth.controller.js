@@ -27,14 +27,11 @@ function sendTokenResponse(user, statusCode, res) {
 }
 
 exports.signup = catchAsync(async (req, res, next) => {
-  console.log('SignUp req body:', req.body);
   const user = await AuthService.signup(req.body);
   sendTokenResponse(user, 201, res);
 });
 
 exports.login = catchAsync(async (req, res, next) => {
-  console.log('Login req body:', req.body);
-
   const user = await AuthService.login(req.body.email, req.body.password);
   sendTokenResponse(user, 200, res);
 });

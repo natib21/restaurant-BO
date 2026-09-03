@@ -10,14 +10,9 @@ const mongooseOptions = {
 let isConnected = false;
 
 async function connectDatabase() {
-  console.log('connectDb Called');
-
   if (isConnected) return mongoose;
 
   const uri = getMongoUri();
-
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  console.log('URI:', uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@'));
 
   try {
     await mongoose.connect(uri, mongooseOptions);

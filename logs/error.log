@@ -2259,3 +2259,84 @@
 {"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.findOneAndUpdate.failed","resource":"Ingredient","resourceId":{"buffer":{"0":106,"1":150,"10":63,"11":143,"2":238,"3":1,"4":213,"5":165,"6":55,"7":201,"8":114,"9":125}},"timestamp":"2026-09-01 21:47:45"}
 {"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.findOneAndUpdate.failed","resource":"Ingredient","resourceId":{"buffer":{"0":106,"1":150,"10":63,"11":137,"2":238,"3":1,"4":213,"5":165,"6":55,"7":201,"8":114,"9":125}},"timestamp":"2026-09-01 21:47:45"}
 {"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.findOneAndUpdate.failed","resource":"Ingredient","resourceId":{"buffer":{"0":106,"1":150,"10":63,"11":147,"2":238,"3":1,"4":213,"5":165,"6":55,"7":201,"8":114,"9":125}},"timestamp":"2026-09-01 21:47:45"}
+{"error":"connect ECONNREFUSED 127.0.0.1:27017","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:41:38"}
+{"error":"connect ECONNREFUSED 127.0.0.1:27017","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:41:49"}
+{"error":"connection <monitor> to 127.0.0.1:27017 closed","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:00"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:04"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:05"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:06"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:07"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:08"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:09"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:10"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:11"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:12"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:13"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:14"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:15"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:16"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:17"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:18"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:19"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:21"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:22"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:23"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:24"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:25"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:26"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:27"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:28"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:29"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:30"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:31"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:32"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:33"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:34"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:35"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:36"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:37"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:38"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:39"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:40"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:41"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:42"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:43"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:44"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:45"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:46"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:47"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:48"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:49"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:50"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:51"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:52"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:53"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:54"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:55"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:56"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:57"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:58"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:42:59"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:00"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:01"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:02"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:03"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:04"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:05"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:06"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:07"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:09"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:10"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:11"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:12"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:13"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:14"}
+{"error":"not primary","level":"\u001b[31mERROR\u001b[39m","message":"outbox.worker.tick.error","timestamp":"2026-09-03 02:43:15"}
+{"level":"\u001b[31mERROR\u001b[39m","message":"Bootstrap failed: getaddrinfo ENOTFOUND 89c2a0ae7a0d","timestamp":"2026-09-03 02:44:19"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.save.failed","resource":"Merchant","resourceId":{"buffer":{"0":106,"1":153,"10":229,"11":53,"2":66,"3":7,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"stack":"ValidationError: AuditLog validation failed: user: Path `user` is required.\n    at Document.invalidate (C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3387:32)\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3148:17\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\schemaType.js:1443:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)","timestamp":"2026-09-03 02:46:47"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.save.failed","resource":"Branch","resourceId":{"buffer":{"0":106,"1":153,"10":229,"11":55,"2":66,"3":7,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"stack":"ValidationError: AuditLog validation failed: user: Path `user` is required.\n    at Document.invalidate (C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3387:32)\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3148:17\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\schemaType.js:1443:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)","timestamp":"2026-09-03 02:46:47"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.save.failed","resource":"Merchant","resourceId":{"buffer":{"0":106,"1":153,"10":230,"11":124,"2":66,"3":169,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"stack":"ValidationError: AuditLog validation failed: user: Path `user` is required.\n    at Document.invalidate (C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3387:32)\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3148:17\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\schemaType.js:1443:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)","timestamp":"2026-09-03 02:49:29"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.save.failed","resource":"Branch","resourceId":{"buffer":{"0":106,"1":153,"10":230,"11":126,"2":66,"3":169,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"stack":"ValidationError: AuditLog validation failed: user: Path `user` is required.\n    at Document.invalidate (C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3387:32)\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3148:17\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\schemaType.js:1443:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)","timestamp":"2026-09-03 02:49:29"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.save.failed","resource":"User","resourceId":{"buffer":{"0":106,"1":153,"10":230,"11":133,"2":66,"3":169,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"stack":"ValidationError: AuditLog validation failed: user: Path `user` is required.\n    at Document.invalidate (C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3387:32)\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3148:17\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\schemaType.js:1443:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)","timestamp":"2026-09-03 02:49:30"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.save.failed","resource":"Subscription","resourceId":{"buffer":{"0":106,"1":153,"10":230,"11":142,"2":66,"3":170,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"stack":"ValidationError: AuditLog validation failed: user: Path `user` is required.\n    at Document.invalidate (C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3387:32)\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\document.js:3148:17\n    at C:\\Users\\TriaPlc\\Projects\\TiruSolutions\\TiruServe\\restaurant-BO\\node_modules\\mongoose\\lib\\schemaType.js:1443:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)","timestamp":"2026-09-03 02:49:30"}
+{"error":"AuditLog validation failed: user: Path `user` is required.","level":"\u001b[31mERROR\u001b[39m","message":"audit.plugin.findOneAndUpdate.failed","resource":"Merchant","resourceId":{"buffer":{"0":106,"1":153,"10":230,"11":124,"2":66,"3":169,"4":82,"5":98,"6":14,"7":172,"8":145,"9":182}},"timestamp":"2026-09-03 02:49:30"}

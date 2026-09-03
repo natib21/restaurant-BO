@@ -150,8 +150,9 @@ exports.deleteMerchant = catchAsync(async (req, res) => {
 });
 
 exports.approveMerchant = catchAsync(async (req, res) => {
+  console.log(`Approving merchant with ID: ${req.params.id} by user: ${req.user._id}`);
   const merchant = await merchantService.approveMerchant(req.params.id, req.user._id);
-
+    
   res.status(200).json({
     status: 'success',
     message: 'Merchant approved',

@@ -102,14 +102,12 @@ class BranchService {
     let payload;
     try {
       payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
-      console.log('DECODED PAYLOAD:', payload);
     } catch {
       throw new AppError('Corrupted QR code', 400);
     }
 
     const { m: merchantId, b: branchId, t: tableId } = payload;
 
-    console.log('Merchant Id : ', merchantId + ' table Id ', tableId, 'Branch Id : ' + branchId);
     if (!merchantId || !tableId || !branchId) throw new AppError('QR missing data', 400);
 
     const branch = await BranchRepository.findBranchById(branchId).select('+qrSecretKey');
@@ -124,14 +122,11 @@ class BranchService {
       t: tableId.toString(),
     });
 
-    console.log('branch Secret Me :', branch.qrSecretKey);
-
     const expectedSignature = crypto
       .createHmac('sha256', branch.qrSecretKey)
       .update(payloadString)
       .digest('hex');
 
-    console.log('Signature :' + signature, 'ExpectedSign : ' + expectedSignature);
     if (expectedSignature !== signature) {
       throw new AppError('Fake QR code', 403);
     }
