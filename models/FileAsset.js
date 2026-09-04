@@ -58,6 +58,10 @@ const fileAssetSchema = new Schema(
       default: false,
       index: true,
     },
+    metadata: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

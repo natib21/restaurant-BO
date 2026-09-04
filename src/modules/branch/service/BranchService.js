@@ -8,6 +8,7 @@ const Merchant =require('../../../../models/merchantModel')
 const { BranchRepository } = require('../repository/BranchRepository');
 const { BranchControlService } = require('../branch-control.service');
 const { QrTokenService } = require('../qr-token.service');
+const { SessionService } = require('../../sessions/service/SessionService');
 
 const TABLE_TRANSITIONS = {
   available: ['occupied', 'reserved', 'disabled'],
@@ -44,22 +45,19 @@ function enrichBranchWithMerchantMedia(branch, origin = '') {
   if (!branch || !branch.merchant) return branch;
 
   if (branch.merchant && typeof branch.merchant === 'object') {
-    // Strategy: Keep the Mongoose document but convert logo/coverImage IDs to URL strings
-    // Then use lean/toObject carefully to avoid schema defaults
     const merchantDoc = branch.merchant;
-    
-    // Create a minimal plain object with only the fields that were actually populated
-    const merchant = {
-      _id: merchantDoc._id,
-      businessName: merchantDoc.businessName,
-      slug: merchantDoc.slug,
-      logo: resolveFileUrl(merchantDoc.logo, origin),
-      coverImage: resolveFileUrl(merchantDoc.coverImage, origin),
-      hasActiveAccess: merchantDoc.hasActiveAccess,
-      publicWebsite: merchantDoc.publicWebsite,
-      id: merchantDoc.id || merchantDoc._id.toString()
-    };
-    
+    const merchant = merchantDoc.toObject ? merchantDoc.toObject() : { ...merchantDoc };
+
+    merchant.logo = resolveFileUrl(merchant.logo, origin);
+    merchant.coverImage = resolveFileUrl(merchant.coverImage, origin);
+    merchant.id = merchant.id || merchant._id?.toString?.() || merchant._id;
+    merchant.hasActiveAccess = merchant.hasActiveAccess ?? false;
+    merchant.publicWebsite =
+      merchant.publicWebsite ||
+      (merchant.customDomain && merchant.customDomainVerified
+        ? `https://${merchant.customDomain}`
+        : `https://${merchant.slug}.menuroom.et`);
+
     branch.merchant = merchant;
   }
 
@@ -141,13 +139,18 @@ class BranchService {
   }
 
   /**
-   * Customer QR scan → table session (same behavior as customerSessionController.startTableSession).
+   * Customer QR scan → table session
+   * 
+   * ✅ REFACTORED: No longer blocks when table is occupied
+   * ✅ Multiple customers can scan same QR and order independently
+   * ✅ Uses SessionService to get or create active session
    */
   static async startTableSessionFromQr({ data, s: signature }) {
     if (!data || !signature) {
       throw new AppError('Invalid QR code', 400);
     }
 
+    // Decode QR payload
     let payload;
     try {
       payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
@@ -157,8 +160,11 @@ class BranchService {
 
     const { m: merchantId, b: branchId, t: tableId } = payload;
 
-    if (!merchantId || !tableId || !branchId) throw new AppError('QR missing data', 400);
+    if (!merchantId || !tableId || !branchId) {
+      throw new AppError('QR missing data', 400);
+    }
 
+    // Verify QR signature
     const branch = await BranchRepository.findBranchById(branchId).select('+qrSecretKey');
 
     if (!branch || !branch.qrSecretKey) {
@@ -180,44 +186,48 @@ class BranchService {
       throw new AppError('Fake QR code', 403);
     }
 
+    // Get table
     const table = await BranchRepository.findTableOne({
       _id: tableId,
       branch: branchId,
       merchant: merchantId,
     });
-    if (!table) throw new AppError('Table not found', 404);
-
-    const active = await BranchRepository.findCustomerSessionOne({
-      table: table._id,
-      branch: branchId,
-      isActive: true,
-      expiresAt: { $gt: new Date() },
-    });
-    if (table.status !== 'available') {
-      throw new AppError('Table is in use. Please wait or ask staff.', 409);
+    
+    if (!table) {
+      throw new AppError('Table not found', 404);
     }
 
-    const sessionToken = crypto.randomBytes(32).toString('hex');
-    await BranchRepository.createCustomerSession({
-      customer: null,
-      merchant: merchantId,
-      table: table._id,
-      branch: branchId,
-      token: sessionToken,
-      expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
-      isActive: true,
+    // ✅ REMOVED: Occupancy check that was blocking second customer
+    // ❌ OLD CODE (deleted):
+    // if (table.status !== 'available') {
+    //   throw new AppError('Table is in use. Please wait or ask staff.', 409);
+    // }
+
+    // ✅ NEW: Use SessionService to get or create active session
+    // This allows multiple customers to scan same QR and get same session
+    const { session, isNew } = await SessionService.getOrCreateActiveSession({
+      tableId: table._id,
+      createdBy: null  // QR-initiated, no staff user
     });
 
-    table.status = 'occupied';
-    await table.save({ validateBeforeSave: false });
+    logger.info('qr.scan.success', {
+      sessionId: session._id.toString(),
+      tableId: table._id.toString(),
+      tableNumber: table.tableNumber,
+      isNewSession: isNew,
+      tableStatus: table.status
+    });
 
     return {
-      sessionToken,
+      sessionToken: session.token,
       table: table._id,
       tableNumber: table.tableNumber,
       branchId: branch._id,
       merchantId,
-      message: 'Welcome!',
+      isNewSession: isNew,  // ✅ Tell frontend if session was created or reused
+      message: isNew 
+        ? 'Welcome! Your session has started.' 
+        : 'Welcome back! You can continue ordering.',
     };
   }
 
@@ -385,7 +395,7 @@ class BranchService {
 
     const branches = await features.query
       .select('-qrSecretKey')
-      .populate('merchant', 'businessName slug logo coverImage');
+      .populate('merchant');
 
     return branches.map(branch => enrichBranchWithMerchantMedia(branch, origin));
   }
@@ -395,22 +405,21 @@ class BranchService {
 
     const branch = await BranchRepository.findBranchOne(query)
       .select('-qrSecretKey')
-      .populate('merchant', 'businessName slug logo coverImage brandColor')
+      .populate('merchant')
       .lean(); // Get plain JavaScript object from the start
 
     if (!branch) throw new AppError('Branch not found', 404);
     
-    // Enrich merchant with media URLs and virtuals
+    // Enrich merchant with media URLs and full payload while preserving the tenant metadata.
     if (branch.merchant) {
       branch.merchant.logo = resolveFileUrl(branch.merchant.logo, origin);
       branch.merchant.coverImage = resolveFileUrl(branch.merchant.coverImage, origin);
-      
-      // Add virtuals manually since lean() doesn't include them
-      branch.merchant.hasActiveAccess = false; // TODO: Calculate based on subscription status
-      branch.merchant.publicWebsite = branch.merchant.customDomain && branch.merchant.customDomainVerified 
-        ? `https://${branch.merchant.customDomain}`
-        : `https://${branch.merchant.slug}.menuroom.et`;
-      branch.merchant.id = branch.merchant._id.toString();
+      branch.merchant.id = branch.merchant.id || branch.merchant._id.toString();
+      branch.merchant.hasActiveAccess = branch.merchant.hasActiveAccess ?? false;
+      branch.merchant.publicWebsite = branch.merchant.publicWebsite ||
+        (branch.merchant.customDomain && branch.merchant.customDomainVerified
+          ? `https://${branch.merchant.customDomain}`
+          : `https://${branch.merchant.slug}.menuroom.et`);
     }
     
     // Add branch virtuals

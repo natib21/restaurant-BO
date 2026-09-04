@@ -52,6 +52,29 @@ No confusion. No extra apps. Just works.
 
 ---
 
+### Dining Session Refactor — Completed and Verified
+
+The table-based dining session flow is now implemented and validated in the backend. Multiple customers can reuse the same table QR, staff can create or attach orders to the active session, and table closure enforces unpaid-order checks before the table is marked as clean.
+
+Key outcomes:
+- QR table scans create or reuse the active dining session without blocking multi-customer ordering.
+- Staff and QR orders are linked to the same session via `order.session` and `order.source` tracking.
+- Table closure validates unpaid orders and emits Socket.IO `session:created` and `session:ended` events.
+- Race conditions are handled with Mongo transaction retry logic and the active-session uniqueness guard.
+
+Validated locally with:
+
+```bash
+./node_modules/.bin/jest --runInBand tests/task-7-close-table.test.js tests/task-8-session-socket-events.test.js tests/task-9-integration-full-flow.test.js --verbose
+```
+
+Documentation package:
+- [README-DINING-SESSION-REFACTOR.md](README-DINING-SESSION-REFACTOR.md)
+- [DINING-SESSION-SYSTEM-DOCUMENTATION.md](DINING-SESSION-SYSTEM-DOCUMENTATION.md)
+- [TASK-BOARD.md](TASK-BOARD.md)
+
+---
+
 ### Professional Architecture (The Right Way)
 
 ```text

@@ -60,6 +60,7 @@ class MerchantService {
     const exists = await merchantRepository.findByUniqueFields(
       data.phone,
       data.taxId,
+      data.tinId,
       data.businessName
     );
     if (exists) {
@@ -95,6 +96,7 @@ class MerchantService {
       'status',
       'isActive',
       'taxId',
+      'tinId',
       'approvedBy',
       'subscriptionPlan',
       'suspendedReason',

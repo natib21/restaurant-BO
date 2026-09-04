@@ -20,6 +20,11 @@ class MerchantRepository {
         select: '_id name branchCode isMain isActive location city createdAt',
         options: { sort: { isMain: -1, createdAt: 1 } },
       })
+      .populate({
+        path: 'users',
+        select: 'firstName lastName phone email role isActive',
+        populate: { path: 'role', select: 'name context description' },
+      })
       .lean();
   }
 
@@ -29,15 +34,20 @@ class MerchantRepository {
       .populate('logo', 'storageKey mimeType originalName createdAt')
       .populate('coverImage', 'storageKey mimeType originalName createdAt')
       .populate({
+        path: 'branches',
+        select: '_id name branchCode isMain isActive location city createdAt',
+        options: { sort: { isMain: -1, createdAt: 1 } },
+      })
+      .populate({
         path: 'users',
         select: 'firstName lastName phone email role isActive',
         populate: { path: 'role', select: 'name context description' },
       });
   }
 
-  async findByUniqueFields(phone, taxId, businessName) {
+  async findByUniqueFields(phone, taxId, tinId, businessName) {
     return await Merchant.findOne({
-      $or: [{ phone }, { taxId }, { businessName }].filter(Boolean),
+      $or: [{ phone }, { taxId }, { tinId }, { businessName }].filter(Boolean),
     });
   }
 
@@ -79,8 +89,8 @@ class MerchantRepository {
 
   async deactivateUsersForMerchant(merchantId) {
     return await User.updateMany(
-      { restaurant: merchantId }, // using 'restaurant' based on legacy code
-      { isActive: false, role: null, restaurant: null }
+      { merchant: merchantId },
+      { isActive: false, role: null, merchant: null }
     );
   }
 }

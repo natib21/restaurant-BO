@@ -45,6 +45,10 @@ class PaymentVerificationRepository {
   static async countDocuments(query) {
     return await PaymentVerification.countDocuments(query);
   }
+
+  static async deleteMany(query = {}) {
+    return await PaymentVerification.deleteMany(query);
+  }
 }
 
 module.exports = PaymentVerificationRepository;

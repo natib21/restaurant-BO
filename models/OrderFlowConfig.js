@@ -48,6 +48,13 @@ const orderFlowConfigSchema = new Schema(
           reviewerRole: 'waiter',
         }),
       },
+      qr: {
+        type: channelConfigSchema,
+        default: () => ({
+          requiresReview: true,
+          reviewerRole: 'waiter',
+        }),
+      },
       admin: {
         type: channelConfigSchema,
         default: () => ({
@@ -73,12 +80,12 @@ const orderFlowConfigSchema = new Schema(
 
 // Validate: if requiresReview is true, reviewerRole must not be null
 orderFlowConfigSchema.pre('validate', function (next) {
-  const channels = ['waiter', 'web', 'admin', 'telegram'];
-  
+  const channels = ['waiter', 'web', 'qr', 'admin', 'telegram'];
+
   for (const channel of channels) {
     if (this.channels?.[channel]) {
       const config = this.channels[channel];
-      
+
       if (config.requiresReview === true && config.reviewerRole === null) {
         return next(
           new Error(
@@ -89,7 +96,7 @@ orderFlowConfigSchema.pre('validate', function (next) {
       }
     }
   }
-  
+
   next();
 });
 

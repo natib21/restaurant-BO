@@ -114,6 +114,17 @@ const orderSchema = new Schema(
         return this.orderType === 'dine_in';
       },
     },
+    
+    // ✅ NEW: Link to dining session (table visit)
+    session: {
+      type: Schema.Types.ObjectId,
+      ref: 'DiningSession',
+      index: true,
+      required: function() {
+        return this.orderType === 'dine_in';
+      },
+      comment: 'Dining session this order belongs to (for dine-in orders)'
+    },
 
     // Useful for fast lookup without population
     tableNumber: { type: String, trim: true },
@@ -132,12 +143,13 @@ const orderSchema = new Schema(
       required: true,
     },
     source: {
-  type: String,
-  enum: ['web', 'telegram', 'admin', 'waiter'],
-  default: 'web',
-  required: true,
-  index: true,
-},
+      type: String,
+      enum: ['qr', 'staff', 'web', 'telegram', 'admin', 'waiter'],  // ✅ Added 'qr' and 'staff'
+      default: 'web',
+      required: true,
+      index: true,
+      comment: 'qr = customer QR scan, staff = waiter created, web/telegram/admin/waiter = legacy'
+    },
  delivery: {
    type: deliverySchema,
    required: function () {
@@ -301,6 +313,11 @@ orderSchema.index({ merchant: 1, table: 1 });
 orderSchema.index({ customer: 1, placedAt: -1 });
 orderSchema.index({ assignedWaiter: 1 });
 orderSchema.index({ placedAt: -1 });
+
+// ✅ NEW: Session-based indexes for dining session queries
+orderSchema.index({ session: 1, status: 1 });  // Query orders by session and status
+orderSchema.index({ session: 1, paymentStatus: 1 });  // Check unpaid orders in session
+orderSchema.index({ session: 1, createdAt: -1 });  // Session orders timeline
 
 // Advanced Reporting indexes (Requirement 18.1)
 orderSchema.index({ merchant: 1, paymentStatus: 1, placedAt: -1 }); // For sales reports filtering by payment status

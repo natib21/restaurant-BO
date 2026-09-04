@@ -29,6 +29,97 @@ const PaymentVerificationSchema = new Schema(
       required: true,
       index: true 
     },
+
+    // Enhanced evidence metadata for review, retries, and matching
+    submittedByType: {
+      type: String,
+      enum: ['customer', 'waiter', 'staff', 'admin', 'system'],
+      default: 'staff',
+    },
+    submittedByUserId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    submissionMethod: {
+      type: String,
+      enum: ['manual_reference', 'qr_scan', 'pdf_download', 'manual_review'],
+      default: 'manual_reference',
+    },
+
+    originalReference: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    normalizedReference: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
+    },
+    rawQrPayload: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    sourceUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    officialDocumentAssetId: {
+      type: Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
+    extractedRawText: {
+      type: String,
+      default: null,
+    },
+    extractionMethod: {
+      type: String,
+      enum: ['manual_reference', 'provider_html', 'provider_pdf_native_text', 'manual_review'],
+      default: 'manual_reference',
+    },
+    normalizedTransaction: {
+      amount: { type: Number, min: 0, default: null },
+      currency: { type: String, trim: true, default: null },
+      provider: { type: String, trim: true, default: null },
+      reference: { type: String, trim: true, default: null },
+      transactionDate: { type: Date, default: null },
+      receiver: { type: String, trim: true, default: null },
+    },
+    matchResult: {
+      amountMatch: { type: Boolean, default: false },
+      currencyMatch: { type: Boolean, default: false },
+      providerMatch: { type: Boolean, default: false },
+      referenceValid: { type: Boolean, default: false },
+      referenceUnique: { type: Boolean, default: false },
+      receiverMatch: { type: Boolean, default: null },
+      transactionTimeValid: { type: Boolean, default: null },
+      warnings: [{ type: String, trim: true }],
+    },
+    failureCode: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    reviewStatus: {
+      type: String,
+      enum: ['pending_review', 'verified', 'rejected', 'failed', 'needs_review'],
+      default: 'pending_review',
+      index: true,
+    },
+    reviewedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
     
     // Verification type - describes how this verification was performed
     verificationType: {
@@ -92,6 +183,7 @@ const PaymentVerificationSchema = new Schema(
     // Error tracking
     lookupError: { type: String },
     retryCount: { type: Number, default: 0 },
+    pdfDownloaded: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -109,6 +201,8 @@ PaymentVerificationSchema.index(
 // Query optimization indexes
 PaymentVerificationSchema.index({ merchant: 1, status: 1, createdAt: -1 });
 PaymentVerificationSchema.index({ merchant: 1, order: 1 });
+PaymentVerificationSchema.index({ merchant: 1, normalizedReference: 1, provider: 1 });
+PaymentVerificationSchema.index({ provider: 1, normalizedReference: 1, merchant: 1 }, { unique: false });
 
 // Audit logging for security-sensitive operations
 PaymentVerificationSchema.plugin(auditPlugin, {

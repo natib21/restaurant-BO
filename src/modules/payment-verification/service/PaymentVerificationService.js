@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { resolveProvider } = require('./providers');
+const providerResolver = require('./provider-resolver');
 const PaymentVerificationRepository = require('../repository/PaymentVerificationRepository');
 const PaymentCompletionService = require('./PaymentCompletionService');
 const Order = require('../../../../models/orderModel');
@@ -20,6 +20,14 @@ class PaymentVerificationService {
    */
   static async initiateManualVerification(params) {
     const { merchantId, orderId, provider, receiptNumber, userId } = params;
+    let normalizedReference = receiptNumber;
+
+    if (provider === 'cbebirr' && typeof receiptNumber === 'string') {
+      const [tid, phone] = receiptNumber.split('|');
+      if (tid && phone) {
+        normalizedReference = { tid: tid.trim().toUpperCase(), phone: phone.trim() };
+      }
+    }
     
     // 1. Validate order
     const order = await Order.findOne({ 
@@ -40,7 +48,9 @@ class PaymentVerificationService {
     }
     
     // 2. Clean receipt number (uppercase for consistency)
-    const cleanedReceiptNo = receiptNumber.toUpperCase().trim();
+    const cleanedReceiptNo = provider === 'cbebirr' && normalizedReference && typeof normalizedReference === 'object'
+      ? normalizedReference.tid
+      : String(receiptNumber).toUpperCase().trim();
     
     // 3. Early duplicate check
     const existing = await PaymentVerificationRepository.findOne({
@@ -56,11 +66,15 @@ class PaymentVerificationService {
     }
     
     // 4. Resolve provider and verify
-    const providerInstance = resolveProvider(provider);
+    const providerInstance = providerResolver.resolveProvider(provider);
     
     let result;
     try {
-      result = await providerInstance.verify(cleanedReceiptNo, {
+      const verificationInput = provider === 'cbebirr' && normalizedReference && typeof normalizedReference === 'object'
+        ? normalizedReference
+        : cleanedReceiptNo;
+
+      result = await providerInstance.verify(verificationInput, {
         orderAmount: order.totalAmount
       });
     } catch (error) {
@@ -139,6 +153,7 @@ class PaymentVerificationService {
             lookupError,
             rejectionReason, // ✅ FIXED: Set for auto-rejected items
             receiptFileRef: pdfFileAsset ? pdfFileAsset._id : null,
+            pdfDownloaded: !!(result.pdfDownloaded || pdfFileAsset),
             ...(status === 'rejected' && { verifiedAt: new Date() }), // Auto-rejected, no manual review
           },
         ],
@@ -525,7 +540,7 @@ class PaymentVerificationService {
     }
     
     // 4. Resolve provider and verify with PDF download
-    const providerInstance = resolveProvider(provider);
+    const providerInstance = providerResolver.resolveProvider(provider);
     
     if (typeof providerInstance.verifyWithPDF !== 'function') {
       throw new AppError(
@@ -624,6 +639,7 @@ class PaymentVerificationService {
         lookupError,
         rejectionReason,
         receiptFileRef: pdfFileAsset ? pdfFileAsset._id : null,
+        pdfDownloaded: !!(result.pdfDownloaded || pdfFileAsset),
         ...(status === 'rejected' && { verifiedAt: new Date() }),
       }, session);
       

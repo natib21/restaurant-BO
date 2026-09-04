@@ -29,6 +29,10 @@ class OrderFlowConfigRepository {
             requiresReview: true,
             reviewerRole: 'waiter',
           },
+          qr: {
+            requiresReview: false,
+            reviewerRole: null,
+          },
           admin: {
             requiresReview: true,
             reviewerRole: 'support',
@@ -90,6 +94,21 @@ class OrderFlowConfigRepository {
    */
   static async getChannelConfig(merchantId, channel) {
     const config = await OrderFlowConfigRepository.findByMerchant(merchantId);
+
+    if (!config || !config.channels) {
+      return { requiresReview: false, reviewerRole: null };
+    }
+
+    if (!config.channels[channel]) {
+      logger.warn('order-flow-config.channel_missing_fallback', {
+        merchantId: merchantId.toString(),
+        channel,
+        availableChannels: Object.keys(config.channels || {}),
+      });
+
+      return { requiresReview: false, reviewerRole: null };
+    }
+
     return config.channels[channel];
   }
 }

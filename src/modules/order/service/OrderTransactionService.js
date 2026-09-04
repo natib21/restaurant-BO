@@ -44,10 +44,11 @@ class OrderTransactionService {
       branchId,
       tableId,
       customerId,
+      sessionId,  // ✅ NEW: Dining session ID
       customer,
       customerName,
       customerPhone,
-      sessionToken, // ✅ Session token from authenticated request
+      sessionToken,
       items,
       performedBy,
       idempotencyKey,
@@ -105,9 +106,10 @@ class OrderTransactionService {
               customerPhone: customerPhone || null,
               table: tableId,
               tableNumber: table.tableNumber,
+              session: sessionId,  // ✅ NEW: Link to dining session
               orderType: 'dine_in',
               orderNumber,
-              source: 'web', // explicit source for customer QR orders
+              source: 'qr',  // ✅ UPDATED: Customer QR orders source='qr'
               items: orderItems,
               subtotal,
               totalAmount: subtotal,
@@ -170,13 +172,20 @@ class OrderTransactionService {
         createdOrder.source
       );
 
+      let finalOrder = createdOrder;
+      if (finalOrder && typeof finalOrder.reload === 'function') {
+        finalOrder = await finalOrder.reload();
+      } else if (finalOrder && finalOrder._id) {
+        finalOrder = await Order.findById(finalOrder._id);
+      }
+
       if (channelConfig.requiresReview === false) {
         // Auto-route: pending → accepted → preparing
         // Use actorType: 'system' for automated transitions
 
         // Transition 1: pending → accepted
         await OrderStateMachineService.transitionOrderStatus({
-          orderId: createdOrder._id,
+          orderId: finalOrder._id,
           toStatus: 'accepted',
           merchantQuery: { merchant: merchantId },
           user: null,
@@ -186,7 +195,7 @@ class OrderTransactionService {
 
         // Transition 2: accepted → preparing
         await OrderStateMachineService.transitionOrderStatus({
-          orderId: createdOrder._id,
+          orderId: finalOrder._id,
           toStatus: 'preparing',
           merchantQuery: { merchant: merchantId },
           user: null,
@@ -194,18 +203,18 @@ class OrderTransactionService {
           reason: 'Auto-sent to kitchen: channel requires no review',
         });
 
-        // Refresh order to get updated status
-        await createdOrder.reload();
+        // Refresh order to get updated status safely in case the original doc was plain data
+        finalOrder = await Order.findById(finalOrder._id);
 
         logger.info('order.auto-routed', {
-          orderId: createdOrder._id.toString(),
-          source: createdOrder.source,
-          finalStatus: createdOrder.status,
+          orderId: finalOrder._id.toString(),
+          source: finalOrder.source,
+          finalStatus: finalOrder.status,
         });
       }
 
       if (useIdempotency && idempotencyKey) {
-        await IdempotencyService.markCompleted(merchantId, idempotencyKey, createdOrder._id);
+        await IdempotencyService.markCompleted(merchantId, idempotencyKey, finalOrder._id);
       }
 
       // ✅ Emit real-time socket event to staff (after DB transaction committed)
@@ -224,37 +233,37 @@ class OrderTransactionService {
         });
         
         io.to(`branch:${branchId}:perm:ORDER_VIEW`).emit('order:new', {
-          _id: createdOrder._id,
-          orderNumber: createdOrder.orderNumber,
-          status: createdOrder.status,
-          source: createdOrder.source,
+          _id: finalOrder._id,
+          orderNumber: finalOrder.orderNumber,
+          status: finalOrder.status,
+          source: finalOrder.source,
           tableNumber: table.tableNumber,
           customerName,
-          totalAmount: createdOrder.totalAmount,
-          placedAt: createdOrder.placedAt,
+          totalAmount: finalOrder.totalAmount,
+          placedAt: finalOrder.placedAt,
           branchId,
         });
         
         io.to(`branch:${branchId}:perm:ORDER_MANAGE`).emit('order:new', {
-          _id: createdOrder._id,
-          orderNumber: createdOrder.orderNumber,
-          status: createdOrder.status,
-          source: createdOrder.source,
+          _id: finalOrder._id,
+          orderNumber: finalOrder.orderNumber,
+          status: finalOrder.status,
+          source: finalOrder.source,
           tableNumber: table.tableNumber,
           customerName,
-          totalAmount: createdOrder.totalAmount,
-          placedAt: createdOrder.placedAt,
+          totalAmount: finalOrder.totalAmount,
+          placedAt: finalOrder.placedAt,
           branchId,
         });
         
         // ✅ Notify customer if they're connected via socket
         // Emit to the order room so customer receives status updates
-        io.to(`order:${createdOrder._id}`).emit('order:created', {
-          _id: createdOrder._id,
-          orderNumber: createdOrder.orderNumber,
-          status: createdOrder.status,
-          totalAmount: createdOrder.totalAmount,
-          placedAt: createdOrder.placedAt,
+        io.to(`order:${finalOrder._id}`).emit('order:created', {
+          _id: finalOrder._id,
+          orderNumber: finalOrder.orderNumber,
+          status: finalOrder.status,
+          totalAmount: finalOrder.totalAmount,
+          placedAt: finalOrder.placedAt,
           items: orderItems.map(item => ({
             name: item.name,
             quantity: item.quantity,
@@ -321,13 +330,13 @@ class OrderTransactionService {
       }
 
       logger.info('order.place.success', {
-        orderId: createdOrder._id.toString(),
+        orderId: finalOrder._id.toString(),
         merchantId: merchantId.toString(),
         branchId: branchId.toString(),
         idempotencyKey: idempotencyKey || undefined,
       });
 
-      return { order: createdOrder, orderItems, table, replayed: false };
+      return { order: finalOrder, orderItems, table, replayed: false };
     } catch (error) {
       if (useIdempotency && idempotencyKey) {
         await IdempotencyService.releaseClaim(merchantId, idempotencyKey);

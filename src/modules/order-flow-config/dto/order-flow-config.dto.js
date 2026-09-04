@@ -3,7 +3,7 @@ const { z } = require('zod');
 /**
  * Valid channel names - MUST match Order.source enum exactly
  */
-const VALID_CHANNELS = ['waiter', 'web', 'admin', 'telegram'];
+const VALID_CHANNELS = ['waiter', 'web', 'qr', 'admin', 'telegram'];
 
 /**
  * Channel configuration schema

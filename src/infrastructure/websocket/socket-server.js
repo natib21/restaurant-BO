@@ -17,17 +17,66 @@ const Order = require('../../../models/orderModel');
 const verifyJwt = (0, util_1.promisify)(jsonwebtoken_1.default.verify);
 let io = null;
 /**
+ * Parse cookies from cookie header string
+ */
+function parseCookies(cookieHeader) {
+    const cookies = {};
+    if (!cookieHeader) return cookies;
+    
+    cookieHeader.split(';').forEach(cookie => {
+        const [name, ...rest] = cookie.split('=');
+        if (name && rest.length) {
+            cookies[name.trim()] = rest.join('=').trim();
+        }
+    });
+    
+    return cookies;
+}
+
+/**
  * Authenticate staff socket connection via JWT token
+ * Supports token from:
+ * 1. socket.handshake.auth.token (client-provided)
+ * 2. Authorization header (Bearer token)
+ * 3. HttpOnly cookie (jwt or token)
  */
 async function authenticateStaffSocket(socket, next) {
     try {
         const token = socket.handshake.auth?.token ||
             socket.handshake.headers.authorization?.split(' ')?.[1];
+
+        // If no token in auth or header, check cookies (for HttpOnly cookies)
+        let cookieToken = null;
         if (!token) {
+            const cookieHeader = socket.handshake.headers.cookie;
+            
+            if (cookieHeader) {
+                const cookies = parseCookies(cookieHeader);
+                cookieToken = cookies.jwt || cookies.token;
+                
+                if (cookieToken) {
+                    logger_1.logger.info('socket.auth.cookie', { 
+                        socketId: socket.id,
+                        cookieName: cookies.jwt ? 'jwt' : 'token'
+                    });
+                }
+            }
+        }
+
+        const finalToken = token || cookieToken;
+
+        if (!finalToken) {
+            logger_1.logger.warn('socket.auth.failed', {
+                socketId: socket.id,
+                hasAuth: !!socket.handshake.auth?.token,
+                hasAuthHeader: !!socket.handshake.headers.authorization,
+                hasCookie: !!socket.handshake.headers.cookie,
+            });
             return next(new Error('Authentication required'));
         }
         const env = (0, env_1.loadEnv)();
-        const decoded = await verifyJwt(token, env.JWT_SECRET);
+        const decoded = await verifyJwt(finalToken, env.JWT_SECRET);
+        
         const user = await User.findById(decoded.id)
             .populate({
             path: 'role',
@@ -36,6 +85,12 @@ async function authenticateStaffSocket(socket, next) {
         })
             .populate('merchant', '_id businessName');
         if (!user || !user.isActive) {
+            logger_1.logger.warn('socket.auth.user_invalid', {
+                socketId: socket.id,
+                userId: decoded.id,
+                userExists: !!user,
+                isActive: user?.isActive
+            });
             return next(new Error('User not found or inactive'));
         }
         socket.data.user = user;
@@ -45,7 +100,11 @@ async function authenticateStaffSocket(socket, next) {
             .filter(Boolean);
         next();
     }
-    catch {
+    catch (error) {
+        logger_1.logger.error('socket.auth.error', {
+            error: error.message,
+            type: error.constructor.name
+        });
         next(new Error('Invalid or expired token'));
     }
 }
@@ -161,9 +220,19 @@ function createSocketServer(app) {
         else if (userType === 'customer') {
             // Customer connection handler
             const session = socket.data.session;
+            console.log('\n👤 CUSTOMER SOCKET CONNECTED:', {
+                socketId: socket.id,
+                sessionToken: session?.token?.substring(0, 8) + '...',
+                tableId: session?.table,
+                merchantId: session?.merchant,
+            });
+            
             logger_1.logger.info(`Customer socket connected: ${socket.id} session=${session?.token?.substring(0, 8)}... table=${session?.table}`);
+            
             // Join session-specific room for direct communication
             socket.join(`session:${session.token}`);
+            console.log(`   ✅ Joined room: session:${session.token.substring(0, 8)}...`);
+            
             // Find all active orders for this session's table and join their rooms
             try {
                 const activeOrders = await Order.find({
@@ -171,9 +240,13 @@ function createSocketServer(app) {
                     merchant: session.merchant,
                     status: { $nin: ['completed', 'canceled'] },
                 }).select('_id').lean();
+                
+                console.log(`   📋 Found ${activeOrders.length} active orders for this table`);
+                
                 activeOrders.forEach((order) => {
                     const orderId = String(order._id);
                     socket.join(`order:${orderId}`);
+                    console.log(`   ✅ Joined room: order:${orderId}`);
                     logger_1.logger.info(`Customer socket ${socket.id} joined order room: order:${orderId}`);
                 });
                 logger_1.logger.info(`Customer joined ${activeOrders.length} active order rooms`);

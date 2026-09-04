@@ -76,28 +76,57 @@ function parseCookies(cookieHeader) {
  */
 function authenticateStaffSocket(socket, next) {
     return __awaiter(this, void 0, void 0, function () {
-        var token, cookieHeader, cookies, env, decoded, user, _a;
-        var _b, _c, _d, _e, _f;
-        return __generator(this, function (_g) {
-            switch (_g.label) {
+        var token, cookieHeader, cookies, env, decoded, user, error_1;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        return __generator(this, function (_j) {
+            switch (_j.label) {
                 case 0:
-                    _g.trys.push([0, 3, , 4]);
-                    token = ((_b = socket.handshake.auth) === null || _b === void 0 ? void 0 : _b.token) ||
-                        ((_d = (_c = socket.handshake.headers.authorization) === null || _c === void 0 ? void 0 : _c.split(' ')) === null || _d === void 0 ? void 0 : _d[1]);
+                    _j.trys.push([0, 3, , 4]);
+                    console.log('\n=== 🔍 SOCKET AUTH DEBUG ===');
+                    console.log('Socket ID:', socket.id);
+                    console.log('Handshake auth:', socket.handshake.auth);
+                    console.log('Authorization header:', socket.handshake.headers.authorization);
+                    console.log('Cookie header:', socket.handshake.headers.cookie);
+                    console.log('All headers:', JSON.stringify(socket.handshake.headers, null, 2));
+                    token = ((_a = socket.handshake.auth) === null || _a === void 0 ? void 0 : _a.token) ||
+                        ((_c = (_b = socket.handshake.headers.authorization) === null || _b === void 0 ? void 0 : _b.split(' ')) === null || _c === void 0 ? void 0 : _c[1]);
+                    console.log('Token from auth/header:', token ? token.substring(0, 30) + '...' : 'NONE');
                     // If no token in auth or header, check cookies (for HttpOnly cookies)
                     if (!token) {
                         cookieHeader = socket.handshake.headers.cookie;
-                        cookies = parseCookies(cookieHeader);
-                        token = cookies.jwt || cookies.token; // Try both 'jwt' and 'token' cookie names
-                        if (token) {
-                            logger_1.logger.info('socket.auth.cookie', {
-                                socketId: socket.id,
-                                cookieName: cookies.jwt ? 'jwt' : 'token',
-                                tokenPreview: token.substring(0, 20) + '...'
-                            });
+                        console.log('Checking cookies...');
+                        if (cookieHeader) {
+                            cookies = parseCookies(cookieHeader);
+                            console.log('Parsed cookies:', Object.keys(cookies));
+                            console.log('Cookie values:', Object.entries(cookies).map(function (_a) {
+                                var k = _a[0], v = _a[1];
+                                return "".concat(k, "=").concat(v.substring(0, 30), "...");
+                            }));
+                            token = cookies.jwt || cookies.token;
+                            if (token) {
+                                console.log('✅ Found token in cookie:', token ? token.substring(0, 30) + '...' : 'NONE');
+                                logger_1.logger.info('socket.auth.cookie', {
+                                    socketId: socket.id,
+                                    cookieName: cookies.jwt ? 'jwt' : 'token',
+                                    tokenPreview: token.substring(0, 20) + '...'
+                                });
+                            }
+                            else {
+                                console.log('❌ No jwt or token cookie found');
+                                console.log('Available cookies:', Object.keys(cookies));
+                            }
+                        }
+                        else {
+                            console.log('❌ No cookie header at all');
                         }
                     }
                     if (!token) {
+                        console.log('\n❌ AUTHENTICATION FAILED - No token found');
+                        console.log('Checked:');
+                        console.log('  - socket.handshake.auth.token:', !!((_d = socket.handshake.auth) === null || _d === void 0 ? void 0 : _d.token));
+                        console.log('  - Authorization header:', !!socket.handshake.headers.authorization);
+                        console.log('  - Cookie header:', !!socket.handshake.headers.cookie);
+                        console.log('=== END AUTH DEBUG ===\n');
                         logger_1.logger.warn('socket.auth.failed', {
                             socketId: socket.id,
                             reason: 'No token found in auth, header, or cookies',
@@ -107,10 +136,12 @@ function authenticateStaffSocket(socket, next) {
                         });
                         return [2 /*return*/, next(new Error('Authentication required'))];
                     }
+                    console.log('✅ Token found, verifying...');
                     env = (0, env_1.loadEnv)();
                     return [4 /*yield*/, verifyJwt(token, env.JWT_SECRET)];
                 case 1:
-                    decoded = _g.sent();
+                    decoded = _j.sent();
+                    console.log('✅ JWT decoded:', { id: decoded.id });
                     return [4 /*yield*/, User.findById(decoded.id)
                             .populate({
                             path: 'role',
@@ -119,19 +150,34 @@ function authenticateStaffSocket(socket, next) {
                         })
                             .populate('merchant', '_id businessName')];
                 case 2:
-                    user = _g.sent();
+                    user = _j.sent();
                     if (!user || !user.isActive) {
+                        console.log('❌ User not found or inactive');
+                        console.log('User found:', !!user);
+                        console.log('User active:', user === null || user === void 0 ? void 0 : user.isActive);
+                        console.log('=== END AUTH DEBUG ===\n');
                         return [2 /*return*/, next(new Error('User not found or inactive'))];
                     }
+                    console.log('✅ User authenticated:', {
+                        userId: user._id,
+                        userName: user.firstName + ' ' + user.lastName,
+                        role: (_f = user.role) === null || _f === void 0 ? void 0 : _f.name,
+                        merchant: (_g = user.merchant) === null || _g === void 0 ? void 0 : _g._id,
+                    });
+                    console.log('=== END AUTH DEBUG ===\n');
                     socket.data.user = user;
                     socket.data.userType = 'staff';
-                    socket.data.permissions = (((_f = user.role) === null || _f === void 0 ? void 0 : _f.tasks) || [])
+                    socket.data.permissions = (((_h = user.role) === null || _h === void 0 ? void 0 : _h.tasks) || [])
                         .map(function (t) { return t.name; })
                         .filter(Boolean);
                     next();
                     return [3 /*break*/, 4];
                 case 3:
-                    _a = _g.sent();
+                    error_1 = _j.sent();
+                    console.log('❌ JWT verification failed:', error_1);
+                    console.log('Error type:', error_1.constructor.name);
+                    console.log('Error message:', error_1.message);
+                    console.log('=== END AUTH DEBUG ===\n');
                     next(new Error('Invalid or expired token'));
                     return [3 /*break*/, 4];
                 case 4: return [2 /*return*/];
@@ -144,7 +190,7 @@ function authenticateStaffSocket(socket, next) {
  */
 function authenticateCustomerSocket(socket, next) {
     return __awaiter(this, void 0, void 0, function () {
-        var sessionToken, session, error_1;
+        var sessionToken, session, error_2;
         var _a;
         return __generator(this, function (_b) {
             switch (_b.label) {
@@ -173,8 +219,8 @@ function authenticateCustomerSocket(socket, next) {
                     next();
                     return [3 /*break*/, 3];
                 case 2:
-                    error_1 = _b.sent();
-                    logger_1.logger.error('Customer socket auth error:', error_1);
+                    error_2 = _b.sent();
+                    logger_1.logger.error('Customer socket auth error:', error_2);
                     next(new Error('Authentication failed'));
                     return [3 /*break*/, 3];
                 case 3: return [2 /*return*/];
@@ -213,7 +259,7 @@ function createSocketServer(app) {
     });
     io.use(authenticateSocket);
     io.on('connection', function (socket) { return __awaiter(_this, void 0, void 0, function () {
-        var userType, user_1, session, activeOrders, error_2;
+        var userType, user_1, session, activeOrders, error_3;
         var _a;
         return __generator(this, function (_b) {
             switch (_b.label) {
@@ -301,8 +347,8 @@ function createSocketServer(app) {
                     logger_1.logger.info("Customer joined ".concat(activeOrders.length, " active order rooms"));
                     return [3 /*break*/, 5];
                 case 4:
-                    error_2 = _b.sent();
-                    logger_1.logger.error('Error joining customer to order rooms:', error_2);
+                    error_3 = _b.sent();
+                    logger_1.logger.error('Error joining customer to order rooms:', error_3);
                     return [3 /*break*/, 5];
                 case 5:
                     // Allow customer to explicitly join order rooms

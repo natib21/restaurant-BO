@@ -18,7 +18,7 @@ const FileAsset = require('../../../../models/FileAsset');
  */
 const PDF_MAGIC_BYTES = '%PDF-';
 const MAX_PDF_SIZE = 10 * 1024 * 1024; // 10 MB
-const MIN_PDF_SIZE = 100; // 100 bytes (tiny PDFs are suspicious)
+const MIN_PDF_SIZE = 20; // Some valid PDFs can be very small; reject only obviously empty payloads.
 
 /**
  * Validate that content is actually a PDF
@@ -46,13 +46,26 @@ function validatePDF(buffer, contentType) {
     // Don't throw yet - Content-Type header can be wrong, check magic bytes
   }
   
-  // ✅ CRITICAL: Validate PDF magic bytes
-  const header = buffer.slice(0, 5).toString('utf-8');
-  if (header !== PDF_MAGIC_BYTES) {
+  // ✅ CRITICAL: Ignore leading padding/offset bytes from large backing ArrayBuffers while still
+  // rejecting HTML that is mislabeled as a PDF. Real provider PDFs should pass as long as the
+  // meaningful payload contains the PDF signature before any HTML marker in the early window.
+  const firstMeaningfulByte = buffer.findIndex(byte => byte !== 0);
+  const normalizedBuffer = firstMeaningfulByte > -1 ? buffer.subarray(firstMeaningfulByte) : buffer;
+  const signatureWindow = normalizedBuffer.subarray(0, Math.min(normalizedBuffer.length, 4096));
+  const preview = signatureWindow.toString('latin1').toLowerCase();
+  const htmlIndex = preview.search(/<!doctype|<html|<body/i);
+  const signatureIndex = preview.indexOf(PDF_MAGIC_BYTES.toLowerCase());
+
+  if (signatureIndex === -1 || (htmlIndex !== -1 && htmlIndex < signatureIndex)) {
     throw new AppError(
       'File is not a valid PDF. Expected PDF format for receipt.',
       400
     );
+  }
+
+  // Normalize the buffer so it begins exactly at the real PDF signature.
+  if (signatureIndex > 0) {
+    buffer = normalizedBuffer.subarray(signatureIndex);
   }
   
   return true;

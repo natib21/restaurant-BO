@@ -18,7 +18,7 @@ const { sendResponse } = require('../../../../../utils/sendResponse');
  * Place order from QR menu
  *
  * Guard: protectTableSession
- * Context: req.customerId, req.tableId, req.tableSession
+ * Context: req.customerId, req.tableId, req.diningSession
  * Body: { items: [...] }
  * Response: { success, message, data: { order } }
  */
@@ -27,13 +27,18 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
   const items = req.validatedBody?.items || req.body.items;
   const tableId = req.tableId;
   const customerId = req.customerId;
-  const sessionToken = req.tableSession?.token; // ✅ Pass session token for notifications
+  const sessionToken = req.tableSession?.token;
+  const sessionId = req.diningSession?._id;  // ✅ NEW: Get session ID
 
   const merchantId = getMerchantId(req);
   const branchId = getBranchId(req) ?? req.tableSession?.branch;
 
   if (!branchId) {
     return next(new AppError('Branch context is required', 400));
+  }
+
+  if (!sessionId) {
+    return next(new AppError('Valid session is required to place order', 401));
   }
 
   // Idempotency for retry safety
@@ -45,10 +50,11 @@ exports.placeOrder = catchAsync(async (req, res, next) => {
     branchId,
     tableId,
     customerId,
+    sessionId,  // ✅ NEW: Pass session ID
     customer: req.customer,
     customerName: req.customer?.fullName || 'Guest',
     customerPhone: req.customer?.phone || null,
-    sessionToken, // ✅ Pass session token to avoid re-querying
+    sessionToken,
     items,
     performedBy: req.user?._id || null,
     idempotencyKey,

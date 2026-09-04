@@ -23,32 +23,65 @@ describe('CBEBirr PDF Receipt Handling', () => {
   
   beforeAll(async () => {
     await mongoose.connect(process.env.MONGO_URI_TEST);
-    
-    // Create test merchant
+
     const Merchant = require('../models/Merchant');
+    const Branch = require('../models/Branch');
+
     merchant = await Merchant.create({
-      name: 'PDF Test Restaurant',
-      email: 'pdf-test@example.com',
+      businessName: 'PDF Test Restaurant',
+      slug: 'pdf-test-restaurant',
       phone: '251911000000',
+      owner: {
+        fullName: 'PDF Tester',
+        gender: 'Male',
+        email: 'pdf-test@example.com',
+        phone: '251911000000',
+      },
+      status: 'approved',
+      isActive: true,
+      isSubscriptionActive: true,
     });
-    
-    // Create test user
+
+    const branch = await Branch.create({
+      name: 'Main Branch',
+      merchant: merchant._id,
+      isMain: true,
+      location: {
+        type: 'Point',
+        coordinates: [38.763611, 9.005401],
+        city: 'Addis Ababa',
+      },
+    });
+
     user = await User.create({
+      firstName: 'PDF',
+      lastName: 'Tester',
       email: 'pdf-tester@example.com',
-      name: 'PDF Tester',
-      role: 'cashier',
+      phone: '251911111111',
+      password: 'Password123',
+      passwordConfirm: 'Password123',
+      role: null,
       merchant: merchant._id,
     });
-    
-    // Create test order
+
     order = await Order.create({
       merchant: merchant._id,
+      branch: branch._id,
+      customerName: 'Walk-in Customer',
+      customerPhone: '251911222222',
       orderNumber: 'ORD-PDF-001',
-      totalAmount: 250.00,
-      paymentStatus: 'pending',
-      paymentMethod: 'cbebirr',
-      status: 'confirmed',
+      orderType: 'takeaway',
+      source: 'staff',
+      status: 'accepted',
       items: [],
+      subtotal: 250,
+      taxAmount: 0,
+      discountAmount: 0,
+      totalAmount: 250.0,
+      paymentStatus: 'unpaid',
+      paymentDetails: {
+        method: 'mobile_banking',
+      },
     });
   });
   
@@ -74,7 +107,7 @@ describe('CBEBirr PDF Receipt Handling', () => {
             return null;
           },
         },
-        arrayBuffer: async () => mockPdfBuffer.buffer,
+        arrayBuffer: async () => mockPdfBuffer.buffer.slice(mockPdfBuffer.byteOffset, mockPdfBuffer.byteOffset + mockPdfBuffer.byteLength),
       });
       
       const provider = new CBEBirrProvider({ httpClient: mockHttpClient });
@@ -98,7 +131,7 @@ describe('CBEBirr PDF Receipt Handling', () => {
             return null;
           },
         },
-        arrayBuffer: async () => fakePdfBuffer.buffer,
+        arrayBuffer: async () => fakePdfBuffer.buffer.slice(fakePdfBuffer.byteOffset, fakePdfBuffer.byteOffset + fakePdfBuffer.byteLength),
       });
       
       const provider = new CBEBirrProvider({ httpClient: mockHttpClient });
@@ -144,7 +177,7 @@ describe('CBEBirr PDF Receipt Handling', () => {
             return null;
           },
         },
-        arrayBuffer: async () => mockPdfBuffer.buffer,
+        arrayBuffer: async () => mockPdfBuffer.buffer.slice(mockPdfBuffer.byteOffset, mockPdfBuffer.byteOffset + mockPdfBuffer.byteLength),
       });
       
       const provider = new CBEBirrProvider({ httpClient: mockHttpClient });

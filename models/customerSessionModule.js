@@ -100,4 +100,22 @@ customerSessionSchema.pre('save', async function (next) {
   next();
 });
 
+// ====================== MIGRATION NOTICE ======================
+// This model has been renamed to DiningSession to better represent
+// table-based sessions rather than individual customer sessions.
+// 
+// This file is kept as a backward compatibility alias during migration.
+// New code should use: require('./DiningSession')
+// 
+// TODO: Remove this file after migration is complete and all references updated
+// ================================================================
+
+// Export the new DiningSession model under the old CustomerSession name
+// This ensures existing code continues to work during migration
+const DiningSession = require('./DiningSession');
+module.exports = DiningSession;
+
+// Keep the old model definition commented for reference during migration
+/*
 module.exports = mongoose.model('CustomerSession', customerSessionSchema);
+*/

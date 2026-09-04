@@ -51,6 +51,18 @@ class StatusSyncService {
         servedVia: item.servedVia,
       };
       
+      console.log('\n🔔 EMITTING order:item-status-changed:', {
+        event: 'order:item-status-changed',
+        orderId: itemStatusEvent.orderId,
+        itemId: itemStatusEvent.itemId,
+        newStatus: itemStatusEvent.newStatus,
+        servedAt: itemStatusEvent.servedAt,
+        rooms: [
+          `order:${order._id}`,
+          `session:${order.table}`,
+        ]
+      });
+      
       // Emit to order room (customers subscribed to this order)
       io.to(`order:${order._id}`).emit('order:item-status-changed', itemStatusEvent);
       
@@ -72,7 +84,10 @@ class StatusSyncService {
           expiresAt: { $gt: new Date() },
         }).select('token').lean();
         
+        console.log(`📡 Found ${sessions.length} active customer sessions for table ${order.table}`);
+        
         sessions.forEach(s => {
+          console.log(`   └─ Emitting to session:${s.token.substring(0, 8)}...`);
           io.to(`session:${s.token}`).emit('order:item-status-changed', itemStatusEvent);
         });
       } catch (err) {
@@ -102,6 +117,17 @@ class StatusSyncService {
         timestamp: new Date().toISOString(),
       };
       
+      console.log('\n🔔 EMITTING order:status-changed:', {
+        event: 'order:status-changed',
+        orderId: statusChangeEvent.orderId,
+        oldStatus: statusChangeEvent.oldStatus,
+        newStatus: statusChangeEvent.newStatus,
+        rooms: [
+          `order:${order._id}`,
+          `session:${order.table}`,
+        ]
+      });
+      
       // Emit to order room (customers subscribed to this order)
       io.to(`order:${order._id}`).emit('order:status-changed', statusChangeEvent);
       
@@ -122,7 +148,10 @@ class StatusSyncService {
           expiresAt: { $gt: new Date() },
         }).select('token').lean();
         
+        console.log(`📡 Found ${sessions.length} active customer sessions for order status change`);
+        
         sessions.forEach(s => {
+          console.log(`   └─ Emitting to session:${s.token.substring(0, 8)}...`);
           io.to(`session:${s.token}`).emit('order:status-changed', statusChangeEvent);
         });
       } catch (err) {
@@ -303,6 +332,8 @@ class StatusSyncService {
     const io = getIo();
     if (!io) return;
 
+    console.log('\n🔔 BULK SERVE - Starting to emit events for', changedItems.length, 'items');
+
     // Emit individual item events
     for (const item of changedItems) {
       const itemStatusEvent = {
@@ -312,6 +343,8 @@ class StatusSyncService {
         servedAt: item.servedAt,
         servedVia: item.servedVia,
       };
+      
+      console.log(`  📤 Emitting order:item-status-changed for item ${item._id} (${item.status})`);
       
       // Emit to order room (customers subscribed to this order)
       io.to(`order:${order._id}`).emit('order:item-status-changed', itemStatusEvent);
@@ -333,7 +366,10 @@ class StatusSyncService {
           expiresAt: { $gt: new Date() },
         }).select('token').lean();
         
+        console.log(`  📡 Found ${sessions.length} active customer sessions for table ${order.table}`);
+        
         sessions.forEach(s => {
+          console.log(`     └─ Emitting to session:${s.token.substring(0, 8)}...`);
           io.to(`session:${s.token}`).emit('order:item-status-changed', itemStatusEvent);
         });
       } catch (err) {
@@ -357,6 +393,12 @@ class StatusSyncService {
         timestamp: new Date().toISOString(),
       };
       
+      console.log('\n🔔 BULK SERVE - Order status changed:', {
+        orderId: statusChangeEvent.orderId,
+        oldStatus: statusChangeEvent.oldStatus,
+        newStatus: statusChangeEvent.newStatus,
+      });
+      
       // Emit to order room (customers subscribed to this order)
       io.to(`order:${order._id}`).emit('order:status-changed', statusChangeEvent);
       
@@ -377,7 +419,10 @@ class StatusSyncService {
           expiresAt: { $gt: new Date() },
         }).select('token').lean();
         
+        console.log(`📡 Found ${sessions.length} active customer sessions for order status change`);
+        
         sessions.forEach(s => {
+          console.log(`   └─ Emitting order:status-changed to session:${s.token.substring(0, 8)}...`);
           io.to(`session:${s.token}`).emit('order:status-changed', statusChangeEvent);
         });
       } catch (err) {

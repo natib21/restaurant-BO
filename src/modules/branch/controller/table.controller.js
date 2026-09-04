@@ -96,3 +96,69 @@ exports.transitionStatus = catchAsync(async (req, res) => {
   });
   res.status(200).json({ status: 'success', data: result });
 });
+
+exports.closeTable = catchAsync(async (req, res) => {
+  const merchantId = getMerchantId(req);
+  const { force } = req.query;
+  const { SessionService } = require('../../sessions/service/SessionService');
+  const DiningSession = require('../../../../models/DiningSession');
+  const Table = require('../../../../models/tabelModel');
+  
+  // Get table to find active session
+  const table = await Table.findOne({
+    _id: req.params.id,
+    merchant: merchantId
+  });
+  
+  if (!table) {
+    return res.status(404).json({
+      status: 'fail',
+      message: 'Table not found'
+    });
+  }
+  
+  // Find active session for this table
+  const activeSession = await SessionService.getActiveSession(table._id);
+  
+  if (!activeSession) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'No active session found for this table',
+      data: {
+        tableId: table._id,
+        tableNumber: table.tableNumber,
+        currentStatus: table.status
+      }
+    });
+  }
+  
+  // Close the session
+  const closedSession = await SessionService.endSession({
+    sessionId: activeSession._id,
+    closedBy: req.user._id,
+    force: force === 'true'
+  });
+  
+  // Get session summary
+  const summary = await SessionService.getSessionSummary(closedSession._id);
+  
+  res.status(200).json({
+    status: 'success',
+    message: 'Table closed successfully',
+    data: {
+      table: {
+        _id: table._id,
+        tableNumber: table.tableNumber,
+        status: 'needs-cleaning'
+      },
+      session: {
+        _id: closedSession._id,
+        status: closedSession.status,
+        startedAt: closedSession.startedAt,
+        endedAt: closedSession.endedAt,
+        duration: closedSession.getDurationFormatted()
+      },
+      summary
+    }
+  });
+});

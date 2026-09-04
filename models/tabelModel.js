@@ -106,11 +106,11 @@ tableSchema.virtual('currentOrder', {
 });
 
 tableSchema.virtual('activeSession', {
-  ref: 'CustomerSession',
+  ref: 'DiningSession',  // ✅ Updated to use new model name
   localField: '_id',
   foreignField: 'table',
   justOne: true,
-  match: { isActive: true, expiresAt: { $gt: new Date() } },
+  match: { status: 'active' },  // ✅ Updated to use status field instead of isActive
 });
 
 // ====================== METHODS ======================
@@ -146,10 +146,9 @@ tableSchema.methods.regenerateQR = async function () {
 
 // Move table + transfer session & orders
 tableSchema.methods.moveTo = async function (newTableId) {
-  const session = await mongoose.model('CustomerSession').findOne({
+  const session = await mongoose.model('DiningSession').findOne({  // ✅ Updated
     table: this._id,
-    isActive: true,
-    expiresAt: { $gt: new Date() },
+    status: 'active',  // ✅ Updated to use status
   });
 
   const newTable = await this.constructor.findById(newTableId);

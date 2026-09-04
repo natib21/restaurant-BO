@@ -156,19 +156,33 @@ exports.getMerchant = catchAsync(async (req, res) => {
 
 exports.createNewMerchant = catchAsync(async (req, res) => {
   const merchant = await merchantService.createMerchant(req.body, req.user._id);
+  const merchantObj = merchant.toObject ? merchant.toObject() : merchant;
 
   res.status(201).json({
     status: 'success',
-    data: { merchant },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
+      },
+    },
   });
 });
 
 exports.updateMerchant = catchAsync(async (req, res) => {
   const merchant = await merchantService.updateMerchant(req.params.id, req.body, req.user);
+  const merchantObj = merchant.toObject ? merchant.toObject() : merchant;
 
   res.status(200).json({
     status: 'success',
-    data: { merchant },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
+      },
+    },
   });
 });
 
@@ -214,31 +228,52 @@ exports.deleteMerchant = catchAsync(async (req, res) => {
 exports.approveMerchant = catchAsync(async (req, res) => {
   console.log(`Approving merchant with ID: ${req.params.id} by user: ${req.user._id}`);
   const merchant = await merchantService.approveMerchant(req.params.id, req.user._id);
-    
+  const merchantObj = merchant.toObject ? merchant.toObject() : merchant;
+
   res.status(200).json({
     status: 'success',
     message: 'Merchant approved',
-    data: { merchant },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
+      },
+    },
   });
 });
 
 exports.suspendMerchant = catchAsync(async (req, res) => {
   const merchant = await merchantService.suspendMerchant(req.params.id, req.body.reason);
+  const merchantObj = merchant.toObject ? merchant.toObject() : merchant;
 
   res.status(200).json({
     status: 'success',
     message: 'Merchant suspended',
-    data: { merchant },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
+      },
+    },
   });
 });
 
 exports.activateMerchant = catchAsync(async (req, res) => {
   const merchant = await merchantService.activateMerchant(req.params.id);
+  const merchantObj = merchant.toObject ? merchant.toObject() : merchant;
 
   res.status(200).json({
     status: 'success',
     message: 'Merchant reactivated',
-    data: { merchant },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
+      },
+    },
   });
 });
 
@@ -253,9 +288,16 @@ exports.getMerchantStats = catchAsync(async (req, res) => {
 
 exports.updateSubscription = catchAsync(async (req, res) => {
   const merchant = await merchantService.updateSubscription(req.params.id, req.body.plan);
+  const merchantObj = merchant.toObject ? merchant.toObject() : merchant;
 
   res.status(200).json({
     status: 'success',
-    data: { merchant },
+    data: {
+      merchant: {
+        ...merchantObj,
+        logo: merchantObj.logo ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.logo)}/content` : null,
+        coverImage: merchantObj.coverImage ? `${req.protocol}://${req.get('host')}/api/v1/files/${String(merchantObj.coverImage)}/content` : null,
+      },
+    },
   });
 });

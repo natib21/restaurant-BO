@@ -1,1854 +1,1872 @@
-# Payment Verification Frontend Integration Guide
+# Frontend Integration Guide - Dining Session System
 
-## 📋 Table of Contents
-1. [Overview](#overview)
-2. [Authentication](#authentication)
-3. [API Endpoints Reference](#api-endpoints-reference)
-4. [Complete User Workflow](#complete-user-workflow)
-5. [Photo Upload Implementation](#photo-upload-implementation)
-6. [Error Handling](#error-handling)
-7. [TypeScript Types](#typescript-types)
-8. [React/Vue Examples](#reactvue-examples)
-9. [Testing Checklist](#testing-checklist)
+## Table of Contents
+1. [Quick Start](#quick-start)
+2. [Customer QR Flow (React)](#customer-qr-flow-react)
+3. [Staff Dashboard (React)](#staff-dashboard-react)
+4. [Socket.IO Integration](#socketio-integration)
+5. [Vue.js Examples](#vuejs-examples)
+6. [React Native Mobile App](#react-native-mobile-app)
+7. [API Reference](#api-reference)
+8. [Error Handling](#error-handling)
+9. [Best Practices](#best-practices)
 
 ---
 
-## Overview
+## Quick Start
 
-The Payment Verification system allows staff to verify Ethiopian mobile payments (Telebirr and CBE) for restaurant orders.
-
-### Key Concepts
-
-- **Providers**: `telebirr`, `cbe` (bank), or `cbebirr` (mobile wallet)
-- **Verification Types**:
-  - `manual_entry_auto_lookup` - Automated lookup succeeded (CBE/CBE Birr)
-  - `manual_entry_lookup_failed` - Automated lookup failed (Telebirr currently)
-- **Verification Methods**:
-  - **QR Code Scan** (Recommended for CBE Birr) - Fast, automatic, includes PDF receipt
-  - **Manual Entry** - Fallback for all providers
-- **Receipt Photo**: **REQUIRED** for all manual verifications (lookup_failed), optional for auto-lookup
-
-### Base URL
+### Prerequisites
+```bash
+npm install socket.io-client axios
+# or
+yarn add socket.io-client axios
 ```
-Production: https://api.yourrestaurant.com/api/v1
-Development: http://localhost:3000/api/v1
+
+### Base Configuration
+```javascript
+// config/api.js
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api/v1';
+export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 ```
 
 ---
 
-## Authentication
+## Customer QR Flow (React)
 
-All endpoints require Bearer token authentication.
-
-### Headers Required
-```javascript
-{
-  "Authorization": "Bearer <your_jwt_token>",
-  "Content-Type": "application/json" // or multipart/form-data for uploads
-}
-```
-
-### Getting Token
-Login via `/api/v1/auth/login` endpoint:
+### 1. QR Code Scanner Component
 
 ```javascript
-const response = await fetch('https://api.yourrestaurant.com/api/v1/auth/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    email: 'staff@restaurant.com',
-    password: 'password123'
-  })
-});
-
-const data = await response.json();
-const token = data.token; // Store this for subsequent requests
-```
-
----
-
-## API Endpoints Reference
-
-### 1. Upload Receipt Photo
-
-**Endpoint:** `POST /api/v1/files/upload`
-
-**Purpose:** Upload receipt image before initiating verification
-
-**Request Type:** `multipart/form-data`
-
-**Required Fields:**
-- `file` (File) - The receipt image file
-- `entityType` (string) - Must be `"order_payment"`
-- `entityId` (string) - The order ID (ObjectId)
-- `purpose` (string) - Must be `"receipt"`
-- `branchId` (string, optional) - Branch ID if applicable
-
-#### Request Example (JavaScript)
-
-```javascript
-const formData = new FormData();
-formData.append('file', receiptImageFile); // File object from input
-formData.append('entityType', 'order_payment');
-formData.append('entityId', orderId);
-formData.append('purpose', 'receipt');
-
-const response = await fetch('https://api.yourrestaurant.com/api/v1/files/upload', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`
-    // Don't set Content-Type - browser sets it automatically with boundary
-  },
-  body: formData
-});
-
-const data = await response.json();
-```
-
-#### Success Response (201)
-```json
-{
-  "status": "success",
-  "data": {
-    "file": {
-      "_id": "507f1f77bcf86cd799439011",
-      "url": "/api/v1/files/507f1f77bcf86cd799439011/content",
-      "entityType": "order_payment",
-      "entityId": "507f1f77bcf86cd799439012",
-      "purpose": "receipt"
-    }
-  }
-}
-```
-
-**Important:** Save the `_id` field - you'll need it for confirmation!
-
-#### Error Responses
-
-**400 - No File**
-```json
-{
-  "status": "fail",
-  "message": "No file uploaded"
-}
-```
-
-**400 - Invalid File Type**
-```json
-{
-  "status": "fail",
-  "message": "Only image uploads are supported"
-}
-```
-
-**400 - Missing entityType**
-```json
-{
-  "status": "fail",
-  "message": "entityType is required"
-}
-```
-
-**413 - File Too Large**
-```json
-{
-  "status": "fail",
-  "message": "File too large. Maximum size is 8MB"
-}
-```
-
----
-
-### 2. Initiate Payment Verification (QR Code - NEW!)
-
-**Endpoint:** `POST /api/v1/payment-verification/initiate-from-qr`
-
-**Purpose:** Fast verification via QR code scanning (CBE Birr only currently)
-
-**Request Type:** `application/json`
-
-**Required Fields:**
-- `orderId` (string) - Order ID to verify payment for
-- `qrPayload` (string) - Raw QR code content (URL from scanner)
-
-**Supported QR Formats:**
-- **CBE Birr**: `https://cbepay1.cbe.com.et/aureceipt?TID=DHT71MPGDI7&PH=251923479921`
-
-#### Request Example
-
-```javascript
-const response = await fetch('https://api.yourrestaurant.com/api/v1/payment-verification/initiate-from-qr', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    orderId: '507f1f77bcf86cd799439012',
-    qrPayload: 'https://cbepay1.cbe.com.et/aureceipt?TID=DHT71MPGDI7&PH=251923479921'
-  })
-});
-
-const data = await response.json();
-```
-
-#### Success Response (201)
-
-```json
-{
-  "status": "success",
-  "data": {
-    "verification": {
-      "_id": "507f1f77bcf86cd799439015",
-      "merchant": "507f1f77bcf86cd799439001",
-      "order": "507f1f77bcf86cd799439012",
-      "provider": "cbebirr",
-      "providerReference": "DHT71MPGDI7",
-      "verificationType": "manual_entry_auto_lookup",
-      "status": "pending_review",
-      "parseQuality": "high",
-      "parsed": {
-        "amount": 250.00,
-        "currency": "ETB",
-        "status": "COMPLETED",
-        "timestamp": "2024-08-29T09:00:00.000Z",
-        "payerName": "John Customer",
-        "payerPhone": "251923479921"
-      },
-      "amountMatch": true,
-      "receiptFileRef": "507f1f77bcf86cd799439016",
-      "createdAt": "2024-08-29T10:30:00.000Z",
-      "updatedAt": "2024-08-29T10:30:00.000Z"
-    },
-    "message": "Verification initiated and PDF receipt downloaded successfully"
-  }
-}
-```
-
-**What Happens Automatically:**
-1. ✅ Backend validates QR URL (SSRF protection)
-2. ✅ Backend extracts transaction ID and phone number
-3. ✅ Backend fetches payment data from CBE Birr
-4. ✅ Backend downloads PDF receipt
-5. ✅ Backend stores PDF as FileAsset
-6. ✅ Returns parsed payment data for staff review
-
-**Note:** The `receiptFileRef` field contains the auto-downloaded PDF receipt ID.
-
-#### Error Responses
-
-**400 - Invalid QR Format**
-```json
-{
-  "status": "fail",
-  "message": "Invalid QR code format. Expected a valid URL."
-}
-```
-
-**400 - Untrusted Host (Security)**
-```json
-{
-  "status": "fail",
-  "message": "Unrecognized payment provider. Expected cbepay1.cbe.com.et, got malicious-site.com"
-}
-```
-
-**400 - Missing Parameters**
-```json
-{
-  "status": "fail",
-  "message": "QR code is missing transaction ID (TID parameter)"
-}
-```
-
-**409 - Duplicate Receipt**
-```json
-{
-  "status": "fail",
-  "message": "This CBEBIRR receipt (DHT71MPGDI7) has already been used for order 507f1f77bcf86cd799439012"
-}
-```
-
-**502 - CBE Server Error**
-```json
-{
-  "status": "fail",
-  "message": "Failed to download PDF: 502 Bad Gateway"
-}
-```
-
-**When to Use:**
-- ✅ Customer paid via CBE Birr mobile wallet
-- ✅ Receipt has QR code
-- ✅ Device has camera or QR scanner
-- ❌ NOT for Telebirr (use manual entry)
-- ❌ NOT for CBE Bank transfers (use manual entry)
-
----
-
-### 3. Initiate Payment Verification (Manual Entry)
-
-**Endpoint:** `POST /api/v1/payment-verification/initiate`
-
-**Purpose:** Start verification process with manual receipt number entry
-
-**Request Type:** `application/json`
-
-**Required Fields:**
-- `orderId` (string) - Order ID to verify payment for
-- `provider` (string) - One of: `"telebirr"`, `"cbe"`, or `"cbebirr"`
-- `receiptNumber` (string) - Receipt reference number from payment provider
-
-#### Request Example
-
-```javascript
-const response = await fetch('https://api.yourrestaurant.com/api/v1/payment-verification/initiate', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    orderId: '507f1f77bcf86cd799439012',
-    provider: 'telebirr', // or 'cbe'
-    receiptNumber: 'DB80L94QPK' // Telebirr format: 10-12 uppercase alphanumeric
-  })
-});
-
-const data = await response.json();
-```
-
-#### Success Response (201)
-
-**For Telebirr (lookup_failed):**
-```json
-{
-  "status": "success",
-  "data": {
-    "verification": {
-      "_id": "507f1f77bcf86cd799439013",
-      "merchant": "507f1f77bcf86cd799439001",
-      "order": "507f1f77bcf86cd799439012",
-      "provider": "telebirr",
-      "providerReference": "DB80L94QPK",
-      "verificationType": "manual_entry_lookup_failed",
-      "status": "lookup_failed",
-      "parseQuality": "failed",
-      "lookupError": "Telebirr auto-lookup not yet enabled — pending verification against live data",
-      "parsed": {
-        "fullRawText": "Telebirr auto-lookup not yet enabled — pending verification against live data"
-      },
-      "amountMatch": false,
-      "createdAt": "2024-08-29T10:30:00.000Z",
-      "updatedAt": "2024-08-29T10:30:00.000Z"
-    }
-  }
-}
-```
-
-**For CBE (successful auto-lookup):**
-```json
-{
-  "status": "success",
-  "data": {
-    "verification": {
-      "_id": "507f1f77bcf86cd799439014",
-      "merchant": "507f1f77bcf86cd799439001",
-      "order": "507f1f77bcf86cd799439012",
-      "provider": "cbe",
-      "providerReference": "FT26240JY4DT",
-      "verificationType": "manual_entry_auto_lookup",
-      "status": "pending_review",
-      "parseQuality": "high",
-      "parsed": {
-        "amount": 250.00,
-        "status": "COMPLETED",
-        "payerName": "John Doe",
-        "transactionDate": "2024-08-29T08:15:00.000Z",
-        "fullRawText": "Transaction completed successfully..."
-      },
-      "amountMatch": true,
-      "createdAt": "2024-08-29T10:30:00.000Z",
-      "updatedAt": "2024-08-29T10:30:00.000Z"
-    }
-  }
-}
-```
-
-#### Error Responses
-
-**400 - Missing Fields**
-```json
-{
-  "status": "fail",
-  "message": "orderId, provider, and receiptNumber are required"
-}
-```
-
-**400 - Invalid Receipt Format (Telebirr)**
-```json
-{
-  "status": "fail",
-  "message": "Invalid Telebirr receipt format. Expected 10-12 uppercase letters/numbers (e.g., DB80L94QPK)"
-}
-```
-
-**400 - Order Already Paid**
-```json
-{
-  "status": "fail",
-  "message": "Order is already paid"
-}
-```
-
-**400 - Canceled Order**
-```json
-{
-  "status": "fail",
-  "message": "Cannot verify payment for canceled order"
-}
-```
-
-**409 - Duplicate Receipt**
-```json
-{
-  "status": "fail",
-  "message": "This TELEBIRR receipt (DB80L94QPK) has already been used for order 507f1f77bcf86cd799439012"
-}
-```
-
-**404 - Order Not Found**
-```json
-{
-  "status": "fail",
-  "message": "Order not found"
-}
-```
-
----
-
-### 3. Confirm Payment Verification
-
-**Endpoint:** `POST /api/v1/payment-verification/:id/confirm`
-
-**Purpose:** Approve verification and mark order as paid
-
-**Request Type:** `application/json`
-
-**URL Parameter:**
-- `:id` - Verification ID from initiate response
-
-**Request Body:**
-- `receiptFileId` (string) - **REQUIRED** for manual verifications, optional for auto-lookup
-
-#### Request Example
-
-```javascript
-const verificationId = '507f1f77bcf86cd799439013';
-const receiptFileId = '507f1f77bcf86cd799439011'; // From upload response
-
-const response = await fetch(`https://api.yourrestaurant.com/api/v1/payment-verification/${verificationId}/confirm`, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    receiptFileId: receiptFileId // REQUIRED for manual verifications!
-  })
-});
-
-const data = await response.json();
-```
-
-#### Success Response (200)
-
-```json
-{
-  "status": "success",
-  "data": {
-    "verification": {
-      "_id": "507f1f77bcf86cd799439013",
-      "merchant": "507f1f77bcf86cd799439001",
-      "order": "507f1f77bcf86cd799439012",
-      "provider": "telebirr",
-      "providerReference": "DB80L94QPK",
-      "verificationType": "manual_entry_lookup_failed",
-      "status": "verified",
-      "parseQuality": "failed",
-      "verifiedBy": "507f1f77bcf86cd799439003",
-      "verifiedAt": "2024-08-29T10:35:00.000Z",
-      "receiptFileRef": "507f1f77bcf86cd799439011",
-      "parsed": {
-        "fullRawText": "Telebirr auto-lookup not yet enabled — pending verification against live data"
-      },
-      "amountMatch": false,
-      "createdAt": "2024-08-29T10:30:00.000Z",
-      "updatedAt": "2024-08-29T10:35:00.000Z"
-    }
-  }
-}
-```
-
-**Note:** The associated order is now marked as `paid` and status updated to `completed` (for dine-in orders).
-
-#### Error Responses
-
-**400 - Receipt Photo Required**
-```json
-{
-  "status": "fail",
-  "message": "A receipt photo is required to confirm manual verifications"
-}
-```
-
-**400 - Invalid Verification ID**
-```json
-{
-  "status": "fail",
-  "message": "Invalid verification ID format"
-}
-```
-
-**400 - Invalid File ID**
-```json
-{
-  "status": "fail",
-  "message": "Invalid receipt file ID format"
-}
-```
-
-**400 - Amount Mismatch**
-```json
-{
-  "status": "fail",
-  "message": "Receipt amount (250 ETB) does not match current order total (300 ETB). Order may have been modified after scan."
-}
-```
-
-**400 - Order Already Paid**
-```json
-{
-  "status": "fail",
-  "message": "Order is already paid"
-}
-```
-
-**404 - Verification Not Found**
-```json
-{
-  "status": "fail",
-  "message": "Verification record not found"
-}
-```
-
-**404 - Receipt File Not Found**
-```json
-{
-  "status": "fail",
-  "message": "Receipt file not found or has been deleted"
-}
-```
-
-**409 - Already Processed**
-```json
-{
-  "status": "fail",
-  "message": "Verification already processed (status: verified)"
-}
-```
-
----
-
-### 4. Reject Payment Verification
-
-**Endpoint:** `POST /api/v1/payment-verification/:id/reject`
-
-**Purpose:** Reject verification (invalid receipt, fraud, etc.)
-
-**Request Type:** `application/json`
-
-**URL Parameter:**
-- `:id` - Verification ID
-
-**Required Fields:**
-- `reason` (string) - Reason for rejection
-
-#### Request Example
-
-```javascript
-const verificationId = '507f1f77bcf86cd799439013';
-
-const response = await fetch(`https://api.yourrestaurant.com/api/v1/payment-verification/${verificationId}/reject`, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    reason: 'Amount on receipt does not match order total'
-  })
-});
-
-const data = await response.json();
-```
-
-#### Success Response (200)
-
-```json
-{
-  "status": "success",
-  "data": {
-    "verification": {
-      "_id": "507f1f77bcf86cd799439013",
-      "merchant": "507f1f77bcf86cd799439001",
-      "order": "507f1f77bcf86cd799439012",
-      "provider": "telebirr",
-      "providerReference": "DB80L94QPK",
-      "verificationType": "manual_entry_lookup_failed",
-      "status": "rejected",
-      "parseQuality": "failed",
-      "verifiedBy": "507f1f77bcf86cd799439003",
-      "verifiedAt": "2024-08-29T10:35:00.000Z",
-      "rejectionReason": "Amount on receipt does not match order total",
-      "createdAt": "2024-08-29T10:30:00.000Z",
-      "updatedAt": "2024-08-29T10:35:00.000Z"
-    }
-  }
-}
-```
-
-#### Error Responses
-
-**400 - Missing Reason**
-```json
-{
-  "status": "fail",
-  "message": "Rejection reason is required"
-}
-```
-
-**409 - Already Processed**
-```json
-{
-  "status": "fail",
-  "message": "Cannot reject verification with status 'verified'"
-}
-```
-
----
-
-### 5. List Payment Verifications
-
-**Endpoint:** `GET /api/v1/payment-verification`
-
-**Purpose:** Get list of verifications with filtering and pagination
-
-**Query Parameters:**
-- `status` (string, optional) - Filter by status: `pending_review`, `verified`, `rejected`, `lookup_failed`
-- `page` (number, optional) - Page number (default: 1)
-- `limit` (number, optional) - Items per page (default: 20)
-
-#### Request Example
-
-```javascript
-const response = await fetch(
-  'https://api.yourrestaurant.com/api/v1/payment-verification?status=pending_review&page=1&limit=10',
-  {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  }
-);
-
-const data = await response.json();
-```
-
-#### Success Response (200)
-
-```json
-{
-  "status": "success",
-  "data": {
-    "verifications": [
-      {
-        "_id": "507f1f77bcf86cd799439013",
-        "merchant": "507f1f77bcf86cd799439001",
-        "order": {
-          "_id": "507f1f77bcf86cd799439012",
-          "orderNumber": "ORD-2024-001",
-          "totalAmount": 250.00,
-          "customerName": "John Doe"
-        },
-        "provider": "telebirr",
-        "providerReference": "DB80L94QPK",
-        "verificationType": "manual_entry_lookup_failed",
-        "status": "pending_review",
-        "parseQuality": "failed",
-        "createdAt": "2024-08-29T10:30:00.000Z",
-        "updatedAt": "2024-08-29T10:30:00.000Z"
-      }
-    ],
-    "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 45,
-      "pages": 5
-    }
-  }
-}
-```
-
----
-
-### 6. Get Single Verification
-
-**Endpoint:** `GET /api/v1/payment-verification/:id`
-
-**Purpose:** Get detailed information about a specific verification
-
-**URL Parameter:**
-- `:id` - Verification ID
-
-#### Request Example
-
-```javascript
-const verificationId = '507f1f77bcf86cd799439013';
-
-const response = await fetch(
-  `https://api.yourrestaurant.com/api/v1/payment-verification/${verificationId}`,
-  {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  }
-);
-
-const data = await response.json();
-```
-
-#### Success Response (200)
-
-```json
-{
-  "status": "success",
-  "data": {
-    "verification": {
-      "_id": "507f1f77bcf86cd799439013",
-      "merchant": "507f1f77bcf86cd799439001",
-      "order": {
-        "_id": "507f1f77bcf86cd799439012",
-        "orderNumber": "ORD-2024-001",
-        "totalAmount": 250.00,
-        "customerName": "John Doe",
-        "paymentStatus": "unpaid",
-        "status": "served"
-      },
-      "provider": "telebirr",
-      "providerReference": "DB80L94QPK",
-      "verificationType": "manual_entry_lookup_failed",
-      "status": "pending_review",
-      "parseQuality": "failed",
-      "parsed": {
-        "fullRawText": "Telebirr auto-lookup not yet enabled — pending verification against live data"
-      },
-      "amountMatch": false,
-      "lookupError": "Telebirr auto-lookup not yet enabled — pending verification against live data",
-      "receiptFileRef": null,
-      "verifiedBy": null,
-      "verifiedAt": null,
-      "rejectionReason": null,
-      "createdAt": "2024-08-29T10:30:00.000Z",
-      "updatedAt": "2024-08-29T10:30:00.000Z"
-    }
-  }
-}
-```
-
-#### Error Response
-
-**404 - Not Found**
-```json
-{
-  "status": "fail",
-  "message": "Verification record not found"
-}
-```
-
----
-
-### 7. Get Receipt Photo
-
-**Endpoint:** `GET /api/v1/files/:id/content`
-
-**Purpose:** Retrieve uploaded receipt image
-
-**URL Parameter:**
-- `:id` - File ID from upload response
-
-**Authentication:** Required (Bearer token)
-
-#### Request Example
-
-```javascript
-const fileId = '507f1f77bcf86cd799439011';
-
-const response = await fetch(
-  `https://api.yourrestaurant.com/api/v1/files/${fileId}/content`,
-  {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  }
-);
-
-// Response is the image binary data
-const blob = await response.blob();
-const imageUrl = URL.createObjectURL(blob);
-
-// Use in <img> tag
-// <img src={imageUrl} alt="Receipt" />
-```
-
-#### Success Response (200)
-- **Content-Type:** `image/jpeg`, `image/png`, etc.
-- **Body:** Binary image data
-- **Cache-Control:** `public, max-age=86400`
-
----
-
-## Complete User Workflow
-
-### Scenario 1: CBE Birr QR Code Verification (Recommended - Fastest!)
-
-```javascript
-// Step 1: Customer shows CBE Birr receipt QR code
-// Step 2: Staff scans QR code with device camera
-
-// QR Scanning function (using html5-qrcode library)
-import { Html5QrcodeScanner } from 'html5-qrcode';
-
-const scanQRAndVerify = async (orderId, token) => {
-  return new Promise((resolve, reject) => {
-    const scanner = new Html5QrcodeScanner(
-      "qr-reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      false
-    );
+// components/QRScanner.jsx
+import React, { useState } from 'react';
+import { QrReader } from 'react-qr-reader';
+import { useNavigate } from 'react-router-dom';
+
+export default function QRScanner() {
+  const [scanning, setScanning] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
+  const handleScan = async (result) => {
+    if (!result) return;
     
-    scanner.render(
-      async (decodedText) => {
-        try {
-          // QR scanned - send to backend
-          const response = await fetch(
-            'https://api.yourrestaurant.com/api/v1/payment-verification/initiate-from-qr',
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                orderId: orderId,
-                qrPayload: decodedText // Raw QR string
-              })
-            }
-          );
-          
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message);
-          }
-          
-          const data = await response.json();
-          scanner.clear();
-          resolve(data.data.verification);
-        } catch (error) {
-          reject(error);
-        }
-      },
-      (error) => {
-        console.warn('QR scan error:', error);
-      }
-    );
-  });
-};
-
-// Step 3: Review parsed payment data and confirm
-const confirmQRVerification = async (verificationId, token) => {
-  const response = await fetch(
-    `https://api.yourrestaurant.com/api/v1/payment-verification/${verificationId}/confirm`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({})
-      // No receiptFileId needed - PDF auto-downloaded!
+    try {
+      setScanning(false);
+      
+      // Parse QR code data
+      const qrData = JSON.parse(result.text);
+      // Expected format: { tableId, merchantId, branchId, token }
+      
+      console.log('QR Scanned:', qrData);
+      
+      // Navigate to menu with table info
+      navigate('/menu', { state: { qrData } });
+      
+    } catch (err) {
+      console.error('Invalid QR code:', err);
+      setError('Invalid QR code. Please scan a valid table QR.');
+      setScanning(true);
     }
-  );
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-  
-  const data = await response.json();
-  return data.data.verification;
-};
-
-// Full QR workflow
-const processCBEBirrPayment = async (orderId, token) => {
-  try {
-    // 1. Scan QR and initiate (one step!)
-    console.log('Scanning QR code...');
-    const verification = await scanQRAndVerify(orderId, token);
-    console.log('QR scanned! Payment data:', verification.parsed);
-    
-    // Show staff the parsed data for review:
-    // - Amount: verification.parsed.amount
-    // - Status: verification.parsed.status
-    // - Payer: verification.parsed.payerName
-    // - Amount Match: verification.amountMatch
-    
-    // 2. Staff reviews and confirms
-    console.log('Confirming verification...');
-    const confirmed = await confirmQRVerification(verification._id, token);
-    console.log('Payment verified! Order is now paid.');
-    
-    return confirmed;
-  } catch (error) {
-    console.error('CBE Birr verification failed:', error.message);
-    throw error;
-  }
-};
-```
-
-**Benefits of QR Method:**
-- ✅ Only 2 API calls (vs 3 for manual)
-- ✅ No manual typing (reduces errors)
-- ✅ PDF receipt automatically downloaded
-- ✅ Faster (10 seconds vs 30 seconds)
-- ✅ Higher accuracy
-
----
-
-### Scenario 2: Telebirr Payment Verification (Manual)
-
-```javascript
-// Step 1: Customer shows receipt to staff
-// Staff takes photo with device camera or selects from gallery
-
-// Step 2: Upload receipt photo
-const uploadReceipt = async (imageFile, orderId, token) => {
-  const formData = new FormData();
-  formData.append('file', imageFile);
-  formData.append('entityType', 'order_payment');
-  formData.append('entityId', orderId);
-  formData.append('purpose', 'receipt');
-  
-  const response = await fetch('https://api.yourrestaurant.com/api/v1/files/upload', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    },
-    body: formData
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-  
-  const data = await response.json();
-  return data.data.file._id; // Return file ID
-};
-
-// Step 3: Staff enters receipt number from the photo
-// System initiates verification
-const initiateVerification = async (orderId, receiptNumber, token) => {
-  const response = await fetch('https://api.yourrestaurant.com/api/v1/payment-verification/initiate', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      orderId: orderId,
-      provider: 'telebirr',
-      receiptNumber: receiptNumber
-    })
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-  
-  const data = await response.json();
-  return data.data.verification;
-};
-
-// Step 4: Confirm verification with receipt photo
-const confirmVerification = async (verificationId, receiptFileId, token) => {
-  const response = await fetch(
-    `https://api.yourrestaurant.com/api/v1/payment-verification/${verificationId}/confirm`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        receiptFileId: receiptFileId
-      })
-    }
-  );
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-  
-  const data = await response.json();
-  return data.data.verification;
-};
-
-// Full workflow
-const processPayment = async (orderId, receiptImage, receiptNumber, token) => {
-  try {
-    // 1. Upload photo
-    console.log('Uploading receipt photo...');
-    const fileId = await uploadReceipt(receiptImage, orderId, token);
-    console.log('Photo uploaded:', fileId);
-    
-    // 2. Initiate verification
-    console.log('Initiating verification...');
-    const verification = await initiateVerification(orderId, receiptNumber, token);
-    console.log('Verification created:', verification._id);
-    
-    // 3. Confirm with photo
-    console.log('Confirming verification...');
-    const confirmed = await confirmVerification(verification._id, fileId, token);
-    console.log('Payment verified! Order is now paid.');
-    
-    return confirmed;
-  } catch (error) {
-    console.error('Payment verification failed:', error.message);
-    throw error;
-  }
-};
-```
-
----
-
-## Photo Upload Implementation
-
-### HTML File Input
-
-```html
-<input 
-  type="file" 
-  id="receiptPhoto" 
-  accept="image/*" 
-  capture="environment"
-/>
-```
-
-**Note:** `capture="environment"` opens rear camera on mobile devices
-
-### JavaScript File Handling
-
-```javascript
-const fileInput = document.getElementById('receiptPhoto');
-
-fileInput.addEventListener('change', async (event) => {
-  const file = event.target.files[0];
-  
-  if (!file) return;
-  
-  // Validate file
-  if (!file.type.startsWith('image/')) {
-    alert('Please select an image file');
-    return;
-  }
-  
-  if (file.size > 8 * 1024 * 1024) { // 8MB
-    alert('File too large. Maximum size is 8MB');
-    return;
-  }
-  
-  // Preview image
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    document.getElementById('preview').src = e.target.result;
   };
-  reader.readAsDataURL(file);
+
+  const handleError = (err) => {
+    console.error('QR Scanner Error:', err);
+    setError('Camera access denied or unavailable.');
+  };
+
+  return (
+    <div className="qr-scanner">
+      <h2>Scan Table QR Code</h2>
+      
+      {scanning && (
+        <QrReader
+          onResult={handleScan}
+          onError={handleError}
+          constraints={{ facingMode: 'environment' }}
+          style={{ width: '100%' }}
+        />
+      )}
+      
+      {error && (
+        <div className="error-message">
+          {error}
+          <button onClick={() => setError(null)}>Try Again</button>
+        </div>
+      )}
+      
+      <div className="instructions">
+        <p>Point your camera at the QR code on your table</p>
+      </div>
+    </div>
+  );
+}
+```
+
+### 2. Menu Page Component
+
+```javascript
+// pages/MenuPage.jsx
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+
+export default function MenuPage() {
+  const location = useLocation();
+  const { qrData } = location.state || {};
   
-  // Upload
+  const [menu, setMenu] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sessionInfo, setSessionInfo] = useState(null);
+
+  useEffect(() => {
+    if (qrData) {
+      initializeSession();
+      loadMenu();
+    }
+  }, [qrData]);
+
+  // Initialize/validate session
+  const initializeSession = async () => {
+    try {
+      // This endpoint validates QR and creates/reuses session
+      const response = await axios.post(
+        `${API_BASE_URL}/orders/validate-qr`,
+        {
+          tableId: qrData.tableId,
+          merchantId: qrData.merchantId,
+          branchId: qrData.branchId,
+          token: qrData.token
+        }
+      );
+      
+      setSessionInfo(response.data.session);
+      
+      console.log('Session initialized:', {
+        sessionId: response.data.session._id,
+        tableNumber: response.data.session.tableNumber,
+        isNew: response.data.isNew // true if you're first customer
+      });
+      
+    } catch (error) {
+      console.error('Session initialization failed:', error);
+      alert('Failed to validate QR code. Please scan again.');
+    }
+  };
+
+  const loadMenu = async () => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/menu?branchId=${qrData.branchId}`
+      );
+      setMenu(response.data.items);
+    } catch (error) {
+      console.error('Failed to load menu:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addToCart = (item) => {
+    const existing = cart.find(c => c._id === item._id);
+    if (existing) {
+      setCart(cart.map(c => 
+        c._id === item._id 
+          ? { ...c, quantity: c.quantity + 1 }
+          : c
+      ));
+    } else {
+      setCart([...cart, { ...item, quantity: 1 }]);
+    }
+  };
+
+  const removeFromCart = (itemId) => {
+    setCart(cart.filter(c => c._id !== itemId));
+  };
+
+  const updateQuantity = (itemId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(itemId);
+    } else {
+      setCart(cart.map(c => 
+        c._id === itemId ? { ...c, quantity: newQuantity } : c
+      ));
+    }
+  };
+
+  if (loading) return <div>Loading menu...</div>;
+
+  return (
+    <div className="menu-page">
+      {/* Table Info */}
+      {sessionInfo && (
+        <div className="table-info">
+          <h3>Table {sessionInfo.tableNumber}</h3>
+          <p>Order independently - others at your table can scan too!</p>
+        </div>
+      )}
+
+      {/* Menu Items */}
+      <div className="menu-items">
+        {menu.map(item => (
+          <MenuItem 
+            key={item._id} 
+            item={item} 
+            onAdd={addToCart}
+          />
+        ))}
+      </div>
+
+      {/* Cart */}
+      {cart.length > 0 && (
+        <Cart 
+          items={cart}
+          onUpdateQuantity={updateQuantity}
+          onRemove={removeFromCart}
+          qrData={qrData}
+        />
+      )}
+    </div>
+  );
+}
+
+// Menu Item Component
+function MenuItem({ item, onAdd }) {
+  return (
+    <div className="menu-item">
+      <img src={item.image} alt={item.name} />
+      <h4>{item.name}</h4>
+      <p>{item.description}</p>
+      <p className="price">{item.price} ETB</p>
+      <button onClick={() => onAdd(item)}>Add to Cart</button>
+    </div>
+  );
+}
+```
+
+### 3. Cart & Checkout Component
+
+```javascript
+// components/Cart.jsx
+import React, { useState } from 'react';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+
+export default function Cart({ items, onUpdateQuantity, onRemove, qrData }) {
+  const [customerName, setCustomerName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+
+  const calculateTotal = () => {
+    return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  const placeOrder = async () => {
+    if (!customerName.trim()) {
+      alert('Please enter your name');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      // Place order - backend will automatically link to session
+      const response = await axios.post(`${API_BASE_URL}/orders`, {
+        tableId: qrData.tableId,
+        merchantId: qrData.merchantId,
+        branchId: qrData.branchId,
+        orderType: 'dine_in',
+        customerName: customerName.trim(),
+        items: items.map(item => ({
+          menuItem: item._id,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          totalPrice: item.price * item.quantity
+        })),
+        // Backend will set session and source='qr' automatically
+      });
+
+      console.log('Order placed successfully:', response.data);
+      
+      setOrderSuccess(true);
+      
+      // Show order confirmation with order number
+      alert(`Order placed! Order #${response.data.order.orderNumber}`);
+      
+      // Redirect to order tracking
+      window.location.href = `/order-tracking?orderId=${response.data.order._id}`;
+      
+    } catch (error) {
+      console.error('Order placement failed:', error);
+      
+      if (error.response?.data?.message) {
+        alert(`Error: ${error.response.data.message}`);
+      } else {
+        alert('Failed to place order. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="cart">
+      <h3>Your Cart</h3>
+      
+      {items.map(item => (
+        <div key={item._id} className="cart-item">
+          <div className="item-info">
+            <h4>{item.name}</h4>
+            <p>{item.price} ETB x {item.quantity}</p>
+          </div>
+          
+          <div className="item-controls">
+            <button onClick={() => onUpdateQuantity(item._id, item.quantity - 1)}>
+              -
+            </button>
+            <span>{item.quantity}</span>
+            <button onClick={() => onUpdateQuantity(item._id, item.quantity + 1)}>
+              +
+            </button>
+            <button onClick={() => onRemove(item._id)}>Remove</button>
+          </div>
+        </div>
+      ))}
+
+      <div className="cart-total">
+        <h3>Total: {calculateTotal()} ETB</h3>
+      </div>
+
+      <div className="checkout">
+        <input
+          type="text"
+          placeholder="Your name"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          disabled={submitting}
+        />
+        
+        <button 
+          onClick={placeOrder}
+          disabled={submitting || items.length === 0}
+        >
+          {submitting ? 'Placing Order...' : 'Place Order'}
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+### 4. Order Tracking Component
+
+```javascript
+// pages/OrderTracking.jsx
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import axios from 'axios';
+import io from 'socket.io-client';
+import { API_BASE_URL, SOCKET_URL } from '../config/api';
+
+export default function OrderTracking() {
+  const [searchParams] = useSearchParams();
+  const orderId = searchParams.get('orderId');
+  
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    loadOrder();
+    setupSocket();
+    
+    return () => {
+      if (socket) socket.disconnect();
+    };
+  }, [orderId]);
+
+  const loadOrder = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/orders/${orderId}`);
+      setOrder(response.data.order);
+    } catch (error) {
+      console.error('Failed to load order:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setupSocket = () => {
+    const newSocket = io(SOCKET_URL);
+    
+    newSocket.on('connect', () => {
+      console.log('Socket connected');
+      
+      // Subscribe to order updates
+      newSocket.emit('join', `order:${orderId}`);
+    });
+
+    // Listen for order status changes
+    newSocket.on('order:status-changed', (data) => {
+      console.log('Order status changed:', data);
+      
+      if (data.orderId === orderId) {
+        setOrder(prev => ({
+          ...prev,
+          status: data.newStatus
+        }));
+        
+        // Show notification
+        showNotification(`Order status: ${data.newStatus}`);
+      }
+    });
+
+    // Listen for item status changes
+    newSocket.on('order:item-status-changed', (data) => {
+      console.log('Item status changed:', data);
+      
+      if (data.orderId === orderId) {
+        setOrder(prev => ({
+          ...prev,
+          items: prev.items.map(item => 
+            item._id === data.itemId
+              ? { ...item, status: data.newStatus }
+              : item
+          )
+        }));
+      }
+    });
+
+    setSocket(newSocket);
+  };
+
+  const showNotification = (message) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Order Update', { body: message });
+    }
+  };
+
+  if (loading) return <div>Loading order...</div>;
+  if (!order) return <div>Order not found</div>;
+
+  return (
+    <div className="order-tracking">
+      <h2>Order #{order.orderNumber}</h2>
+      
+      <div className="order-status">
+        <OrderStatusBar status={order.status} />
+      </div>
+
+      <div className="order-items">
+        <h3>Your Items</h3>
+        {order.items.map(item => (
+          <div key={item._id} className="order-item">
+            <span>{item.name} x{item.quantity}</span>
+            <span className={`status ${item.status}`}>
+              {item.status}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="order-info">
+        <p>Table: {order.table?.tableNumber}</p>
+        <p>Total: {order.totalAmount} ETB</p>
+        <p>Payment: {order.paymentStatus}</p>
+      </div>
+    </div>
+  );
+}
+
+function OrderStatusBar({ status }) {
+  const statuses = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
+  const currentIndex = statuses.indexOf(status);
+
+  return (
+    <div className="status-bar">
+      {statuses.map((s, index) => (
+        <div 
+          key={s}
+          className={`status-step ${index <= currentIndex ? 'active' : ''}`}
+        >
+          {s}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+## Staff Dashboard (React)
+
+### 1. Active Sessions View
+
+```javascript
+// pages/StaffDashboard.jsx
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import io from 'socket.io-client';
+import { API_BASE_URL, SOCKET_URL } from '../config/api';
+
+export default function StaffDashboard() {
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [socket, setSocket] = useState(null);
+  const branchId = localStorage.getItem('branchId'); // Assume stored on login
+
+  useEffect(() => {
+    loadActiveSessions();
+    setupSocket();
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
+  }, []);
+
+  const loadActiveSessions = async () => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/branches/${branchId}/active-sessions`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }
+      );
+      
+      setActiveSessions(response.data.sessions);
+    } catch (error) {
+      console.error('Failed to load active sessions:', error);
+    }
+  };
+
+  const setupSocket = () => {
+    const newSocket = io(SOCKET_URL, {
+      auth: {
+        token: localStorage.getItem('authToken')
+      }
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Socket connected');
+      
+      // Join branch room
+      newSocket.emit('join', `branch:${branchId}:perm:ORDER_VIEW`);
+    });
+
+    // Listen for new sessions
+    newSocket.on('session:created', (data) => {
+      console.log('New session created:', data);
+      
+      // Add to active sessions list
+      setActiveSessions(prev => [...prev, {
+        _id: data.sessionId,
+        table: { tableNumber: data.tableNumber },
+        startedAt: data.startedAt,
+        source: data.source
+      }]);
+      
+      // Show notification
+      showNotification(`New session at Table ${data.tableNumber}`);
+      
+      // Play sound
+      playNotificationSound();
+    });
+
+    // Listen for ended sessions
+    newSocket.on('session:ended', (data) => {
+      console.log('Session ended:', data);
+      
+      // Remove from active sessions
+      setActiveSessions(prev => 
+        prev.filter(s => s._id !== data.sessionId)
+      );
+      
+      // Show summary modal if needed
+      if (selectedSession?._id === data.sessionId) {
+        showSessionSummary(data.summary);
+        setSelectedSession(null);
+      }
+    });
+
+    // Listen for new orders
+    newSocket.on('order:new', (order) => {
+      console.log('New order:', order);
+      
+      // Update session order count
+      setActiveSessions(prev => prev.map(session => 
+        session._id === order.session
+          ? { ...session, orderCount: (session.orderCount || 0) + 1 }
+          : session
+      ));
+    });
+
+    setSocket(newSocket);
+  };
+
+  const showNotification = (message) => {
+    // Browser notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Restaurant Dashboard', { body: message });
+    }
+    
+    // In-app toast
+    // (use your toast library)
+  };
+
+  const playNotificationSound = () => {
+    const audio = new Audio('/notification.mp3');
+    audio.play().catch(err => console.log('Audio play failed:', err));
+  };
+
+  const showSessionSummary = (summary) => {
+    alert(`Session Summary:
+Orders: ${summary.orderCount}
+Total: ${summary.totalAmount} ETB
+QR Orders: ${summary.qrOrders}
+Staff Orders: ${summary.staffOrders}`);
+  };
+
+  return (
+    <div className="staff-dashboard">
+      <h1>Active Tables</h1>
+      
+      <div className="sessions-grid">
+        {activeSessions.map(session => (
+          <SessionCard
+            key={session._id}
+            session={session}
+            onClick={() => setSelectedSession(session)}
+          />
+        ))}
+      </div>
+
+      {selectedSession && (
+        <SessionDetailsModal
+          session={selectedSession}
+          onClose={() => setSelectedSession(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SessionCard({ session, onClick }) {
+  const duration = calculateDuration(session.startedAt);
+  
+  return (
+    <div className="session-card" onClick={onClick}>
+      <h3>Table {session.table?.tableNumber}</h3>
+      <p>Duration: {duration}</p>
+      <p>Orders: {session.orderCount || 0}</p>
+      <span className={`badge ${session.source}`}>
+        {session.source}
+      </span>
+    </div>
+  );
+}
+
+function calculateDuration(startedAt) {
+  const start = new Date(startedAt);
+  const now = new Date();
+  const minutes = Math.floor((now - start) / 1000 / 60);
+  
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+}
+```
+
+### 2. Session Details Modal
+
+```javascript
+// components/SessionDetailsModal.jsx
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
+
+export default function SessionDetailsModal({ session, onClose }) {
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadSessionDetails();
+  }, [session._id]);
+
+  const loadSessionDetails = async () => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/sessions/${session._id}/summary`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }
+      );
+      
+      setDetails(response.data.summary);
+    } catch (error) {
+      console.error('Failed to load session details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeTable = async (force = false) => {
+    if (!force && details.unpaidOrders > 0) {
+      const confirm = window.confirm(
+        `There are ${details.unpaidOrders} unpaid orders. Close anyway?`
+      );
+      if (!confirm) return;
+    }
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/tables/${session.table._id}/close?force=${force}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+          }
+        }
+      );
+      
+      alert('Table closed successfully');
+      onClose();
+      
+    } catch (error) {
+      console.error('Failed to close table:', error);
+      
+      if (error.response?.data?.error?.code === 'UNPAID_ORDERS_EXIST') {
+        const forceClose = window.confirm(
+          `${error.response.data.message}\n\nForce close?`
+        );
+        if (forceClose) {
+          closeTable(true);
+        }
+      } else {
+        alert('Failed to close table');
+      }
+    }
+  };
+
+  if (loading) return <div className="modal">Loading...</div>;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <h2>Table {session.table?.tableNumber} - Session Details</h2>
+        
+        <div className="session-stats">
+          <div className="stat">
+            <label>Duration</label>
+            <span>{details.duration}</span>
+          </div>
+          <div className="stat">
+            <label>Orders</label>
+            <span>{details.orderCount}</span>
+          </div>
+          <div className="stat">
+            <label>Total Amount</label>
+            <span>{details.totalAmount} ETB</span>
+          </div>
+          <div className="stat">
+            <label>Payment Status</label>
+            <span>
+              {details.paidOrders} paid / {details.unpaidOrders} unpaid
+            </span>
+          </div>
+        </div>
+
+        <div className="order-breakdown">
+          <h3>Order Breakdown</h3>
+          <p>QR Orders: {details.qrOrders}</p>
+          <p>Staff Orders: {details.staffOrders}</p>
+        </div>
+
+        <div className="orders-list">
+          <h3>Orders</h3>
+          {details.orders.map(order => (
+            <div key={order.orderId} className="order-summary">
+              <span>{order.orderNumber}</span>
+              <span className={`badge ${order.source}`}>{order.source}</span>
+              <span>{order.totalAmount} ETB</span>
+              <span className={`status ${order.paymentStatus}`}>
+                {order.paymentStatus}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="modal-actions">
+          <button onClick={onClose}>Cancel</button>
+          <button 
+            onClick={() => closeTable(false)}
+            disabled={details.unpaidOrders > 0}
+            className="primary"
+          >
+            Close Table
+          </button>
+          {details.unpaidOrders > 0 && (
+            <button 
+              onClick={() => closeTable(true)}
+              className="danger"
+            >
+              Force Close
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## Socket.IO Integration
+
+### Custom Hook for Socket.IO
+
+```javascript
+// hooks/useSocket.js
+import { useEffect, useState } from 'react';
+import io from 'socket.io-client';
+import { SOCKET_URL } from '../config/api';
+
+export function useSocket(room = null) {
+  const [socket, setSocket] = useState(null);
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const newSocket = io(SOCKET_URL, {
+      auth: {
+        token: localStorage.getItem('authToken')
+      },
+      transports: ['websocket', 'polling']
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Socket connected:', newSocket.id);
+      setConnected(true);
+      
+      // Join room if specified
+      if (room) {
+        newSocket.emit('join', room);
+        console.log('Joined room:', room);
+      }
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('Socket disconnected');
+      setConnected(false);
+    });
+
+    newSocket.on('error', (error) => {
+      console.error('Socket error:', error);
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [room]);
+
+  return { socket, connected };
+}
+
+// Usage:
+// const { socket, connected } = useSocket(`branch:${branchId}:perm:ORDER_VIEW`);
+```
+
+### Session Events Hook
+
+```javascript
+// hooks/useSessionEvents.js
+import { useEffect, useState } from 'react';
+import { useSocket } from './useSocket';
+
+export function useSessionEvents(branchId) {
+  const { socket, connected } = useSocket(
+    branchId ? `branch:${branchId}:perm:ORDER_VIEW` : null
+  );
+  
+  const [sessions, setSessions] = useState([]);
+
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    // Listen for session:created
+    socket.on('session:created', (data) => {
+      console.log('Session created event:', data);
+      
+      setSessions(prev => [...prev, {
+        _id: data.sessionId,
+        tableId: data.tableId,
+        tableNumber: data.tableNumber,
+        startedAt: data.startedAt,
+        source: data.source
+      }]);
+    });
+
+    // Listen for session:ended
+    socket.on('session:ended', (data) => {
+      console.log('Session ended event:', data);
+      
+      setSessions(prev => prev.filter(s => s._id !== data.sessionId));
+    });
+
+    return () => {
+      socket.off('session:created');
+      socket.off('session:ended');
+    };
+  }, [socket, connected]);
+
+  return { sessions, connected };
+}
+
+// Usage in component:
+// const { sessions, connected } = useSessionEvents(branchId);
+```
+
+---
+
+## Vue.js Examples
+
+### QR Scanner (Vue 3 Composition API)
+
+```vue
+<!-- components/QRScanner.vue -->
+<template>
+  <div class="qr-scanner">
+    <h2>Scan Table QR Code</h2>
+    
+    <QrcodeStream 
+      v-if="scanning"
+      @decode="onDecode"
+      @init="onInit"
+    />
+    
+    <div v-if="error" class="error">
+      {{ error }}
+      <button @click="error = null">Try Again</button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { QrcodeStream } from 'vue3-qrcode-reader';
+
+const router = useRouter();
+const scanning = ref(true);
+const error = ref(null);
+
+const onDecode = async (result) => {
   try {
-    const fileId = await uploadReceipt(file, orderId, token);
-    console.log('Upload successful:', fileId);
-  } catch (error) {
-    alert('Upload failed: ' + error.message);
+    scanning.value = false;
+    
+    const qrData = JSON.parse(result);
+    
+    // Navigate to menu
+    router.push({
+      name: 'menu',
+      state: { qrData }
+    });
+    
+  } catch (err) {
+    error.value = 'Invalid QR code';
+    scanning.value = true;
   }
+};
+
+const onInit = async (promise) => {
+  try {
+    await promise;
+  } catch (err) {
+    error.value = 'Camera access denied';
+  }
+};
+</script>
+```
+
+### Staff Dashboard (Vue 3)
+
+```vue
+<!-- pages/StaffDashboard.vue -->
+<template>
+  <div class="staff-dashboard">
+    <h1>Active Tables</h1>
+    
+    <div class="connection-status">
+      <span :class="{ connected: socketConnected }">
+        {{ socketConnected ? 'Connected' : 'Connecting...' }}
+      </span>
+    </div>
+    
+    <div class="sessions-grid">
+      <SessionCard
+        v-for="session in activeSessions"
+        :key="session._id"
+        :session="session"
+        @click="selectedSession = session"
+      />
+    </div>
+    
+    <SessionDetailsModal
+      v-if="selectedSession"
+      :session="selectedSession"
+      @close="selectedSession = null"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue';
+import { io } from 'socket.io-client';
+import { API_BASE_URL, SOCKET_URL } from '../config/api';
+import SessionCard from '../components/SessionCard.vue';
+import SessionDetailsModal from '../components/SessionDetailsModal.vue';
+
+const activeSessions = ref([]);
+const selectedSession = ref(null);
+const socketConnected = ref(false);
+let socket = null;
+
+const branchId = localStorage.getItem('branchId');
+
+onMounted(() => {
+  loadActiveSessions();
+  setupSocket();
+});
+
+onUnmounted(() => {
+  if (socket) socket.disconnect();
+});
+
+const loadActiveSessions = async () => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/branches/${branchId}/active-sessions`,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`
+        }
+      }
+    );
+    
+    const data = await response.json();
+    activeSessions.value = data.sessions;
+    
+  } catch (error) {
+    console.error('Failed to load sessions:', error);
+  }
+};
+
+const setupSocket = () => {
+  socket = io(SOCKET_URL, {
+    auth: {
+      token: localStorage.getItem('authToken')
+    }
+  });
+
+  socket.on('connect', () => {
+    socketConnected.value = true;
+    socket.emit('join', `branch:${branchId}:perm:ORDER_VIEW`);
+  });
+
+  socket.on('disconnect', () => {
+    socketConnected.value = false;
+  });
+
+  socket.on('session:created', (data) => {
+    activeSessions.value.push({
+      _id: data.sessionId,
+      table: { tableNumber: data.tableNumber },
+      startedAt: data.startedAt,
+      source: data.source
+    });
+    
+    // Notification
+    new Notification('New Session', {
+      body: `Table ${data.tableNumber}`
+    });
+  });
+
+  socket.on('session:ended', (data) => {
+    activeSessions.value = activeSessions.value.filter(
+      s => s._id !== data.sessionId
+    );
+  });
+};
+</script>
+```
+
+---
+
+## React Native Mobile App
+
+### QR Scanner (React Native)
+
+```javascript
+// screens/QRScannerScreen.js
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Alert } from 'react-native';
+import { Camera } from 'expo-camera';
+import { BarCodeScanner } from 'expo-barcode-scanner';
+
+export default function QRScannerScreen({ navigation }) {
+  const [hasPermission, setHasPermission] = useState(null);
+  const [scanned, setScanned] = useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  const handleBarCodeScanned = ({ data }) => {
+    if (scanned) return;
+    
+    setScanned(true);
+
+    try {
+      const qrData = JSON.parse(data);
+      
+      // Navigate to menu
+      navigation.navigate('Menu', { qrData });
+      
+    } catch (error) {
+      Alert.alert(
+        'Invalid QR Code',
+        'Please scan a valid table QR code',
+        [{ text: 'OK', onPress: () => setScanned(false) }]
+      );
+    }
+  };
+
+  if (hasPermission === null) {
+    return <Text>Requesting camera permission...</Text>;
+  }
+
+  if (hasPermission === false) {
+    return <Text>No access to camera</Text>;
+  }
+
+  return (
+    <View style={styles.container}>
+      <Camera
+        style={styles.camera}
+        onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+        barCodeScannerSettings={{
+          barCodeTypes: [BarCodeScanner.Constants.BarCodeType.qr],
+        }}
+      />
+      
+      <View style={styles.overlay}>
+        <Text style={styles.instructions}>
+          Point camera at table QR code
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  instructions: {
+    color: 'white',
+    fontSize: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 15,
+    borderRadius: 10,
+  },
 });
 ```
 
-### Image Compression (Optional)
+### Order Tracking (React Native)
 
 ```javascript
-const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob((blob) => {
-          resolve(new File([blob], file.name, {
-            type: 'image/jpeg',
-            lastModified: Date.now()
-          }));
-        }, 'image/jpeg', quality);
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-};
+// screens/OrderTrackingScreen.js
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { io } from 'socket.io-client';
+import { SOCKET_URL, API_BASE_URL } from '../config/api';
 
-// Usage
-const originalFile = event.target.files[0];
-const compressedFile = await compressImage(originalFile);
-await uploadReceipt(compressedFile, orderId, token);
+export default function OrderTrackingScreen({ route }) {
+  const { orderId } = route.params;
+  const [order, setOrder] = useState(null);
+  const [socket, setSocket] = useState(null);
+
+  useEffect(() => {
+    loadOrder();
+    setupSocket();
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
+  }, []);
+
+  const loadOrder = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders/${orderId}`);
+      const data = await response.json();
+      setOrder(data.order);
+    } catch (error) {
+      console.error('Failed to load order:', error);
+    }
+  };
+
+  const setupSocket = () => {
+    const newSocket = io(SOCKET_URL);
+
+    newSocket.on('connect', () => {
+      newSocket.emit('join', `order:${orderId}`);
+    });
+
+    newSocket.on('order:status-changed', (data) => {
+      if (data.orderId === orderId) {
+        setOrder(prev => ({
+          ...prev,
+          status: data.newStatus
+        }));
+      }
+    });
+
+    newSocket.on('order:item-status-changed', (data) => {
+      if (data.orderId === orderId) {
+        setOrder(prev => ({
+          ...prev,
+          items: prev.items.map(item =>
+            item._id === data.itemId
+              ? { ...item, status: data.newStatus }
+              : item
+          )
+        }));
+      }
+    });
+
+    setSocket(newSocket);
+  };
+
+  if (!order) return <Text>Loading...</Text>;
+
+  return (
+    <ScrollView style={styles.container}>
+      <Text style={styles.orderNumber}>Order #{order.orderNumber}</Text>
+      
+      <View style={styles.statusBar}>
+        <OrderStatusIndicator status={order.status} />
+      </View>
+
+      <Text style={styles.sectionTitle}>Your Items</Text>
+      {order.items.map(item => (
+        <View key={item._id} style={styles.item}>
+          <Text>{item.name} x{item.quantity}</Text>
+          <Text style={styles.itemStatus}>{item.status}</Text>
+        </View>
+      ))}
+
+      <View style={styles.info}>
+        <Text>Table: {order.table?.tableNumber}</Text>
+        <Text>Total: {order.totalAmount} ETB</Text>
+        <Text>Payment: {order.paymentStatus}</Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+function OrderStatusIndicator({ status }) {
+  const statuses = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
+  const currentIndex = statuses.indexOf(status);
+
+  return (
+    <View style={styles.statusIndicator}>
+      {statuses.map((s, index) => (
+        <View
+          key={s}
+          style={[
+            styles.statusDot,
+            index <= currentIndex && styles.statusDotActive
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+  },
+  orderNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  statusBar: {
+    marginBottom: 30,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statusDot: {
+    width: 50,
+    height: 10,
+    backgroundColor: '#ddd',
+    borderRadius: 5,
+  },
+  statusDotActive: {
+    backgroundColor: '#4CAF50',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  item: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 15,
+    backgroundColor: '#f5f5f5',
+    marginBottom: 10,
+    borderRadius: 8,
+  },
+  itemStatus: {
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  info: {
+    marginTop: 30,
+    padding: 15,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 8,
+  },
+});
+```
+
+---
+
+## API Reference
+
+### Base URLs
+```javascript
+const API_BASE_URL = 'http://localhost:3000/api/v1';
+const SOCKET_URL = 'http://localhost:3000';
+```
+
+### Authentication
+```javascript
+// Include in all authenticated requests
+headers: {
+  'Authorization': `Bearer ${authToken}`,
+  'Content-Type': 'application/json'
+}
+```
+
+### Endpoints
+
+#### 1. Validate QR & Initialize Session
+```http
+POST /api/v1/orders/validate-qr
+```
+
+**Request:**
+```javascript
+{
+  "tableId": "60d5ec49f1b2c8b5f8e4a7b3",
+  "merchantId": "60d5ec49f1b2c8b5f8e4a7b1",
+  "branchId": "60d5ec49f1b2c8b5f8e4a7b2",
+  "token": "abc123..."
+}
+```
+
+**Response:**
+```javascript
+{
+  "success": true,
+  "session": {
+    "_id": "...",
+    "table": "...",
+    "tableNumber": "T-101",
+    "status": "active",
+    "startedAt": "2024-01-15T10:30:00Z",
+    "token": "..."
+  },
+  "isNew": false  // true if you're first customer
+}
+```
+
+#### 2. Place Order
+```http
+POST /api/v1/orders
+```
+
+**Request:**
+```javascript
+{
+  "tableId": "60d5ec49f1b2c8b5f8e4a7b3",
+  "merchantId": "60d5ec49f1b2c8b5f8e4a7b1",
+  "branchId": "60d5ec49f1b2c8b5f8e4a7b2",
+  "orderType": "dine_in",
+  "customerName": "John Doe",
+  "items": [
+    {
+      "menuItem": "...",
+      "name": "Burger",
+      "quantity": 1,
+      "unitPrice": 150,
+      "totalPrice": 150
+    }
+  ]
+}
+// Backend automatically sets session and source='qr'
+```
+
+**Response:**
+```javascript
+{
+  "success": true,
+  "order": {
+    "_id": "...",
+    "orderNumber": "#QR-001",
+    "session": "...",  // Linked to dining session
+    "source": "qr",    // Automatically set
+    "status": "pending",
+    "totalAmount": 150
+  }
+}
+```
+
+#### 3. Get Order Details
+```http
+GET /api/v1/orders/:orderId
+```
+
+**Response:**
+```javascript
+{
+  "success": true,
+  "order": {
+    "_id": "...",
+    "orderNumber": "#QR-001",
+    "session": "...",
+    "table": {
+      "_id": "...",
+      "tableNumber": "T-101"
+    },
+    "status": "preparing",
+    "paymentStatus": "unpaid",
+    "items": [...],
+    "totalAmount": 150
+  }
+}
+```
+
+#### 4. Get Active Sessions (Staff)
+```http
+GET /api/v1/branches/:branchId/active-sessions
+Authorization: Bearer <token>
+```
+
+**Response:**
+```javascript
+{
+  "success": true,
+  "sessions": [
+    {
+      "_id": "...",
+      "table": {
+        "_id": "...",
+        "tableNumber": "T-101"
+      },
+      "startedAt": "2024-01-15T10:30:00Z",
+      "status": "active",
+      "orderCount": 3
+    }
+  ]
+}
+```
+
+#### 5. Get Session Summary (Staff)
+```http
+GET /api/v1/sessions/:sessionId/summary
+Authorization: Bearer <token>
+```
+
+**Response:**
+```javascript
+{
+  "success": true,
+  "summary": {
+    "sessionId": "...",
+    "tableId": "...",
+    "status": "active",
+    "startedAt": "2024-01-15T10:30:00Z",
+    "duration": "45 minutes",
+    "orderCount": 3,
+    "totalAmount": 450,
+    "paidOrders": 2,
+    "unpaidOrders": 1,
+    "qrOrders": 2,
+    "staffOrders": 1,
+    "orders": [...]
+  }
+}
+```
+
+#### 6. Close Table (Staff)
+```http
+POST /api/v1/tables/:tableId/close?force=false
+Authorization: Bearer <token>
+```
+
+**Response (Success):**
+```javascript
+{
+  "success": true,
+  "message": "Table closed successfully",
+  "session": {
+    "sessionId": "...",
+    "tableNumber": "T-101",
+    "status": "ended",
+    "duration": "45 minutes",
+    "summary": {
+      "orderCount": 3,
+      "totalAmount": 450,
+      "paidOrders": 3,
+      "unpaidOrders": 0
+    }
+  }
+}
+```
+
+**Response (Error - Unpaid Orders):**
+```javascript
+{
+  "success": false,
+  "message": "Cannot close session: 2 unpaid order(s) remaining",
+  "error": {
+    "code": "UNPAID_ORDERS_EXIST",
+    "unpaidOrderIds": ["...", "..."],
+    "unpaidOrderNumbers": ["#001", "#002"],
+    "unpaidCount": 2
+  }
+}
 ```
 
 ---
 
 ## Error Handling
 
-### Comprehensive Error Handler
+### Global Error Handler
 
 ```javascript
-const handlePaymentVerificationError = (error, response) => {
-  // Parse error response
-  let message = 'An error occurred';
-  let code = 'UNKNOWN_ERROR';
-  
-  if (response) {
-    const errorData = response;
-    message = errorData.message || message;
-    code = errorData.status || code;
+// utils/errorHandler.js
+export function handleApiError(error) {
+  if (error.response) {
+    // Server responded with error
+    const { status, data } = error.response;
+    
+    switch (status) {
+      case 400:
+        return {
+          message: data.message || 'Invalid request',
+          code: data.error?.code
+        };
+        
+      case 401:
+        // Unauthorized - redirect to login
+        localStorage.removeItem('authToken');
+        window.location.href = '/login';
+        return { message: 'Please log in again' };
+        
+      case 403:
+        return { message: 'Access denied' };
+        
+      case 404:
+        return { message: 'Not found' };
+        
+      case 500:
+        return { message: 'Server error. Please try again.' };
+        
+      default:
+        return { message: data.message || 'Something went wrong' };
+    }
+    
+  } else if (error.request) {
+    // Request made but no response
+    return { message: 'Network error. Check your connection.' };
+    
+  } else {
+    // Something else happened
+    return { message: error.message || 'Unknown error' };
   }
-  
-  // User-friendly messages
-  const userMessages = {
-    'A receipt photo is required to confirm manual verifications': 
-      'Please upload a receipt photo before confirming',
-    'Invalid Telebirr receipt format': 
-      'Receipt number must be 10-12 uppercase letters/numbers (e.g., DB80L94QPK)',
-    'Order is already paid': 
-      'This order has already been paid',
-    'Verification already processed': 
-      'This verification has already been processed',
-    'Receipt file not found or has been deleted': 
-      'The receipt photo was not found. Please upload again',
-    'Amount on receipt does not match current order total': 
-      'Receipt amount does not match order total. Please verify',
-  };
-  
-  // Return user-friendly message
-  return userMessages[message] || message;
-};
+}
 
-// Usage
+// Usage:
 try {
-  await confirmVerification(verificationId, fileId, token);
+  await placeOrder();
 } catch (error) {
-  const userMessage = handlePaymentVerificationError(error, await error.response?.json());
-  alert(userMessage);
+  const { message, code } = handleApiError(error);
+  
+  if (code === 'UNPAID_ORDERS_EXIST') {
+    // Handle specific error
+  } else {
+    alert(message);
+  }
 }
 ```
 
-### Retry Logic
+### Retry Logic for Network Errors
 
 ```javascript
-const uploadWithRetry = async (file, orderId, token, maxRetries = 3) => {
-  let lastError;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await uploadReceipt(file, orderId, token);
-    } catch (error) {
-      lastError = error;
-      if (i < maxRetries - 1) {
-        console.log(`Upload failed, retrying (${i + 1}/${maxRetries})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
-      }
+// utils/apiClient.js
+import axios from 'axios';
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000
+});
+
+// Add retry logic
+apiClient.interceptors.response.use(
+  response => response,
+  async error => {
+    const config = error.config;
+    
+    // Don't retry if already retried 3 times
+    if (!config || !config.retry || config.__retryCount >= 3) {
+      return Promise.reject(error);
     }
+    
+    // Increment retry count
+    config.__retryCount = config.__retryCount || 0;
+    config.__retryCount += 1;
+    
+    // Wait before retry (exponential backoff)
+    const delay = Math.pow(2, config.__retryCount) * 1000;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    // Retry request
+    return apiClient(config);
   }
-  
-  throw lastError;
-};
-```
-
----
-
-## TypeScript Types
-
-```typescript
-// Enums
-enum PaymentProvider {
-  TELEBIRR = 'telebirr',
-  CBE = 'cbe',
-  CBEBIRR = 'cbebirr'
-}
-
-enum VerificationType {
-  MANUAL_ENTRY_AUTO_LOOKUP = 'manual_entry_auto_lookup',
-  MANUAL_ENTRY_LOOKUP_FAILED = 'manual_entry_lookup_failed',
-  QR_SCAN = 'qr_scan'
-}
-
-enum VerificationStatus {
-  PENDING_REVIEW = 'pending_review',
-  VERIFIED = 'verified',
-  REJECTED = 'rejected',
-  LOOKUP_FAILED = 'lookup_failed'
-}
-
-enum ParseQuality {
-  HIGH = 'high',
-  MEDIUM = 'medium',
-  LOW = 'low',
-  FAILED = 'failed'
-}
-
-// API Response Types
-interface ApiResponse<T> {
-  status: 'success' | 'fail' | 'error';
-  message?: string;
-  data?: T;
-}
-
-interface FileUploadResponse {
-  file: {
-    _id: string;
-    url: string;
-    entityType: string;
-    entityId: string;
-    purpose: string;
-  };
-}
-
-interface ParsedData {
-  amount?: number;
-  payerName?: string;
-  payerAccountOrPhone?: string;
-  receiverName?: string;
-  receiverAccount?: string;
-  transactionDate?: string;
-  status?: string;
-  fullRawText?: string;
-}
-
-interface PaymentVerification {
-  _id: string;
-  merchant: string;
-  order: string | {
-    _id: string;
-    orderNumber: string;
-    totalAmount: number;
-    customerName?: string;
-    paymentStatus: string;
-    status: string;
-  };
-  provider: PaymentProvider;
-  providerReference: string;
-  verificationType: VerificationType;
-  parsed?: ParsedData;
-  amountMatch?: boolean;
-  accountMatch?: boolean;
-  parseQuality: ParseQuality;
-  status: VerificationStatus;
-  verifiedBy?: string;
-  verifiedAt?: string;
-  rejectionReason?: string;
-  receiptFileRef?: string;
-  lookupError?: string;
-  retryCount?: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface VerificationListResponse {
-  verifications: PaymentVerification[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
-}
-
-// Request Types
-interface InitiateVerificationRequest {
-  orderId: string;
-  provider: PaymentProvider;
-  receiptNumber: string;
-}
-
-interface ConfirmVerificationRequest {
-  receiptFileId?: string;
-}
-
-interface RejectVerificationRequest {
-  reason: string;
-}
-
-// Service Functions
-class PaymentVerificationService {
-  private baseUrl: string;
-  private token: string;
-  
-  constructor(baseUrl: string, token: string) {
-    this.baseUrl = baseUrl;
-    this.token = token;
-  }
-  
-  async uploadReceipt(
-    file: File,
-    orderId: string
-  ): Promise<string> {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('entityType', 'order_payment');
-    formData.append('entityId', orderId);
-    formData.append('purpose', 'receipt');
-    
-    const response = await fetch(`${this.baseUrl}/files/upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.token}`
-      },
-      body: formData
-    });
-    
-    if (!response.ok) {
-      throw new Error('Upload failed');
-    }
-    
-    const data: ApiResponse<FileUploadResponse> = await response.json();
-    return data.data!.file._id;
-  }
-  
-  async initiate(
-    request: InitiateVerificationRequest
-  ): Promise<PaymentVerification> {
-    const response = await fetch(`${this.baseUrl}/payment-verification/initiate`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(request)
-    });
-    
-    if (!response.ok) {
-      throw new Error('Initiation failed');
-    }
-    
-    const data: ApiResponse<{ verification: PaymentVerification }> = await response.json();
-    return data.data!.verification;
-  }
-  
-  async confirm(
-    verificationId: string,
-    request: ConfirmVerificationRequest
-  ): Promise<PaymentVerification> {
-    const response = await fetch(
-      `${this.baseUrl}/payment-verification/${verificationId}/confirm`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(request)
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error('Confirmation failed');
-    }
-    
-    const data: ApiResponse<{ verification: PaymentVerification }> = await response.json();
-    return data.data!.verification;
-  }
-  
-  async reject(
-    verificationId: string,
-    request: RejectVerificationRequest
-  ): Promise<PaymentVerification> {
-    const response = await fetch(
-      `${this.baseUrl}/payment-verification/${verificationId}/reject`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(request)
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error('Rejection failed');
-    }
-    
-    const data: ApiResponse<{ verification: PaymentVerification }> = await response.json();
-    return data.data!.verification;
-  }
-  
-  async list(
-    status?: VerificationStatus,
-    page: number = 1,
-    limit: number = 20
-  ): Promise<VerificationListResponse> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString()
-    });
-    
-    if (status) {
-      params.append('status', status);
-    }
-    
-    const response = await fetch(
-      `${this.baseUrl}/payment-verification?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error('List failed');
-    }
-    
-    const data: ApiResponse<VerificationListResponse> = await response.json();
-    return data.data!;
-  }
-  
-  async getById(verificationId: string): Promise<PaymentVerification> {
-    const response = await fetch(
-      `${this.baseUrl}/payment-verification/${verificationId}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error('Get failed');
-    }
-    
-    const data: ApiResponse<{ verification: PaymentVerification }> = await response.json();
-    return data.data!.verification;
-  }
-}
-```
-
----
-
-## React/Vue Examples
-
-### React Component
-
-```tsx
-import React, { useState } from 'react';
-import { PaymentVerificationService, PaymentProvider } from './types';
-
-interface PaymentVerificationFormProps {
-  orderId: string;
-  token: string;
-  onSuccess: () => void;
-}
-
-const PaymentVerificationForm: React.FC<PaymentVerificationFormProps> = ({
-  orderId,
-  token,
-  onSuccess
-}) => {
-  const [receiptImage, setReceiptImage] = useState<File | null>(null);
-  const [receiptNumber, setReceiptNumber] = useState('');
-  const [provider, setProvider] = useState<PaymentProvider>(PaymentProvider.TELEBIRR);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [preview, setPreview] = useState('');
-  
-  const service = new PaymentVerificationService(
-    'https://api.yourrestaurant.com/api/v1',
-    token
-  );
-  
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
-      return;
-    }
-    
-    if (file.size > 8 * 1024 * 1024) {
-      setError('File too large. Maximum size is 8MB');
-      return;
-    }
-    
-    setReceiptImage(file);
-    setError('');
-    
-    // Preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      // Validate
-      if (!receiptImage) {
-        throw new Error('Please upload a receipt photo');
-      }
-      
-      if (!receiptNumber.trim()) {
-        throw new Error('Please enter receipt number');
-      }
-      
-      // 1. Upload photo
-      const fileId = await service.uploadReceipt(receiptImage, orderId);
-      
-      // 2. Initiate verification
-      const verification = await service.initiate({
-        orderId,
-        provider,
-        receiptNumber: receiptNumber.trim().toUpperCase()
-      });
-      
-      // 3. Confirm with photo
-      await service.confirm(verification._id, { receiptFileId: fileId });
-      
-      // Success!
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Verification failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  return (
-    <form onSubmit={handleSubmit} className="payment-verification-form">
-      <h2>Verify Payment</h2>
-      
-      {error && (
-        <div className="alert alert-error">{error}</div>
-      )}
-      
-      <div className="form-group">
-        <label>Payment Provider</label>
-        <select 
-          value={provider} 
-          onChange={(e) => setProvider(e.target.value as PaymentProvider)}
-        >
-          <option value={PaymentProvider.TELEBIRR}>Telebirr</option>
-          <option value={PaymentProvider.CBE}>CBE</option>
-        </select>
-      </div>
-      
-      <div className="form-group">
-        <label>Receipt Photo *</label>
-        <input 
-          type="file" 
-          accept="image/*" 
-          capture="environment"
-          onChange={handleImageChange}
-          required
-        />
-        {preview && (
-          <img src={preview} alt="Receipt preview" className="receipt-preview" />
-        )}
-      </div>
-      
-      <div className="form-group">
-        <label>Receipt Number *</label>
-        <input 
-          type="text" 
-          value={receiptNumber}
-          onChange={(e) => setReceiptNumber(e.target.value)}
-          placeholder="e.g., DB80L94QPK"
-          required
-        />
-        <small>Enter the reference number from the receipt</small>
-      </div>
-      
-      <button type="submit" disabled={loading}>
-        {loading ? 'Processing...' : 'Verify Payment'}
-      </button>
-    </form>
-  );
-};
-
-export default PaymentVerificationForm;
-```
-
-### Vue 3 Component
-
-```vue
-<template>
-  <form @submit.prevent="handleSubmit" class="payment-verification-form">
-    <h2>Verify Payment</h2>
-    
-    <div v-if="error" class="alert alert-error">{{ error }}</div>
-    
-    <div class="form-group">
-      <label>Payment Provider</label>
-      <select v-model="provider">
-        <option value="telebirr">Telebirr</option>
-        <option value="cbe">CBE</option>
-      </select>
-    </div>
-    
-    <div class="form-group">
-      <label>Receipt Photo *</label>
-      <input 
-        type="file" 
-        accept="image/*" 
-        capture="environment"
-        @change="handleImageChange"
-        required
-      />
-      <img v-if="preview" :src="preview" alt="Receipt preview" class="receipt-preview" />
-    </div>
-    
-    <div class="form-group">
-      <label>Receipt Number *</label>
-      <input 
-        v-model="receiptNumber"
-        type="text" 
-        placeholder="e.g., DB80L94QPK"
-        required
-      />
-      <small>Enter the reference number from the receipt</small>
-    </div>
-    
-    <button type="submit" :disabled="loading">
-      {{ loading ? 'Processing...' : 'Verify Payment' }}
-    </button>
-  </form>
-</template>
-
-<script setup lang="ts">
-import { ref } from 'vue';
-import { PaymentVerificationService } from './services/payment-verification';
-
-interface Props {
-  orderId: string;
-  token: string;
-}
-
-const props = defineProps<Props>();
-const emit = defineEmits<{
-  success: [];
-}>();
-
-const receiptImage = ref<File | null>(null);
-const receiptNumber = ref('');
-const provider = ref('telebirr');
-const loading = ref(false);
-const error = ref('');
-const preview = ref('');
-
-const service = new PaymentVerificationService(
-  'https://api.yourrestaurant.com/api/v1',
-  props.token
 );
 
-const handleImageChange = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) return;
-  
-  if (!file.type.startsWith('image/')) {
-    error.value = 'Please select an image file';
-    return;
-  }
-  
-  if (file.size > 8 * 1024 * 1024) {
-    error.value = 'File too large. Maximum size is 8MB';
-    return;
-  }
-  
-  receiptImage.value = file;
-  error.value = '';
-  
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    preview.value = e.target?.result as string;
-  };
-  reader.readAsDataURL(file);
-};
-
-const handleSubmit = async () => {
-  loading.value = true;
-  error.value = '';
-  
-  try {
-    if (!receiptImage.value) {
-      throw new Error('Please upload a receipt photo');
-    }
-    
-    if (!receiptNumber.value.trim()) {
-      throw new Error('Please enter receipt number');
-    }
-    
-    // 1. Upload photo
-    const fileId = await service.uploadReceipt(receiptImage.value, props.orderId);
-    
-    // 2. Initiate verification
-    const verification = await service.initiate({
-      orderId: props.orderId,
-      provider: provider.value as any,
-      receiptNumber: receiptNumber.value.trim().toUpperCase()
-    });
-    
-    // 3. Confirm with photo
-    await service.confirm(verification._id, { receiptFileId: fileId });
-    
-    // Success!
-    emit('success');
-  } catch (err: any) {
-    error.value = err.message || 'Verification failed';
-  } finally {
-    loading.value = false;
-  }
-};
-</script>
-
-<style scoped>
-.receipt-preview {
-  max-width: 300px;
-  margin-top: 10px;
-}
-</style>
+export default apiClient;
 ```
 
 ---
 
-## Testing Checklist
+## Best Practices
 
-### Manual Testing Steps
+### 1. Store QR Data Securely
 
-#### 1. Upload Receipt Photo
-- [ ] Select/capture image from device
-- [ ] Verify image preview displays
-- [ ] Verify file size validation (>8MB rejected)
-- [ ] Verify file type validation (non-images rejected)
-- [ ] Verify upload progress indicator
-- [ ] Verify success message with file ID
-- [ ] Test retry on network failure
+```javascript
+// Don't store sensitive data in localStorage
+// Use sessionStorage for temporary data
 
-#### 2. Initiate Verification
-- [ ] Enter valid Telebirr receipt number (10-12 chars)
-- [ ] Enter valid CBE receipt number
-- [ ] Verify invalid format error for Telebirr
-- [ ] Verify duplicate receipt error
-- [ ] Verify already-paid order error
-- [ ] Verify canceled order error
+// Good:
+sessionStorage.setItem('qrData', JSON.stringify(qrData));
 
-#### 3. Confirm Verification
-- [ ] Confirm with uploaded photo (Telebirr)
-- [ ] Verify missing photo error (Telebirr)
-- [ ] Confirm without photo (CBE auto-lookup)
-- [ ] Verify amount mismatch error
-- [ ] Verify already-processed error
-- [ ] Verify order marked as paid after confirmation
+// Better: Use secure state management
+import { create } from 'zustand';
 
-#### 4. Reject Verification
-- [ ] Reject with reason
-- [ ] Verify missing reason error
-- [ ] Verify already-processed error
-- [ ] Verify order remains unpaid after rejection
+const useQRStore = create((set) => ({
+  qrData: null,
+  setQRData: (data) => set({ qrData: data }),
+  clearQRData: () => set({ qrData: null })
+}));
+```
 
-#### 5. List/Get Verifications
-- [ ] List all verifications
-- [ ] Filter by status
-- [ ] Verify pagination
-- [ ] Get single verification details
-- [ ] Verify order data populated
+### 2. Handle Socket Reconnection
 
-#### 6. Error Handling
-- [ ] Test network timeout
-- [ ] Test server error (500)
-- [ ] Test unauthorized (401)
-- [ ] Test not found (404)
-- [ ] Test validation errors (400)
-- [ ] Verify user-friendly error messages
+```javascript
+socket.on('disconnect', () => {
+  console.log('Socket disconnected');
+  
+  // Show reconnecting indicator
+  setConnectionStatus('reconnecting');
+});
+
+socket.on('connect', () => {
+  console.log('Socket reconnected');
+  
+  // Re-join rooms
+  socket.emit('join', `branch:${branchId}:perm:ORDER_VIEW`);
+  
+  // Reload data
+  loadActiveSessions();
+  
+  setConnectionStatus('connected');
+});
+```
+
+### 3. Optimize Re-renders
+
+```javascript
+// Use React.memo for list items
+const SessionCard = React.memo(({ session, onClick }) => {
+  // Component logic
+}, (prevProps, nextProps) => {
+  return prevProps.session._id === nextProps.session._id;
+});
+
+// Use useCallback for event handlers
+const handleCloseTable = useCallback((tableId) => {
+  closeTable(tableId);
+}, []);
+```
+
+### 4. Implement Offline Support
+
+```javascript
+// Use service worker for offline caching
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+
+// Queue orders when offline
+import localforage from 'localforage';
+
+async function placeOrderWithOfflineSupport(orderData) {
+  if (!navigator.onLine) {
+    // Save to local queue
+    await localforage.setItem(`pending-order-${Date.now()}`, orderData);
+    alert('Order saved. Will be submitted when online.');
+    return;
+  }
+  
+  // Submit immediately
+  await submitOrder(orderData);
+}
+
+// Sync when online
+window.addEventListener('online', async () => {
+  const keys = await localforage.keys();
+  const pendingOrders = keys.filter(k => k.startsWith('pending-order-'));
+  
+  for (const key of pendingOrders) {
+    const orderData = await localforage.getItem(key);
+    try {
+      await submitOrder(orderData);
+      await localforage.removeItem(key);
+    } catch (error) {
+      console.error('Failed to sync order:', error);
+    }
+  }
+});
+```
+
+### 5. Add Loading States
+
+```javascript
+// Use loading states for better UX
+const [loading, setLoading] = useState({
+  sessions: false,
+  closeTable: false
+});
+
+const closeTable = async (tableId) => {
+  setLoading(prev => ({ ...prev, closeTable: true }));
+  
+  try {
+    await api.post(`/tables/${tableId}/close`);
+  } finally {
+    setLoading(prev => ({ ...prev, closeTable: false }));
+  }
+};
+
+// In JSX:
+<button disabled={loading.closeTable}>
+  {loading.closeTable ? 'Closing...' : 'Close Table'}
+</button>
+```
 
 ---
 
-## Quick Start Checklist
+## Complete Example: Customer Flow
 
-✅ **Backend Setup**
-- API server running
-- Authentication configured
-- File upload working
-- Payment verification routes registered
+```javascript
+// App.jsx - Complete customer flow
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import QRScanner from './components/QRScanner';
+import MenuPage from './pages/MenuPage';
+import OrderTracking from './pages/OrderTracking';
 
-✅ **Frontend Setup**
-- API base URL configured
-- Authentication token management
-- File upload component
-- Error handling implemented
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<QRScanner />} />
+        <Route path="/menu" element={<MenuPage />} />
+        <Route path="/order-tracking" element={<OrderTracking />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
 
-✅ **Testing**
-- Upload test images
-- Create test orders
-- Verify full workflow
-- Test error scenarios
+---
 
-✅ **Production**
-- HTTPS enabled
-- File size limits configured
-- Error monitoring
-- User training completed
+## Testing Your Integration
+
+### Test Checklist
+
+**Customer Flow:**
+- [ ] QR code scanner works on mobile
+- [ ] Multiple customers can scan same QR
+- [ ] Orders are placed successfully
+- [ ] Real-time updates show in order tracking
+- [ ] Notifications work
+
+**Staff Dashboard:**
+- [ ] Socket.IO connects successfully
+- [ ] New sessions appear in real-time
+- [ ] Session details load correctly
+- [ ] Close table works (with/without unpaid orders)
+- [ ] Force close works
+- [ ] Sound notifications play
+
+**Error Handling:**
+- [ ] Invalid QR code handled
+- [ ] Network errors show friendly message
+- [ ] Unpaid orders prevent table close
+- [ ] Auth token expiry redirects to login
+
+---
+
+## Support
+
+For issues or questions:
+- Check browser console for errors
+- Verify Socket.IO connection status
+- Test API endpoints with Postman
+- Review backend logs for session-related events
+
+---
+
+*Happy coding! 🚀*

@@ -10,6 +10,12 @@ router.use(protect);
 router.use(restrictTo());
 
 router.post(
+  '/:id/close',
+  requireCapability(CAPABILITIES.TABLE_MANAGE),
+  tableController.closeTable
+);
+
+router.post(
   '/:id/qr/regenerate',
   requireCapability(CAPABILITIES.TABLE_MANAGE),
   tableController.regenerateQr

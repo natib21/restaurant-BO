@@ -375,21 +375,39 @@ class OrderService {
     const { orderItems, subtotal } = await OrderService.buildOrderItems(items, merchantId);
     const deductionPlan = await InventoryService.resolveDeductionPlan(orderItems, merchantId);
 
-    const session = await mongoose.startSession();
+    const mongoSession = await mongoose.startSession();
     let createdOrder;
+    let diningSessionId = null; // Track dining session for dine-in orders
 
     try {
-      await session.withTransaction(async () => {
-        // Table validation — merchant-scoped to prevent cross-tenant table use
+      await mongoSession.withTransaction(async () => {
+        // ✅ TASK 6: Get or create dining session for dine-in orders
         let tableNumber = null;
         if (orderType === 'dine_in') {
           const table = await Table.findOne({
             _id: tableId,
             merchant: merchantId,
             branch: branchId,
-          }).session(session);
+          }).session(mongoSession);
           if (!table) throw new AppError('Table not found', 404);
           tableNumber = table.tableNumber;
+          
+          // ✅ Get or create active dining session for this table
+          const { SessionService } = require('../../sessions/service/SessionService');
+          const { session: diningSession } = await SessionService.getOrCreateActiveSession({
+            tableId,
+            createdBy: performedBy, // Staff user ID
+            mongoSession, // Pass transaction session
+          });
+          
+          diningSessionId = diningSession._id;
+          
+          logger.info('staff.order.session_attached', {
+            tableId: tableId.toString(),
+            sessionId: diningSessionId.toString(),
+            isNew: !diningSession.startedAt || 
+                   (Date.now() - new Date(diningSession.startedAt).getTime() < 1000)
+          });
         }
 
         // Generate orderNumber inside the transaction so the Counter update is
@@ -398,7 +416,7 @@ class OrderService {
         // un-sessioned Counter call, matching OrderTransactionService.executePlaceOrder.
         const orderNumber = await OrderTransactionService.generateOrderNumber(
           { merchant: merchantId, branch: branchId, orderType }, // ✅ Pass orderType for prefix
-          session
+          mongoSession
         );
 
         // Create order using server-computed prices only
@@ -411,6 +429,7 @@ class OrderService {
               customerPhone: customerPhone || null,
               table: orderType === 'dine_in' ? tableId : null,
               tableNumber: orderType === 'dine_in' ? tableNumber : null,
+              session: diningSessionId, // ✅ TASK 6: Link to dining session (null for takeaway/delivery)
               orderType,
               orderNumber,
               source, // explicit source ('waiter' | 'admin')
@@ -427,13 +446,13 @@ class OrderService {
               placedBy: performedBy,
             },
           ],
-          { session }
+          { session: mongoSession }
         );
         createdOrder = order;
 
-        // Mark table occupied
+        // Mark table occupied (SessionService already did this, but keep for safety)
         if (orderType === 'dine_in') {
-          await Table.findByIdAndUpdate(tableId, { status: 'occupied' }, { session });
+          await Table.findByIdAndUpdate(tableId, { status: 'occupied' }, { session: mongoSession });
         }
 
         // Deduct inventory inside the same transaction
@@ -445,7 +464,7 @@ class OrderService {
             plan: deductionPlan,
             performedBy,
           },
-          session
+          mongoSession
         );
 
         await NotificationService.notifyStaffOrderPlaced(
@@ -456,7 +475,7 @@ class OrderService {
             tableNumber,
             placedByName: performedByName,
           },
-          session
+          mongoSession
         );
       });
 
@@ -577,7 +596,7 @@ class OrderService {
       });
       throw new AppError('Failed to create staff order', 500);
     } finally {
-      await session.endSession();
+      await mongoSession.endSession();
     }
   }
 

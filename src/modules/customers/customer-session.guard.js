@@ -1,6 +1,7 @@
 const catchAsync = require('../../../utils/catchAsync');
 const AppError = require('../../common/errors');
-const CustomerSession = require('../../../models/customerSessionModule');
+const CustomerSession = require('../../../models/customerSessionModule'); // Alias to DiningSession
+const DiningSession = require('../../../models/DiningSession');
 const Merchant = require('../../../models/merchantModel');
 const logger = require('../../../utils/logger');
 
@@ -12,6 +13,8 @@ const SESSION_EXTENSION_MS = () => {
 /**
  * Validates table QR session token and populates unified request context.
  * Populates full merchant object for feature guard compatibility.
+ * 
+ * ✅ UPDATED: Now fetches DiningSession and populates req.diningSession
  */
 const protectTableSession = catchAsync(async (req, res, next) => {
   let token;
@@ -19,7 +22,6 @@ const protectTableSession = catchAsync(async (req, res, next) => {
     token = req.headers.authorization.split(' ')[1];
   }
 
-  // ✅ Log what we're doing
   if (!token) {
     logger.debug('protectTableSession.no_token', { path: req.path });
     return next(new AppError('You are not logged in. Please scan the QR code again.', 401));
@@ -27,10 +29,10 @@ const protectTableSession = catchAsync(async (req, res, next) => {
 
   logger.debug('protectTableSession.validating_token', { path: req.path, tokenLength: token.length });
 
-  const session = await CustomerSession.findOne({
+  // ✅ Use DiningSession directly (CustomerSession is now an alias)
+  const session = await DiningSession.findOne({
     token,
-    isActive: true,
-    expiresAt: { $gt: new Date() },
+    status: 'active',  // ✅ Updated to use status field
   });
 
   if (!session) {
@@ -47,11 +49,11 @@ const protectTableSession = catchAsync(async (req, res, next) => {
     merchantId: session.merchant.toString().slice(-6),
   });
 
+  // ✅ Extend session expiration
   session.expiresAt = new Date(Date.now() + SESSION_EXTENSION_MS());
   await session.save();
 
   // ✅ Populate full merchant object for feature guard
-  // Include fields needed for hasActiveAccess virtual: status, isActive, isSubscriptionActive
   const merchant = await Merchant.findById(session.merchant).select(
     'businessName isActive status isSubscriptionActive features subscription'
   );
@@ -65,12 +67,14 @@ const protectTableSession = catchAsync(async (req, res, next) => {
     return next(new AppError('Restaurant is not available at this time.', 403));
   }
 
-  req.tableSession = session;
+  // ✅ Populate request context
+  req.tableSession = session;  // Backward compatibility
+  req.diningSession = session;  // ✅ NEW: Explicit dining session reference
   req.merchantId = session.merchant;
-  req.merchant = merchant; // ✅ Full merchant object with .hasActiveAccess and .hasFeature()
+  req.merchant = merchant;
   req.branchId = session.branch;
   req.tableId = session.table;
-  req.customerId = session.customer;
+  req.customerId = session.customer || null;  // May be null for QR sessions
   req.isAnonymous = !session.customer;
 
   if (!req.ctx)
@@ -79,6 +83,7 @@ const protectTableSession = catchAsync(async (req, res, next) => {
   req.ctx.branchId = session.branch;
   req.ctx.tableId = session.table;
   req.ctx.customerId = session.customer;
+  req.ctx.sessionId = session._id;  // ✅ NEW: Session ID for order creation
   req.ctx.sessionToken = token;
   req.ctx.actorType = session.customer ? 'customer' : 'anonymous';
   if (session.customer) req.ctx.actorId = session.customer;
