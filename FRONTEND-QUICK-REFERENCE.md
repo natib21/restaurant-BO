@@ -191,6 +191,7 @@ socket.on('order:item-status-changed', (data) => {
 | GET | `/branches/:id/active-sessions` | Yes | List active sessions |
 | GET | `/sessions/:id/summary` | Yes | Get session details |
 | POST | `/tables/:id/close` | Yes | Close table |
+| POST | `/menu/render-pdf` | No | Render menu to PDF |
 
 ### Close Table Endpoint
 ```javascript
@@ -224,7 +225,51 @@ POST /api/v1/tables/:tableId/close?force=true
 }
 ```
 
----
+### Render PDF Endpoint
+```javascript
+// Generate menu PDF
+import axios from 'axios';
+
+const response = await axios.post(
+  '/api/v1/menu/render-pdf',
+  {
+    title: 'Restaurant Menu',
+    paperSize: 'a4',        // a4|a5|letter|legal|tabloid
+    orientation: 'portrait', // portrait|landscape
+    branding: {
+      name: 'My Restaurant',
+      phone: '+251-11-234-5678',
+      location: 'Addis Ababa'
+    },
+    categories: [
+      {
+        name: 'Appetizers',
+        layout: 'grid-2col', // grid-2col|list-with-photos|compact-price-list
+        items: [
+          {
+            name: 'Misir Wot',
+            description: 'Spiced lentil stew',
+            price: 125,
+            tags: ['Vegan', 'Spicy']
+          }
+        ]
+      }
+    ],
+    qrCodeData: 'https://restaurant.com/menu'
+  },
+  { responseType: 'blob' } // Important!
+);
+
+// Download PDF
+const blobUrl = URL.createObjectURL(response.data);
+const link = document.createElement('a');
+link.href = blobUrl;
+link.download = 'menu.pdf';
+link.click();
+
+// Or preview in iframe
+document.getElementById('pdfViewer').src = blobUrl;
+```
 
 ## 🎨 React Hooks
 
