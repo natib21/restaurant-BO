@@ -12,6 +12,7 @@ const { FileManagementService } = require('../../files/file-management.service')
 const FileAsset = require('../../../../models/FileAsset');
 const { resolveSingleImageData, resolveImageCollectionData } = require('../utils/image-response');
 const { sendResponse } = require('../../../../utils/sendResponse');
+const { MenuPdfService } = require('../service/MenuPdfService');
 
 /**
  * Parse JSON-stringified fields from multipart/form-data
@@ -397,6 +398,24 @@ exports.getStaffMenu = catchAsync(async (req, res) => {
 // ============================================
 // 10. PUBLISH MENU GROUP
 // ============================================
+// ============================================
+// RENDER MENU PDF
+// ============================================
+exports.renderMenuPdf = catchAsync(async (req, res) => {
+  const settings = req.validatedBody?.settings ?? req.validatedBody;
+
+  if (!settings || typeof settings !== 'object') {
+    throw new AppError('Invalid settings payload for PDF render', 400);
+  }
+
+  const result = await MenuPdfService.renderMenuPdf(settings);
+
+  // Stream PDF back as attachment
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="menu.pdf"');
+  res.status(200).send(result.buffer);
+});
+
 exports.publishMenuGroup = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
   const { menuGroupId, branchId } = req.body;
