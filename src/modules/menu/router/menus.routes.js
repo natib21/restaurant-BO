@@ -19,11 +19,15 @@ const { CAPABILITIES } = require('../../../common/capabilities/capabilities');
 const { protectTableSession } = require('../../customers/customer-session.guard');
 const menuController = require('../controller/menu.controller');
 const menuMgmtController = menuController; // same file handles both CRUD and publish lifecycle
+const validate = require('../../../common/middleware/validate.middleware');
+const { menuRenderPdfSchema } = require('../dto/menu-render-pdf.dto');
 
 const router = express.Router();
 
 // ── 1. Public (table session) ─────────────────────────────────────────────────
 router.get('/public', protectTableSession, menuController.getPublicMenu);
+// POST /api/v1/menu/render-pdf - render a menu to PDF using headless Chromium
+router.post('/render-pdf', validate(menuRenderPdfSchema, 'body'), menuController.renderMenuPdf);
 router.get(
   '/public/beverages',
   protectTableSession,
