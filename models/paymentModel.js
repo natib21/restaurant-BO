@@ -1,45 +1,48 @@
 const mongoose = require('mongoose');
+const auditPlugin = require('../utils/auditPlugin');
 
 const paymentSchema = new mongoose.Schema({
   order: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Order',
-    required: true, // Links payment to the specific order
+    required: true,
+    index: true, // FIX: was missing — this is a primary lookup path
   },
   restaurant: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Merchant',
-    required: true, // Multi-tenant SaaS: link payment to restaurant
+    required: true,
+    index: true, // FIX: was missing — needed for merchant financial reporting
   },
   amount: {
     type: Number,
-    required: true, // Total payment amount
+    required: true,
   },
   currency: {
     type: String,
-    default: 'ETB', // Ethiopian Birr by default
+    default: 'ETB',
   },
   status: {
     type: String,
     enum: ['pending', 'paid', 'failed', 'refunded'],
-    default: 'pending', // Payment workflow: pending → paid → refunded
+    default: 'pending',
     required: true,
   },
   method: {
     type: String,
-    enum: ['card', 'mobile', 'cash'], // allow cash too
+    enum: ['card', 'mobile', 'cash'],
     required: true,
   },
   transactionId: {
     type: String,
-    required: true, // Unique ID from payment gateway
+    required: true,
   },
   paymentDate: {
     type: Date,
-    required: true, // When payment was successfully made
+    required: true,
   },
   notes: {
-    type: String, // Optional for manual adjustments, partial payments, discounts
+    type: String,
   },
   createdAt: {
     type: Date,
@@ -48,11 +51,27 @@ const paymentSchema = new mongoose.Schema({
   updatedAt: Date,
 });
 
-// Auto-update `updatedAt`
+// FIX: added — this is the query you'll run constantly for merchant
+// dashboards ("this merchant's payments, most recent first, filtered by status")
+paymentSchema.index({ restaurant: 1, status: 1, paymentDate: -1 });
+
 paymentSchema.pre('save', function (next) {
   this.updatedAt = new Date();
   next();
 });
 
-const Payment = mongoose.model('Payment', paymentSchema);
-module.exports = Payment;
+// Apply audit plugin BEFORE model creation
+paymentSchema.plugin(auditPlugin, {
+  resource: 'Payment',
+  auditedFields: [
+    'status',
+    'amount',
+    'currency',
+    'method',
+    'transactionId',
+    'paymentDate',
+    'notes',
+  ],
+});
+
+module.exports = mongoose.model('Payment', paymentSchema);

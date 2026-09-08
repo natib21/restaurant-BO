@@ -1,6 +1,7 @@
 // models/Role.js
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const auditPlugin = require('../utils/auditPlugin');
 
 const roleSchema = new Schema(
   {
@@ -37,6 +38,11 @@ const roleSchema = new Schema(
         ref: 'Task',
       },
     ],
+    /** Additive capability codes — optional; task RBAC still applies */
+    capabilities: {
+      type: [String],
+      default: [],
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -69,6 +75,21 @@ roleSchema.pre('save', function (next) {
     return next(new Error('isSystemRole cannot be changed after creation'));
   }
   next();
+});
+
+// Apply audit plugin BEFORE model creation
+roleSchema.plugin(auditPlugin, {
+  resource: 'Role',
+  auditedFields: [
+    'name',
+    'description',
+    'isSystemRole',
+    'isSubscriptionBased',
+    'merchant',
+    'tasks',
+    'capabilities',
+    'isActive',
+  ],
 });
 
 const Role = mongoose.model('Role', roleSchema);

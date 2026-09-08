@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+#
+# Pre-commit hook: runs TypeScript type-checking and unit tests
+# to prevent broken code from being committed or pushed.
+#
+# Runs:
+#   1. tsc --noEmit  (TypeScript lint)
+#   2. Jest unit suite (DB-dependent integration tests skipped)
+#
+# To enable:
+#   npm run githooks:install
+#
+# To bypass (emergencies only):
+#   git commit --no-verify
+
+set -e
+
+COLOR_RED="\033[0;31m"
+COLOR_GREEN="\033[0;32m"
+COLOR_YELLOW="\033[1;33m"
+COLOR_RESET="\033[0m"
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT_DIR"
+
+echo "${COLOR_YELLOW}[pre-commit] Running TypeScript type-check...${COLOR_RESET}"
+
+if ! npx tsc --noEmit; then
+  echo "${COLOR_RED}[pre-commit] ✗ TypeScript errors detected — commit ABORTED.${COLOR_RESET}"
+  echo "Run \`npm run lint\` locally to inspect."
+  exit 1
+fi
+
+echo "${COLOR_GREEN}[pre-commit] ✓ TypeScript OK${COLOR_RESET}"
+echo ""
+echo "${COLOR_YELLOW}[pre-commit] Running unit tests (skip DB-dependent suites)...${COLOR_RESET}"
+
+NODE_ENV=test npx jest \
+  --runInBand \
+  --forceExit \
+  --testPathIgnorePatterns=inventory.test.js \
+  --testPathIgnorePatterns=orders-integration.test.js \
+  --testPathIgnorePatterns=order-history.test.js
+
+TEST_STATUS=$?
+
+if [ $TEST_STATUS -ne 0 ]; then
+  echo ""
+  echo "${COLOR_RED}[pre-commit] ✗ Test suite failed — commit ABORTED.${COLOR_RESET}"
+  echo "Run \`npm run test:unit\` locally to inspect failing tests."
+  exit 1
+fi
+
+echo ""
+echo "${COLOR_GREEN}[pre-commit] ✓ All unit tests passed.${COLOR_RESET}"
+echo "${COLOR_GREEN}[pre-commit] ✓ Pre-commit gates cleared. Commit may proceed.${COLOR_RESET}"
+exit 0

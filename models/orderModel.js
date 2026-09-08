@@ -2,20 +2,86 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const Counter = require('./CounterModel.js');
+const auditPlugin = require('../utils/auditPlugin');
 /* -----------------------------------------------------
    Order Item Sub-schema (snapshot of menu at order time)
 ------------------------------------------------------ */
 const orderItemSchema = new Schema(
   {
     menuItem: { type: Schema.Types.ObjectId, ref: 'Menu', required: true },
+    name: { type: String, trim: true }, // snapshot of menu item name (primary locale) at order time
     quantity: { type: Number, required: true, min: 1 },
     unitPrice: { type: Number, required: true, min: 0 },
+    unitCost: { type: Number, min: 0, default: null }, // COGS per unit — null if no recipe/inventory tracking
     totalPrice: { type: Number, required: true, min: 0 },
     notes: { type: String, trim: true },
+    
+    // ✅ Item-level workflow fields (snapshotted from MenuItem at order creation)
+    requiresKitchen: { 
+      type: Boolean, 
+      default: true,
+      comment: 'Snapshotted from MenuItem.requiresKitchen - determines if item generates kitchen tickets'
+    },
+    
+    // ✅ Item status tracking
+    status: {
+      type: String,
+      enum: ['pending', 'in_progress', 'ready', 'served', 'void'],
+      default: 'pending',
+      index: true,
+      comment: 'Item-level status independent of order status'
+    },
+    
+    // ✅ Served tracking
+    servedAt: { type: Date, default: null },
+    servedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    servedVia: {
+      type: String,
+      enum: ['auto', 'manual'],
+      default: null,
+      comment: 'auto = system auto-served (e.g., non-cooked dine-in items), manual = staff explicitly served'
+    },
+    
+    // ✅ Void tracking
+    voidedAt: { type: Date, default: null },
+    voidedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    voidReason: { type: String, trim: true, default: null },
+    
+    // ✅ Replacement tracking
+    replacementItemId: { 
+      type: Schema.Types.ObjectId, 
+      default: null,
+      comment: 'If this item was voided and replaced, points to the replacement item'
+    },
+    replacedItemId: { 
+      type: Schema.Types.ObjectId, 
+      default: null,
+      comment: 'If this item is a replacement, points to the original voided item'
+    },
+  },
+  { _id: true } // ✅ PHASE 0: Enable _id for KDS ticket item tracking
+);
+const deliverySchema = new Schema(
+  {
+    location: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+    },
+    addressNote: { type: String, trim: true, maxlength: 500 },
+    // Contact number for whoever's delivering — may differ from
+    // customerPhone already on the order.
+    phone: { type: String, trim: true },
+    fee: { type: Number, default: 0, min: 0 },
+    // Free-text, no account — "Abebe (branch motorbike)". Matches the
+    // no-rider-account model you described.
+    handledBy: { type: String, trim: true, maxlength: 100 },
+    // Written by OrderStateMachineService.applyDeliveryStatusTimestamps —
+    // already implemented, just needs these fields to exist on the schema.
+    dispatchedAt: Date,
+    deliveredAt: Date,
   },
   { _id: false }
 );
-
 /* -----------------------------------------------------
    Main Order Schema
 ------------------------------------------------------ */
@@ -48,6 +114,17 @@ const orderSchema = new Schema(
         return this.orderType === 'dine_in';
       },
     },
+    
+    // ✅ NEW: Link to dining session (table visit)
+    session: {
+      type: Schema.Types.ObjectId,
+      ref: 'DiningSession',
+      index: true,
+      required: function() {
+        return this.orderType === 'dine_in';
+      },
+      comment: 'Dining session this order belongs to (for dine-in orders)'
+    },
 
     // Useful for fast lookup without population
     tableNumber: { type: String, trim: true },
@@ -65,12 +142,49 @@ const orderSchema = new Schema(
       default: 'dine_in',
       required: true,
     },
+    source: {
+      type: String,
+      enum: ['qr', 'staff', 'web', 'telegram', 'admin', 'waiter'],  // ✅ Added 'qr' and 'staff'
+      default: 'web',
+      required: true,
+      index: true,
+      comment: 'qr = customer QR scan, staff = waiter created, web/telegram/admin/waiter = legacy'
+    },
+ delivery: {
+   type: deliverySchema,
+   required: function () {
+   return this.orderType === 'delivery';
+  },
+ },
+ 
+deliveryNotes: {
+  type: String,
+  trim: true,
+  maxlength: 500,
+},
+deliveryFee: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
     status: {
       type: String,
-      enum: ['pending', 'accepted', 'preparing', 'ready', 'served', 'completed', 'canceled'],
+      enum: ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'served', 'completed', 'canceled'],
       default: 'pending',
       index: true,
     },
+    statusHistory: [
+      {
+        fromStatus: { type: String, required: true },
+        toStatus: { type: String, required: true },
+        changedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+        changedAt: { type: Date, default: Date.now },
+        reason: { type: String, trim: true },
+      },
+    ],
+    canceledAt: Date,
+    canceledBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    canceledReason: { type: String, trim: true },
     items: { type: [orderItemSchema], required: true },
 
     subtotal: { type: Number, required: true, min: 0 },
@@ -168,45 +282,27 @@ const orderSchema = new Schema(
   }
 );
 
-/* -----------------------------------------------------
-   Auto-generate Professional Order Number
+/* ✅ FIXED: Order number generation moved to OrderTransactionService
+   (lines in transaction context). This prevents race condition where
+   order number could be generated twice (once pre-validate, once in transaction).
+   
    Format examples:
    - #T5-467      (dine-in with table T5)
    - #TAKE-120    (takeaway)
    - #DEL-980     (delivery)
 ------------------------------------------------------ */
-/* -----------------------------------------------------
-   Auto-generate Professional Order Number
------------------------------------------------------- */
-// CHANGE 'save' TO 'validate'
-orderSchema.pre('validate', async function (next) {
-  if (!this.isNew || this.orderNumber) return next();
-  if (!this.merchant || !this.branch) return next();
 
-  try {
-    const today = new Date().toISOString().split('T')[0];
-    let prefix = 'POS';
-
-    if (this.orderType === 'dine_in' && this.tableNumber) {
-      prefix = this.tableNumber.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'POS';
-    } else if (this.orderType === 'delivery') prefix = 'DEL';
-    else if (this.orderType === 'takeaway') prefix = 'TAKE';
-
-    const counter = await Counter.findOneAndUpdate(
-      { merchantId: this.merchant, branchId: this.branch, date: today, prefix },
-      { $inc: { seq: 1 }, $setOnInsert: { prefix } },
-
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-
-    // Append milliseconds to ensure uniqueness if race conditions occur
-    const millis = Date.now() % 1000;
-    this.orderNumber = `#${prefix}-${counter.seq}-${millis}`;
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
+orderSchema.pre('validate', function (next) {
+     if (this.orderType === 'delivery') {
+       if (!this.delivery?.location?.lat || !this.delivery?.location?.lng) {
+         return next(new Error('delivery.location is required for delivery orders'));
+       }
+       if (!this.delivery?.phone) {
+         return next(new Error('delivery.phone is required for delivery orders'));
+       }
+    }
+      next();
+   });
 
 /* -----------------------------------------------------
    Indexes — for real restaurant performance
@@ -218,6 +314,15 @@ orderSchema.index({ customer: 1, placedAt: -1 });
 orderSchema.index({ assignedWaiter: 1 });
 orderSchema.index({ placedAt: -1 });
 
+// ✅ NEW: Session-based indexes for dining session queries
+orderSchema.index({ session: 1, status: 1 });  // Query orders by session and status
+orderSchema.index({ session: 1, paymentStatus: 1 });  // Check unpaid orders in session
+orderSchema.index({ session: 1, createdAt: -1 });  // Session orders timeline
+
+// Advanced Reporting indexes (Requirement 18.1)
+orderSchema.index({ merchant: 1, paymentStatus: 1, placedAt: -1 }); // For sales reports filtering by payment status
+orderSchema.index({ merchant: 1, branch: 1, placedAt: -1 }); // For branch-specific report queries
+
 /* -----------------------------------------------------
    Virtual — clean populate for frontend
 ------------------------------------------------------ */
@@ -226,6 +331,27 @@ orderSchema.virtual('tableDetails', {
   localField: 'table',
   foreignField: '_id',
   justOne: true,
+});
+
+// ✅ PHASE 2 - STEP 4: Apply audit plugin for Order model
+// Track business-critical fields (financial, status, payment)
+orderSchema.plugin(auditPlugin, {
+  resource: 'Order',
+  auditedFields: [
+    'status',
+    'orderType',
+    'totalAmount',
+    'subtotal',
+    'taxAmount',
+    'discountAmount',
+    'paymentStatus',
+    'paymentDetails',
+    'canceledAt',
+    'canceledBy',
+    'canceledReason',
+    'assignedWaiter',
+    'assignedKitchenStaff',
+  ],
 });
 
 module.exports = mongoose.model('Order', orderSchema);

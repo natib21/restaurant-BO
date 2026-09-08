@@ -1,6 +1,7 @@
 // models/Table.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
+const auditPlugin = require('../utils/auditPlugin');
 
 const tableSchema = new mongoose.Schema(
   {
@@ -88,11 +89,30 @@ const tableSchema = new mongoose.Schema(
 );
 
 // ====================== INDEXES (Lightning Fast) ======================
-tableSchema.index({ merchant: 1, tableNumber: 1 }, { unique: true });
+// ✅ BRANCH-LEVEL UNIQUENESS: Table numbers unique PER BRANCH ONLY
+// ✅ SOFT-DELETE: Only enforce uniqueness for ACTIVE tables
+// When a table is soft-deleted (isActive=false), the name can be reused by a new active table
+// 
+// Key point: { branch: 1, tableNumber: 1, isActive: 1 } means:
+// - Branch A, Table "01" (active) → unique
+// - Branch A, Table "01" (inactive) → allowed (soft-deleted)
+// - Branch B, Table "01" (active) → allowed (different branch)
+tableSchema.index(
+  { branch: 1, tableNumber: 1, isActive: 1 },
+  { 
+    unique: true,
+    sparse: true,  // Only index active tables (isActive: true)
+    partialFilterExpression: { isActive: true }  // MongoDB 3.2+: only create index for active=true
+  }
+);
 tableSchema.index({ branch: 1, status: 1 });
 tableSchema.index({ branch: 1, section: 1 });
 tableSchema.index({ branch: 1, isActive: 1 });
 tableSchema.index({ merchant: 1, branch: 1, status: 1 });
+
+// ✅ P0-001: Added to support soft-delete queries
+tableSchema.index({ merchant: 1, isActive: 1 });
+tableSchema.index({ branch: 1, isActive: 1, tableNumber: 1 });
 
 // ====================== VIRTUALS ======================
 tableSchema.virtual('currentOrder', {
@@ -104,11 +124,11 @@ tableSchema.virtual('currentOrder', {
 });
 
 tableSchema.virtual('activeSession', {
-  ref: 'CustomerSession',
+  ref: 'DiningSession',  // ✅ Updated to use new model name
   localField: '_id',
   foreignField: 'table',
   justOne: true,
-  match: { isActive: true, expiresAt: { $gt: new Date() } },
+  match: { status: 'active' },  // ✅ Updated to use status field instead of isActive
 });
 
 // ====================== METHODS ======================
@@ -144,10 +164,9 @@ tableSchema.methods.regenerateQR = async function () {
 
 // Move table + transfer session & orders
 tableSchema.methods.moveTo = async function (newTableId) {
-  const session = await mongoose.model('CustomerSession').findOne({
+  const session = await mongoose.model('DiningSession').findOne({  // ✅ Updated
     table: this._id,
-    isActive: true,
-    expiresAt: { $gt: new Date() },
+    status: 'active',  // ✅ Updated to use status
   });
 
   const newTable = await this.constructor.findById(newTableId);
@@ -179,5 +198,18 @@ tableSchema.methods.moveTo = async function (newTableId) {
 
   return { success: true, newTable: newTable.tableNumber };
 };
+
+// Apply audit plugin BEFORE model creation
+tableSchema.plugin(auditPlugin, {
+  resource: 'Table',
+  auditedFields: [
+    'tableNumber',
+    'capacity',
+    'status',
+    'location',
+    'section',
+    'isActive',
+  ],
+});
 
 module.exports = mongoose.model('Table', tableSchema);

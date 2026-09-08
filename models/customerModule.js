@@ -24,7 +24,6 @@ const customerSchema = new Schema(
       type: String,
       trim: true,
       sparse: true,
-      unique: true,
       validate: {
         validator: v => !v || /^\+?251[79]\d{8}$/.test(v.replace(/\s/g, '')),
         message: 'Invalid Ethiopian phone number',
@@ -34,11 +33,18 @@ const customerSchema = new Schema(
     // Social logins
     facebook: { id: String, username: String, profilePic: String },
     tiktok: { id: String, username: String, profilePic: String },
+    // models/Customer.js — replace the telegram block
     telegram: {
-      id: String,
+      id: String, // Telegram's global user id
+      chatId: String, // chat id for 1:1 conversation with THIS merchant's bot
       username: String,
       firstName: String,
       profilePic: String,
+      linked: { type: Boolean, default: false },
+      linkedAt: Date,
+      optIn: { type: Boolean, default: false }, // marketing consent, set true on /start
+      optInAt: Date,
+      lastInteractionAt: Date,
     },
 
     source: {
@@ -147,6 +153,8 @@ customerSchema.virtual('profileImage').get(function () {
 customerSchema.index({ merchant: 1, phone: 1 }, { unique: true, sparse: true });
 customerSchema.index({ merchant: 1, lastSeen: -1 });
 customerSchema.index({ 'loyalty.tier': 1, merchant: 1 });
+customerSchema.index({ merchant: 1, 'telegram.chatId': 1 }, { sparse: true });
+customerSchema.index({ merchant: 1, 'telegram.optIn': 1 });
 
 // Auto-delete inactive guests after 90 days
 customerSchema.index(

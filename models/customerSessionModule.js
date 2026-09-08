@@ -1,21 +1,18 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// At top of customerSessionSchema file
 const SESSION_DURATION_HOURS = process.env.SESSION_DURATION_HOURS || 4;
 const SESSION_DURATION_MS = 1000 * 60 * 60 * SESSION_DURATION_HOURS;
 
 const customerSessionSchema = new Schema(
   {
-    // *** SECURITY CRITICAL FIELDS ***
     token: {
       type: String,
       required: true,
-      unique: true, // Must be unique for quick and secure lookup
+      unique: true,
       index: true,
     },
     table: { type: Schema.Types.ObjectId, ref: 'Table', required: true, index: true },
-    // *** CONTEXT & EXPIRY ***
     merchant: {
       type: Schema.Types.ObjectId,
       ref: 'Merchant',
@@ -23,26 +20,22 @@ const customerSessionSchema = new Schema(
       index: true,
     },
     branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: true, index: true },
-    // Keep customer optional if anonymous ordering is allowed
     customer: {
       type: Schema.Types.ObjectId,
       ref: 'Customer',
-      required: false, // Set to false if not all customers log in
+      required: false,
       index: true,
     },
     deviceInfo: {
       userAgent: String,
       ip: String,
     },
-    // Session is functionally expired after this time (2 hours recommended)
     expiresAt: {
       type: Date,
       required: true,
       default: () => new Date(Date.now() + SESSION_DURATION_MS),
-      // TTL index to automatically delete documents 1 day after expiresAt
       index: { expires: '1d' },
     },
-    // Used to immediately revoke the token after the final order is placed
     isActive: {
       type: Boolean,
       default: true,
@@ -53,11 +46,22 @@ const customerSessionSchema = new Schema(
   }
 );
 
-// Compound index for fast lookup by merchant and location
-customerSessionSchema.index({ table: 1, merchant: 1, isActive: 1, expiresAt: 1 }, { unique: true });
-// customerSessionSchema.index({ table: 1, isActive: true }, { unique: true, sparse: true });
+// FIX: the old compound unique index (table + merchant + isActive + expiresAt)
+// didn't actually prevent two simultaneous active sessions on the same table,
+// since expiresAt is essentially never identical between two sessions. There
+// was also a second index referencing a field called `tableId`, which doesn't
+// exist on this schema (the real field is `table`) — it silently indexed
+// nothing and enforced nothing.
+//
+// This partial unique index does what was intended: at most one *active*
+// session per table at a time. Creating a new session for an occupied table
+// must first set the old session's isActive to false.
+customerSessionSchema.index(
+  { table: 1 },
+  { unique: true, partialFilterExpression: { isActive: true } }
+);
 
-customerSessionSchema.index({ tableId: 1, isActive: true }, { unique: true, sparse: true });
+customerSessionSchema.index({ merchant: 1, branch: 1 });
 
 customerSessionSchema.virtual('tableDetails', {
   ref: 'Table',
@@ -73,8 +77,6 @@ customerSessionSchema.virtual('branchDetails', {
   justOne: true,
 });
 
-// ================= PRE-SAVE HOOK =================
-// Auto-set branch from table if not provided
 customerSessionSchema.pre('save', async function (next) {
   if (!this.branch && this.table) {
     const Table = mongoose.model('Table');
@@ -82,10 +84,9 @@ customerSessionSchema.pre('save', async function (next) {
 
     if (!tableDoc) return next(new Error('Table not found'));
     this.branch = tableDoc.branch;
-    this.merchant = tableDoc.merchant; // also set merchant automatically
+    this.merchant = tableDoc.merchant;
   }
 
-  // Ensure branch matches table branch
   if (this.table && this.branch) {
     const Table = mongoose.model('Table');
     const tableDoc = await Table.findById(this.table).select('branch');
@@ -99,4 +100,22 @@ customerSessionSchema.pre('save', async function (next) {
   next();
 });
 
+// ====================== MIGRATION NOTICE ======================
+// This model has been renamed to DiningSession to better represent
+// table-based sessions rather than individual customer sessions.
+// 
+// This file is kept as a backward compatibility alias during migration.
+// New code should use: require('./DiningSession')
+// 
+// TODO: Remove this file after migration is complete and all references updated
+// ================================================================
+
+// Export the new DiningSession model under the old CustomerSession name
+// This ensures existing code continues to work during migration
+const DiningSession = require('./DiningSession');
+module.exports = DiningSession;
+
+// Keep the old model definition commented for reference during migration
+/*
 module.exports = mongoose.model('CustomerSession', customerSessionSchema);
+*/

@@ -40,6 +40,18 @@ const branchMenu = new mongoose.Schema(
     overrideImage: String,
     isHidden: { type: Boolean, default: false },
     isAvailable: { type: Boolean, default: true },
+
+    // === Stock availability & manual override ===
+    availability: {
+      // Manual override to allow ordering despite low/critical stock
+      manualOverride: {
+        enabled: { type: Boolean, default: false },
+        reason: String,
+        setBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        setAt: Date,
+        expiresAt: Date,
+      },
+    },
   },
   {
     timestamps: true,
@@ -47,7 +59,7 @@ const branchMenu = new mongoose.Schema(
   }
 );
 
-branchMenuItemSchema.index({ branch: 1, masterItem: 1 }, { unique: true, sparse: true });
-branchMenuItemSchema.index({ branch: 1 });
+branchMenu.index({ branch: 1, menuItem: 1 }, { unique: true, sparse: true });
+branchMenu.index({ branch: 1 });
 
 module.exports = mongoose.model('BranchMenu', branchMenu);

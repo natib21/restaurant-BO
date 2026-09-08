@@ -1,15 +1,17 @@
-// seed/createSuperAdmin.js
 const mongoose = require('mongoose');
 const User = require('../models/userModel');
 const Role = require('../models/roleModel');
 const dotenv = require('dotenv');
 require('../models/taskModel');
-const bcrypt = require('bcryptjs');
 const { logger } = require('../utils/logger');
-dotenv.config({ path: '././config.env' });
+
+// Ensure path to config is correct relative to the file location
+dotenv.config({ path: './config.env' });
+
 const SUPER_ADMIN_CONFIG = {
   email: process.env.SUPER_ADMIN_EMAIL || 'admin@system.com',
   password: process.env.SUPER_ADMIN_PASSWORD || 'admin123',
+  passwordConfirm: process.env.SUPER_ADMIN_PASSWORD || 'admin123',
   firstName: 'System',
   lastName: 'Admin',
   phone: '+251900000000',
@@ -17,24 +19,18 @@ const SUPER_ADMIN_CONFIG = {
 
 const createSuperAdmin = async () => {
   try {
-    const DB = `mongodb+srv://nathnaelzelalem_db_user:L6iyvT71WT4adq37@cluster0.zuwarje.mongodb.net/?appName=Cluster0`;
     const Local_DB = process.env.LOCAL_DATABASE;
-    console.log(Local_DB);
 
-    await mongoose.connect(DB).then(() => {
-      logger.info('MongoDB connected successfully!');
-    });
-
-    console.log('Connected to database. Seeding super-admin...');
+    await mongoose.connect(Local_DB);
+    logger.info('MongoDB connected successfully!');
 
     // 1. Create SUPER-ADMIN role
     const role = await Role.findOneAndUpdate(
       { name: 'SUPER-ADMIN' },
       {
         name: 'SUPER-ADMIN',
-        description: 'Full system access. Can manage all merchants, users, and settings.',
+        description: 'Full system access.',
         isSystemRole: true,
-
         tasks: [],
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -47,25 +43,19 @@ const createSuperAdmin = async () => {
       process.exit(0);
     }
 
-    // 3. Hash password
-    const hashedPassword = await bcrypt.hash(SUPER_ADMIN_CONFIG.password, 12);
-
-    // 4. Create user
-    const superAdmin = await User.create({
-      ...SUPER_ADMIN_CONFIG,
-      password: hashedPassword,
+    // 3. Create user (Mongoose pre-save hook handles hashing automatically)
+    await User.create({
+      firstName: SUPER_ADMIN_CONFIG.firstName,
+      lastName: SUPER_ADMIN_CONFIG.lastName,
+      email: SUPER_ADMIN_CONFIG.email,
+      phone: SUPER_ADMIN_CONFIG.phone,
+      password: SUPER_ADMIN_CONFIG.password, // Raw
+      passwordConfirm: SUPER_ADMIN_CONFIG.password, // Raw (matches password for validation)
       role: role._id,
       isActive: true,
     });
 
-    await superAdmin.populate('role');
-
     console.log('SUPER-ADMIN created successfully!');
-    console.log(`   Email: ${SUPER_ADMIN_CONFIG.email}`);
-    console.log(`   Password: ${SUPER_ADMIN_CONFIG.password}`);
-    console.log(`   Role: SUPER-ADMIN`);
-    console.log(`\n   Login at: POST /api/v1/auth/login`);
-
     process.exit(0);
   } catch (err) {
     console.error('Seeder failed:', err.message);

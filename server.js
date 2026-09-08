@@ -1,49 +1,8 @@
-const mongoose = require('mongoose');
+/**
+ * Application entry — modular bootstrap in src/
+ * 
+ * Note: This is used by npm run start:prod which runs compiled JavaScript.
+ * For development, use `npm run dev` which runs TypeScript directly.
+ */
+require('./src/server.js');
 
-const { logger, morganStream } = require('./utils/logger');
-
-const dotenv = require('dotenv');
-
-const { createSocketServer } = require('./socket');
-
-process.on('uncaughtException', err => {
-  logger.error(`UNHANDLED EXCEPTION: ${err.name} - ${err.message}`);
-  process.exit(1);
-});
-const chalk = require('chalk');
-dotenv.config({ path: './config.env' });
-
-const app = require('./app');
-
-const server = createSocketServer(app);
-
-const DB = process.env.DATABASE_SECOND.replace('<PASSWORD>', process.env.DATABASE_PASSWORD_SECOND);
-const Local_Db = process.env.DATABASE_LOCAL;
-
-mongoose.connect(DB).then(() => {
-  logger.info(chalk.white.bgGreen('MongoDB connected successfully!'));
-});
-
-const PORT = process.env.PORT || 3000;
-const SERVER = server.listen(PORT, () => {
-  logger.info(chalk.bgCyan(`Server is running on port ${PORT}`));
-});
-
-process.on('unhandledRejection', err => {
-  logger.error(`UNHANDLED REJECTION: ${err.name} - ${err.message}`);
-  console.log('UNHANDLES REJECTION 🔥 SHUTTING DOWN... ');
-  SERVER.close(() => {
-    process.exit(1);
-  });
-});
-
-const shutdown = () => {
-  logger.info('Shutting down gracefully...');
-  SERVER.close(() => {
-    logger.info('Closed all connections. Exiting process.');
-    process.exit(1);
-  });
-};
-
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);

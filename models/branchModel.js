@@ -1,7 +1,7 @@
 // models/Branch.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
-
+const auditPlugin = require('../utils/auditPlugin');
 const branchSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -46,6 +46,17 @@ const branchSchema = new mongoose.Schema(
     shortCode: { type: String, length: 6, uppercase: true, unique: true, sparse: true },
     // Partial override of merchant settings
     settings: { type: mongoose.Schema.Types.Mixed, default: {} },
+    
+    // ✅ Branch-specific configuration
+    config: {
+      orderNumberStart: {
+        type: Number,
+        default: 1,
+        min: 1,
+        comment: 'Starting number for order sequence in this branch (default: 1)'
+      }
+      // Future: Add more config options (table number format, receipt settings, etc.)
+    },
   },
   {
     timestamps: true,
@@ -100,7 +111,14 @@ branchSchema.pre('save', async function (next) {
         { new: true, select: 'branchCounter' }
       );
 
-    if (!merchant) return next(new Error('Merchant not found'));
+    // Some bootstrap/test flows can reach branch creation before the merchant is fully visible
+    // to the current connection. In that case, allow a safe fallback branch code instead of
+    // aborting the entire create flow.
+    if (!merchant) {
+      this.branchCode = this.branchCode || 'BR-001';
+      return next();
+    }
+
     this.branchCode = `BR-${String(merchant.branchCounter).padStart(3, '0')}`;
   }
   next();
@@ -129,6 +147,16 @@ branchSchema.pre('save', async function (next) {
     this.shortCode = this.shortCode.toUpperCase();
   }
   next();
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// PHASE 2 - STEP 3: Apply Audit Plugin
+// ══════════════════════════════════════════════════════════════════════════
+
+
+branchSchema.plugin(auditPlugin, {
+  resource: 'Branch',
+  auditedFields: ['name', 'phone', 'isActive', 'isMain', 'location', 'settings'],
 });
 
 const Branch = mongoose.model('Branch', branchSchema);

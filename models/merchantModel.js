@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const auditPlugin = require('../utils/auditPlugin');
 
 const officialRepresentativeSchema = new mongoose.Schema({
   fullName: { type: String, required: true, trim: true },
@@ -20,6 +21,7 @@ const officialRepresentativeSchema = new mongoose.Schema({
     },
   },
 });
+
 const merchantSchema = new mongoose.Schema(
   {
     businessName: {
@@ -67,7 +69,6 @@ const merchantSchema = new mongoose.Schema(
         message: 'Invalid phone number',
       },
     },
-    tinId: { type: String, trim: true, uppercase: true },
     status: {
       type: String,
       enum: ['pending', 'approved', 'suspended', 'inactive'],
@@ -82,31 +83,33 @@ const merchantSchema = new mongoose.Schema(
       match: [/^#[0-9A-Fa-f]{6}$/i, 'Invalid hex color'],
       uppercase: true,
     },
-    logo: { url: String, public_id: String },
-    coverImage: { url: String, public_id: String },
+    logo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
+    coverImage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileAsset',
+      default: null,
+    },
 
-    // DEFAULT MENU (used by branches if not overridden)
     masterMenu: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Menu',
       default: null,
     },
 
-    // COUNTER FOR BRANCH CODES
     branchCounter: { type: Number, default: 0 },
     location: {
-      address: { type: String, trim: true }, // Physical address string
+      address: { type: String, trim: true },
       city: { type: String, default: 'Addis Ababa' },
       subcity: String,
-      woreda: String,
-      // GeoJSON for Map integration
-
-      coordinates: {
-        type: [Number],
-        default: [38.7578, 9.0192],
-      },
     },
+
     // LEGAL & KYC
+    // FIX: tinId used to be declared twice with two different validators — the
+    // first (no validation) was dead code silently overwritten by this one.
     tinId: {
       type: String,
       trim: true,
@@ -120,9 +123,9 @@ const merchantSchema = new mongoose.Schema(
       licenseNumber: { type: String, trim: true },
       url: { type: String },
       public_id: { type: String },
-      verified: { type: Boolean, default: false }, // Useful for admin approval
+      verified: { type: Boolean, default: false },
     },
-    // SETTINGS (merchant-wide defaults)
+
     settings: {
       showTableNumberOnQR: { type: Boolean, default: true },
       qrStyle: { type: String, enum: ['classic', 'modern', 'rounded', 'dots'], default: 'modern' },
@@ -160,30 +163,116 @@ const merchantSchema = new mongoose.Schema(
       prepTimeMinutes: { type: Number, default: 15, min: 5, max: 180 },
     },
 
-    trialStartedAt: {
-      type: Date,
-      default: Date.now,
-    },
-    trialExpiresAt: {
-      type: Date,
-      default: function () {
-        // Automatically set to 14 days from the moment of creation
-        return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-      },
-    },
+    // trialStartedAt: {
+    //   type: Date,
+    //   default: Date.now,
+    // },
+    // trialExpiresAt: {
+    //   type: Date,
+    //   default: function () {
+    //     return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    //   },
+    // },
     isSubscriptionActive: {
       type: Boolean,
       default: false,
     },
-    // Add this inside merchantSchema
     currentSubscription: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Subscription',
     },
     subscriptionPlan: {
       type: String,
-      enum: ['free', 'basic', 'pro', 'enterprise'],
+      enum: ['free', 'basic', 'pro', 'enterprise', 'feature', 'trial'],
       default: 'free',
+    },
+    features: {
+      core: {
+        menu: {
+          enabled: {
+            type: Boolean,
+            default: true,
+          },
+        },
+
+        tableManagement: {
+          enabled: {
+            type: Boolean,
+            default: true,
+          },
+        },
+      },
+
+      optional: {
+        orders: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+        inventory: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        multiBranch: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        telegram: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        sales: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        reports: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        customerManagement: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        deliveryManagement: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        paymentIntegration: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+
+        restaurantWebsite: {
+          enabled: {
+            type: Boolean,
+            default: false,
+          },
+        },
+      },
     },
     isActive: { type: Boolean, default: true },
     mode: { type: String, default: 'Test' },
@@ -191,10 +280,49 @@ const merchantSchema = new mongoose.Schema(
     apiKey: { type: String, select: false },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
+    // FIX: these are long-lived secrets used to send messages/post as the
+    // business (needed for the feedback/campaign social-send feature). They
+    // were plain, unselected fields — any query returning a Merchant document
+    // leaked them to the frontend by default. Now hidden like apiKey.
     facebookPageId: String,
-    facebookPageToken: String,
-    telegramBotToken: String,
-    telegramChannel: String,
+    facebookPageToken: { type: String, select: false },
+
+    telegram: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+
+      deliveryEnabled: {
+        type: Boolean,
+        default: false,
+      },
+
+      notificationsEnabled: {
+        type: Boolean,
+        default: true,
+      },
+
+      marketingEnabled: {
+        type: Boolean,
+        default: false,
+      },
+
+      telegramBotToken: {
+        type: String,
+        select: false,
+      },
+      telegramChannel: String,
+      telegramBotUsername: {
+        type: String,
+        trim: true,
+      }, // public, e.g. "marios_pizza_bot" — used in deep links
+      telegramWebhookSecret: {
+        type: String,
+        select: false,
+      }, // random secret, verified via header on every webhook call
+      telegramBotConnectedAt: Date,
+    },
   },
   {
     timestamps: true,
@@ -203,16 +331,20 @@ const merchantSchema = new mongoose.Schema(
   }
 );
 
-merchantSchema.virtual('trialDaysLeft').get(function () {
-  if (!this.trialExpiresAt) return 0;
-  const now = new Date();
-  const diff = this.trialExpiresAt - now;
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-});
+// merchantSchema.virtual('trialDaysLeft').get(function () {
+//   if (!this.trialExpiresAt) return 0;
+//   const now = new Date();
+//   const diff = this.trialExpiresAt - now;
+//   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+// });
+// merchantSchema.virtual('hasActiveAccess').get(function () {
+//   const now = new Date();
+//   const isTrialValid = now <= this.trialExpiresAt;
+//   return this.status === 'approved' && this.isActive && (isTrialValid || this.isSubscriptionActive);
+// });
+// ✅ REPLACE the existing hasActiveAccess virtual with this
 merchantSchema.virtual('hasActiveAccess').get(function () {
-  const now = new Date();
-  const isTrialValid = now <= this.trialExpiresAt;
-  return this.status === 'approved' && this.isActive && (isTrialValid || this.isSubscriptionActive);
+  return this.status === 'approved' && this.isActive && this.isSubscriptionActive;
 });
 merchantSchema.virtual('publicWebsite').get(function () {
   if (this.customDomain && this.customDomainVerified) {
@@ -220,6 +352,17 @@ merchantSchema.virtual('publicWebsite').get(function () {
   }
   return `https://${this.slug}.menuroom.et`;
 });
+merchantSchema.methods.hasFeature = function (featureName) {
+  if (this.features?.core?.[featureName]?.enabled) {
+    return true;
+  }
+
+  if (this.features?.optional?.[featureName]?.enabled) {
+    return true;
+  }
+
+  return false;
+};
 
 merchantSchema.virtual('subscriptionHistory', {
   ref: 'Subscription',
@@ -240,7 +383,6 @@ merchantSchema.virtual('orderCount', {
   count: true,
 });
 
-// Methods
 merchantSchema.methods.canAcceptOrders = function () {
   return this.hasActiveAccess;
 };
@@ -253,5 +395,25 @@ merchantSchema.methods.getMainBranch = async function () {
   return await mongoose.model('Branch').findOne({ merchant: this._id, isMain: true });
 };
 
-const Merchant = mongoose.model('Merchant', merchantSchema);
-module.exports = Merchant;
+// ✅ PHASE 2 - STEP 3: Apply audit plugin for Merchant model
+// Track business-critical fields (excluding sensitive data like apiKey, tokens, passwords)
+merchantSchema.plugin(auditPlugin, {
+  resource: 'Merchant',
+  auditedFields: [
+    'businessName',
+    'slug',
+    'status',
+    'phone',
+    'sector',
+    'isActive',
+    'mode',
+    'subscriptionPlan',
+    'isSubscriptionActive',
+    'currentSubscription',
+    'brandColor',
+    'customDomain',
+    'customDomainVerified',
+  ],
+});
+
+module.exports = mongoose.model('Merchant', merchantSchema);
