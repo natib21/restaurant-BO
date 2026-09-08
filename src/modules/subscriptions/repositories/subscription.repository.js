@@ -13,7 +13,7 @@ class SubscriptionRepository {
   static createSubscription(data, options = {}) {
     const { session } = options;
     if (session) {
-      return Subscription.create([data], { session }).then(docs => docs[0]);
+      return Subscription.create([data], { session, ordered: true }).then(docs => docs[0]);
     }
     return Subscription.create(data);
   }
@@ -148,7 +148,7 @@ class SubscriptionRepository {
     const AuditLog = require('../../../../models/auditLogModel');
 
     if (session) {
-      return AuditLog.create([data], { session }).then(docs => docs[0]);
+      return AuditLog.create([data], { session, ordered: true }).then(docs => docs[0]);
     }
     return AuditLog.create(data);
   }

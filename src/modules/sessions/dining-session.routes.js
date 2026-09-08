@@ -31,4 +31,12 @@ router.get(
   diningSessionController.getSessionOrders
 );
 
+// ── Close dining session (staff closes table) ──────────────────────────────────
+// SECURITY FIX: Explicitly close sessions to prevent fixation
+router.post(
+  '/:sessionId/close',
+  requireCapability(CAPABILITIES.ORDER_MANAGE),
+  diningSessionController.closeSession
+);
+
 module.exports = router;

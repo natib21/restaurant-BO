@@ -4,6 +4,7 @@ const path = require('path');
 dotenv.config({ path: path.resolve(process.cwd(), 'config.env') });
 
 process.env.NODE_ENV = 'test';
+process.env.CAPABILITY_ENFORCEMENT = 'true'; // Required for production-mode code paths
 process.env.DATABASE_LOCAL = process.env.DATABASE_LOCAL || process.env.DATABASE || 'mongodb://127.0.0.1:27017/restaurant-bo';
 process.env.MONGO_URI_TEST =
   process.env.MONGO_URI_TEST ||

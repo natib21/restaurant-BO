@@ -96,15 +96,9 @@ class PaymentCompletionService {
             { session }
           );
           
-          const table = await Table.findOne({
-            _id: order.table,
-            merchant: merchantId,
-          }).session(session);
-          
-          if (table) {
-            table.status = 'available';
-            await table.save({ session });
-          }
+          // ✅ SECURITY FIX: Use transitionTableStatus (called after transaction) instead of direct set
+          // Return table ID for caller to handle post-transaction
+          order._tableIdToFree = order.table;
         }
       }
       // else: takeaway/delivery payment does NOT complete order - separate endpoint needed

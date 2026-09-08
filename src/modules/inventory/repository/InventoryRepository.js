@@ -34,7 +34,7 @@ class InventoryRepository {
   }
 
   static createStockMovements(docs, { session } = {}) {
-    if (session) return StockMovement.create(docs, { session });
+    if (session) return StockMovement.create(docs, { session, ordered: true });
     return StockMovement.create(docs);
   }
 

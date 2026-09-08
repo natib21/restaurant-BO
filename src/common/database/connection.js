@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { getMongoUri } = require('../../config/env');
 
 const mongooseOptions = {
-  serverSelectionTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 5000,  // Reduced to 5 seconds for faster feedback
   socketTimeoutMS: 45000,
   family: 4,
 };
@@ -13,16 +13,19 @@ async function connectDatabase() {
   if (isConnected) return mongoose;
 
   const uri = getMongoUri();
+  console.log('[DB] Attempting to connect to MongoDB at:', uri.replace(/\/\/.*@/, '//***@'));
 
   try {
+    console.log('[DB] Connecting with timeout:', mongooseOptions.serverSelectionTimeoutMS, 'ms');
     await mongoose.connect(uri, mongooseOptions);
-    console.log('MongoDB connected successfully');
+    console.log('[DB] ✅ MongoDB connected successfully');
 
     isConnected = true;
     return mongoose;
   } catch (error) {
-    console.error('MongoDB connection error:');
-    console.error(error);
+    console.error('[DB] ❌ MongoDB connection error:');
+    console.error('[DB] Error:', error.message);
+    console.error('[DB] Code:', error.code);
     throw error;
   }
 }

@@ -163,7 +163,7 @@ class KitchenTicketService {
       };
 
       const ticket = session
-        ? await KitchenTicket.create([ticketData], { session }).then(docs => docs[0])
+        ? await KitchenTicket.create([ticketData], { session, ordered: true }).then(docs => docs[0])
         : await KitchenTicket.create(ticketData);
 
       tickets.push(ticket);
@@ -210,7 +210,7 @@ class KitchenTicketService {
         };
 
         const ticket = session
-          ? await KitchenTicket.create([ticketData], { session }).then(docs => docs[0])
+          ? await KitchenTicket.create([ticketData], { session, ordered: true }).then(docs => docs[0])
           : await KitchenTicket.create(ticketData);
 
         tickets.push(ticket);

@@ -43,4 +43,12 @@ router.get(
   diningSessionController.getActiveSessions
 );
 
+// ── Table Health Check (Staff Dashboard) ──────────────────────────────────────
+// Check for stuck tables (occupied but order is paid+completed)
+router.get(
+  '/health/stuck-tables',
+  requireCapability(CAPABILITIES.ORDER_VIEW),
+  branchController.checkStuckTables
+);
+
 module.exports = router;

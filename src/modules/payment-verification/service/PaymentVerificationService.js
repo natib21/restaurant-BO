@@ -337,6 +337,31 @@ class PaymentVerificationService {
           amount: order.totalAmount,
         });
       });
+
+      // ✅ AFTER TRANSACTION: Free table using transitionTableStatus to trigger session auto-close
+      if (order?._tableIdToFree) {
+        try {
+          const { BranchService } = require('../../branch/service/BranchService');
+          await BranchService.transitionTableStatus({
+            tableId: order._tableIdToFree,
+            merchantId: order.merchant,
+            branchId: order.branch,
+            toStatus: 'available'
+          });
+          logger.info('payment.verification.table_freed_post_transaction', {
+            verificationId: verificationId.toString(),
+            orderId: order._id.toString(),
+            tableId: order._tableIdToFree?.toString()
+          });
+        } catch (error) {
+          logger.warn('payment.verification.table_transition_failed', {
+            verificationId: verificationId.toString(),
+            orderId: order?._id?.toString(),
+            tableId: order?._tableIdToFree?.toString(),
+            error: error.message
+          });
+        }
+      }
       
       return verification;
       

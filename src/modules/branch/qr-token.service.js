@@ -20,9 +20,15 @@ class QrTokenService {
   }
 
   static async sign({ merchantId, branchId, tableId }) {
-    const branch = await BranchRepository.findBranchById(branchId).select('+qrSecretKey');
+    // ✅ P0-001: IDOR Fix - Verify branch belongs to the merchant
+    // Prevents tenant A from accessing tenant B's qrSecretKey
+    const branch = await BranchRepository.findActiveBranchOne({
+      _id: branchId,
+      merchant: merchantId
+    }).select('+qrSecretKey');
+    
     if (!branch?.qrSecretKey) {
-      throw new AppError('Branch QR secret key missing', 404);
+      throw new AppError('Branch QR secret key missing or access denied', 404);
     }
 
     const payload = QrTokenService.buildPayload({ merchantId, branchId, tableId });
@@ -52,9 +58,16 @@ class QrTokenService {
       throw new AppError('QR missing data', 400);
     }
 
-    const branch = await BranchRepository.findBranchById(branchId).select('+qrSecretKey');
+    // ✅ P0-001: IDOR Fix - Verify branch belongs to the merchant from the QR payload
+    // The merchantId comes from the QR code itself (already signed), so we trust it
+    // But we still must verify the branch exists and belongs to that merchant
+    const branch = await BranchRepository.findActiveBranchOne({
+      _id: branchId,
+      merchant: merchantId
+    }).select('+qrSecretKey');
+    
     if (!branch?.qrSecretKey) {
-      throw new AppError('Branch QR secret key missing', 404);
+      throw new AppError('Branch QR secret key missing or access denied', 404);
     }
 
     const payloadString = QrTokenService.serializePayload({ merchantId, branchId, tableId });

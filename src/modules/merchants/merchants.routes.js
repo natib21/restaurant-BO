@@ -59,6 +59,7 @@ router
   .delete(restrictTo(), merchantUserController.deleteMerchantUser);
 
 router.patch('/users/:id/activate', restrictTo(), merchantUserController.activateMerchantUser);
+router.patch('/users/:id/role', restrictTo(), merchantUserController.changeUserRole);
 router.get('/users/branch/:id', restrictTo(), merchantUserController.getMerchantUsersByBranch);
 
 // ── Self (logged-in merchant) ──────────────────────────────────────────────────

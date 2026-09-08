@@ -7,7 +7,15 @@ const QRCode = require('qrcode');
 // utils/secureQR.js
 
 const generateSecureQR = async (merchantId, branchId, tableId = null) => {
-  const branch = await Branch.findById(branchId).select('+qrSecretKey');
+  // ✅ P0-001: IDOR Fix - Verify branch belongs to the merchant
+  // Prevents tenant A from accessing tenant B's qrSecretKey
+  const query = {
+    _id: branchId,
+    merchant: merchantId._id || merchantId,
+    isActive: true
+  };
+  
+  const branch = await Branch.findOne(query).select('+qrSecretKey');
   if (!branch || !branch.qrSecretKey) {
     throw new Error('Branch QR secret key missing. Contact support.');
   }

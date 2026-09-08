@@ -11,6 +11,7 @@ const sendEmail = require('../../../utils/email');
 const { loadEnv } = require('../../config/env');
 const { resolveBranchId } = require('../../common/guards/auth.guard');
 const { trialFeatureSet } = require('../subscriptions/dto/subscription.dto');
+const { seedDefaultMerchantRoles } = require('./default-roles.helper');
 
 class AuthService {
   static signToken(user) {
@@ -28,7 +29,8 @@ class AuthService {
 
     const env = loadEnv();
     return jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRE_IN || '7d',
+      // ⚠️ Interim mitigation: shortened from 7d to 24h until proper token revocation on logout implemented
+      expiresIn: env.JWT_EXPIRE_IN || '24h',
     });
   }
 
@@ -157,7 +159,7 @@ class AuthService {
   // }
 
   /**
-   * Grants the standard signup trial: a 3-month Subscription with every
+   * Grants the standard signup trial: a 1-month Subscription with every
    * optional feature enabled, synced onto Merchant.features in the same
    * transaction. This is the ONLY trial mechanism now.
    */
@@ -166,7 +168,7 @@ class AuthService {
 
     const trialStart = new Date();
     const trialEnd = new Date(trialStart);
-    const trialDurationMonths = 3;
+    const trialDurationMonths = 1;
     trialEnd.setMonth(trialEnd.getMonth() + trialDurationMonths);
 
     const [subscription] = await Subscription.create(
@@ -278,6 +280,9 @@ class AuthService {
         // 4. Role
         const superRole = await Role.findOne({ name: 'SUPER-MERCHANT-ADMIN' }).session(session);
         if (!superRole) throw new AppError('System role not found.', 500);
+
+        // 4b. Seed default merchant roles (MANAGER, WAITER, KITCHEN)
+        await seedDefaultMerchantRoles(merchant._id, session);
 
         // 5. Create user
         const [newUser] = await User.create(

@@ -678,24 +678,17 @@ class OrderStateMachineService {
               { session }
             );
 
-            // Free the table
-            const table = await Table.findOne({
-              _id: order.table,
-              merchant: order.merchant,
-            }).session(session);
-
-            if (table) {
-              table.status = 'available';
-              await table.save({ session });
-
-              logger.info('order.table.freed', {
-                orderId: order._id.toString(),
-                orderNumber: order.orderNumber,
-                tableId: table._id.toString(),
-                tableNumber: table.tableNumber,
-                toStatus,
-              });
-            }
+            // ✅ SECURITY FIX: Use transitionTableStatus (called after transaction) instead of direct set
+            // Store table ID for transition call after transaction commits (see end of method)
+            order._tableIdToFree = order.table;
+            
+            logger.info('order.table.pending_free', {
+              orderId: order._id.toString(),
+              orderNumber: order.orderNumber,
+              tableId: order.table?.toString(),
+              toStatus,
+              note: 'Table transition will happen after transaction commits'
+            });
           }
 
           /**
@@ -781,7 +774,7 @@ class OrderStateMachineService {
 
             // Create event with or without session
             if (session) {
-              await OutboxEvent.create([eventData], { session });
+              await OutboxEvent.create([eventData], { session, ordered: true });
               logger.info('kds.transition.CREATED-WITH-SESSION', {
                 orderId: order._id.toString(),
               });
@@ -977,6 +970,29 @@ class OrderStateMachineService {
             orderId: result.order?._id?.toString(),
             orderNumber: result.order?.orderNumber,
             error: socketError.message,
+          });
+        }
+      }
+
+      // ✅ AFTER TRANSACTION: Free table using transitionTableStatus to trigger session auto-close
+      if (result.order?._tableIdToFree) {
+        try {
+          const { BranchService } = require('../../branch/service/BranchService');
+          await BranchService.transitionTableStatus({
+            tableId: result.order._tableIdToFree,
+            merchantId: result.order.merchant,
+            branchId: result.order.branch,
+            toStatus: 'available'
+          });
+          logger.info('order.table.freed_post_transaction', {
+            orderId: result.order._id.toString(),
+            tableId: result.order._tableIdToFree?.toString()
+          });
+        } catch (error) {
+          logger.warn('order.table_transition_failed', {
+            orderId: result.order._id.toString(),
+            tableId: result.order._tableIdToFree?.toString(),
+            error: error.message
           });
         }
       }

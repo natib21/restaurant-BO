@@ -89,12 +89,30 @@ const tableSchema = new mongoose.Schema(
 );
 
 // ====================== INDEXES (Lightning Fast) ======================
-// ✅ BRANCH-SPECIFIC: Table numbers unique per merchant + branch (not globally)
-tableSchema.index({ merchant: 1, branch: 1, tableNumber: 1 }, { unique: true });
+// ✅ BRANCH-LEVEL UNIQUENESS: Table numbers unique PER BRANCH ONLY
+// ✅ SOFT-DELETE: Only enforce uniqueness for ACTIVE tables
+// When a table is soft-deleted (isActive=false), the name can be reused by a new active table
+// 
+// Key point: { branch: 1, tableNumber: 1, isActive: 1 } means:
+// - Branch A, Table "01" (active) → unique
+// - Branch A, Table "01" (inactive) → allowed (soft-deleted)
+// - Branch B, Table "01" (active) → allowed (different branch)
+tableSchema.index(
+  { branch: 1, tableNumber: 1, isActive: 1 },
+  { 
+    unique: true,
+    sparse: true,  // Only index active tables (isActive: true)
+    partialFilterExpression: { isActive: true }  // MongoDB 3.2+: only create index for active=true
+  }
+);
 tableSchema.index({ branch: 1, status: 1 });
 tableSchema.index({ branch: 1, section: 1 });
 tableSchema.index({ branch: 1, isActive: 1 });
 tableSchema.index({ merchant: 1, branch: 1, status: 1 });
+
+// ✅ P0-001: Added to support soft-delete queries
+tableSchema.index({ merchant: 1, isActive: 1 });
+tableSchema.index({ branch: 1, isActive: 1, tableNumber: 1 });
 
 // ====================== VIRTUALS ======================
 tableSchema.virtual('currentOrder', {

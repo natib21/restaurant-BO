@@ -4,6 +4,8 @@
  * This allows Sentry to capture unhandled exceptions and rejections globally.
  * ============================================================================
  */
+console.log('[SERVER] Server module loading started...');
+
 const Sentry = require('@sentry/node');
 const { 
   initSentry,
@@ -28,15 +30,15 @@ const {
   startSubscriptionScheduler,
   stopSubscriptionScheduler,
 } = require('./modules/subscriptions/subscription.scheduler');
+const {
+  startStuckTableScheduler,
+  stopStuckTableScheduler,
+} = require('./modules/branch/stuck-table.scheduler');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Global health status — exported for /health/ready endpoint to access
 // ══════════════════════════════════════════════════════════════════════════════
-const globalHealth = {
-  outboxWorker: null,
-  integrityScheduler: null,
-  subscriptionScheduler: null,
-};
+const { globalHealth } = require('./infrastructure/globals');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Global error handlers with Sentry integration
@@ -65,16 +67,51 @@ process.on('uncaughtException', async err => {
 });
 
 async function bootstrap() {
+  console.log('[BOOTSTRAP] Starting application bootstrap...');
   const env = loadEnv();
+  console.log('[BOOTSTRAP] Environment loaded:', env.NODE_ENV);
+  
+  
+  // ✅ P0-002: Mandatory capability enforcement in production
+  // Reject startup if CAPABILITY_ENFORCEMENT is not properly configured
+  if (env.NODE_ENV === 'production') {
+    if (env.CAPABILITY_ENFORCEMENT !== 'true') {
+      const errorMsg = [
+        '',
+        '═══════════════════════════════════════════════════════════════════',
+        '  PRODUCTION STARTUP BLOCKED: Invalid Capability Enforcement Config',
+        '═══════════════════════════════════════════════════════════════════',
+        '',
+        '  CAPABILITY_ENFORCEMENT must be set to "true" in production.',
+        '  Optional security controls are not permitted in production.',
+        '',
+        '  Current value: ' + (env.CAPABILITY_ENFORCEMENT || 'NOT SET'),
+        '',
+        '  Fix: Add CAPABILITY_ENFORCEMENT=true to your .env file',
+        '',
+        '═══════════════════════════════════════════════════════════════════',
+        '',
+      ].join('\n');
+      
+      logger.error(errorMsg);
+      process.exit(1);
+    }
+    
+    logger.info('✅ Capability enforcement is enabled (required for production)');
+  }
+
   const app = createApp();
+  console.log('[BOOTSTRAP] App created successfully');
 
   await connectDatabase();
+  console.log('[BOOTSTRAP] Database connected successfully');
   logger.info(chalk.white.bgGreen('MongoDB connected successfully!'));
 
   const server = createSocketServer(app);
   const outboxWorker = startOutboxWorker();
   const integrityScheduler = startIntegrityScheduler();
   const subscriptionScheduler = startSubscriptionScheduler();
+  const stuckTableScheduler = startStuckTableScheduler();
 
   // ────────────────────────────────────────────────────────────────────────────
   // Store references in globalHealth for /health/ready endpoint to access
@@ -82,6 +119,7 @@ async function bootstrap() {
   globalHealth.outboxWorker = outboxWorker;
   globalHealth.integrityScheduler = integrityScheduler;
   globalHealth.subscriptionScheduler = subscriptionScheduler;
+  globalHealth.stuckTableScheduler = stuckTableScheduler;
 
   const httpServer = server.listen(env.PORT || 3000, () => {
     logger.info(
@@ -125,6 +163,8 @@ async function bootstrap() {
     if (integrityScheduler?.stop) integrityScheduler.stop();
     stopSubscriptionScheduler();
     if (subscriptionScheduler?.stop) subscriptionScheduler.stop();
+    stopStuckTableScheduler();
+    if (stuckTableScheduler?.stop) stuckTableScheduler.stop();
     httpServer.close(() => process.exit(0));
   };
 
@@ -134,10 +174,10 @@ async function bootstrap() {
 
 bootstrap().catch(err => {
   logger.error(`Bootstrap failed: ${err.message}`);
+  console.error('[SERVER] Bootstrap error:', err);
   process.exit(1);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Export global health status for /health/ready endpoint to access worker status
+// No module.exports needed — globalHealth is in infrastructure/globals.js
 // ══════════════════════════════════════════════════════════════════════════════
-module.exports = { globalHealth };

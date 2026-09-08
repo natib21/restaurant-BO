@@ -95,7 +95,7 @@ class InventoryRepository {
   static createStockMovements(docs, options = {}) {
     const { session } = options;
     if (session) {
-      return StockMovement.create(docs, { session });
+      return StockMovement.create(docs, { session, ordered: true });
     }
     return StockMovement.create(docs);
   }
@@ -247,7 +247,7 @@ class InventoryRepository {
     const AuditLog = require('../../../../models/auditLogModel');
 
     if (session) {
-      return AuditLog.create([data], { session });
+      return AuditLog.create([data], { session, ordered: true });
     }
     return AuditLog.create(data);
   }

@@ -21,7 +21,8 @@ const envSchema = zod_1.z.object({
     DATABASE_PASSWORD: zod_1.z.string().optional(),
     DATABASE_PASSWORD_SECOND: zod_1.z.string().optional(),
     JWT_SECRET: zod_1.z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
-    JWT_EXPIRE_IN: zod_1.z.string().default('7d'),
+    // ⚠️ Interim mitigation: shortened from 7d to 24h until proper token revocation on logout implemented
+    JWT_EXPIRE_IN: zod_1.z.string().default('24h'),
     JWT_COOKIE_EXPIRES_IN: zod_1.z.coerce.number().default(7),
     EMAIL_HOST: zod_1.z.string().optional(),
     EMAIL_PORT: zod_1.z.coerce.number().optional(),
@@ -49,6 +50,8 @@ const envSchema = zod_1.z.object({
     CORS_ORIGINS: zod_1.z.string().optional(),
     TRUST_PROXY: zod_1.z.coerce.boolean().default(false),
     REDIS_URL: zod_1.z.string().optional(),
+    // ✅ P0-002: Capability enforcement configuration
+    CAPABILITY_ENFORCEMENT: zod_1.z.string().default('true').optional(),
 });
 let cached = null;
 function loadEnv() {

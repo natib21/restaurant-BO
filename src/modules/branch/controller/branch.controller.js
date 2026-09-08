@@ -95,3 +95,16 @@ exports.listStaff = catchAsync(async (req, res) => {
   const staff = await BranchService.listStaffForBranch(merchantId, req.params.id);
   res.status(200).json({ status: 'success', results: staff.length, data: { staff } });
 });
+
+exports.checkStuckTables = catchAsync(async (req, res) => {
+  const { getStuckTableStatus } = require('../stuck-table.scheduler');
+  const status = await getStuckTableStatus();
+  
+  res.status(200).json({
+    status: 'success',
+    message: status.stuckCount > 0 
+      ? `⚠️ Found ${status.stuckCount} stuck table(s) out of ${status.totalOccupied} occupied`
+      : `✓ All ${status.totalOccupied} occupied tables are properly tracked`,
+    data: status,
+  });
+});

@@ -80,3 +80,37 @@ exports.getSessionOrders = catchAsync(async (req, res, next) => {
     orders
   });
 });
+
+/**
+ * Close a dining session (explicitly end table session)
+ * 
+ * POST /api/v1/sessions/:sessionId/close
+ * 
+ * SECURITY FIX: Prevents session fixation by allowing staff to explicitly 
+ * close sessions. Also called automatically when table transitions to 'available'.
+ * 
+ * @access Staff (ORDER_MANAGE)
+ * @param {Object} req.params.sessionId - Session ID to close
+ * @param {Object} req.body.force - Force close even with unpaid orders (optional)
+ */
+exports.closeSession = catchAsync(async (req, res, next) => {
+  const { sessionId } = req.params;
+  const { force } = req.body;
+
+  const closedSession = await SessionService.endSession({
+    sessionId,
+    closedBy: req.user._id,
+    force: force || false
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Session closed successfully',
+    session: {
+      _id: closedSession._id,
+      status: closedSession.status,
+      endedAt: closedSession.endedAt,
+      table: closedSession.table,
+    }
+  });
+});

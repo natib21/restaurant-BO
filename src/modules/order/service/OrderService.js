@@ -685,6 +685,7 @@ class OrderService {
 
     const session = await mongoose.startSession();
     let order;
+    let tableIdToFree = null;
 
     try {
       await session.withTransaction(async () => {
@@ -742,14 +743,9 @@ class OrderService {
                 { session }
               );
 
-              const table = await Table.findOne(
-                merchantScopedQuery({ _id: order.table }, req)
-              ).session(session);
-
-              if (table) {
-                table.status = 'available';
-                await table.save({ session });
-              }
+              // ✅ SECURITY FIX: Use transitionTableStatus (called after transaction) instead of direct set
+              // This ensures session auto-close logic triggers for table status change
+              tableIdToFree = order.table;
             }
           }
           // else: takeaway/delivery payment does NOT complete order - separate endpoint needed
@@ -813,6 +809,25 @@ class OrderService {
           session
         );
       });
+
+      // ✅ AFTER TRANSACTION: Call transitionTableStatus to trigger session auto-close
+      if (tableIdToFree && order.table) {
+        try {
+          const { BranchService } = require('../../branch/service/BranchService');
+          await BranchService.transitionTableStatus({
+            tableId: order.table,
+            merchantId: order.merchant,
+            branchId: order.branch,
+            toStatus: 'available'
+          });
+        } catch (error) {
+          logger.warn('payment.table_transition_failed', {
+            orderId: order._id.toString(),
+            tableId: order.table?.toString(),
+            error: error.message
+          });
+        }
+      }
 
       return order;
     } finally {

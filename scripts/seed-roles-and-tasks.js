@@ -182,6 +182,7 @@ const ALL_TASKS = [
   { name: 'merchants.users.update', endpoint: '/api/v1/merchant/users/:id', method: 'PATCH', description: 'Update merchant user', isMerchant: true, hidden: false },
   { name: 'merchants.users.delete', endpoint: '/api/v1/merchant/users/:id', method: 'DELETE', description: 'Delete merchant user', isMerchant: true, hidden: false },
   { name: 'merchants.users.activate', endpoint: '/api/v1/merchant/users/:id/activate', method: 'PATCH', description: 'Activate merchant user', isMerchant: true, hidden: false },
+  { name: 'merchants.users.changeRole', endpoint: '/api/v1/merchant/users/:id/role', method: 'PATCH', description: 'Change merchant user role (with safety guards)', isMerchant: true, hidden: false },
   { name: 'merchants.users.listByBranch', endpoint: '/api/v1/merchant/users/branch/:id', method: 'GET', description: 'List users by branch', isMerchant: true, hidden: false },
   { name: 'merchants.me.read', endpoint: '/api/v1/merchant/me', method: 'GET', description: 'Get own merchant profile', isMerchant: true, hidden: false },
   { name: 'merchants.me.update', endpoint: '/api/v1/merchant/me', method: 'PATCH', description: 'Update own merchant profile', isMerchant: true, hidden: false },

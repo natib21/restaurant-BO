@@ -1,7 +1,7 @@
 const express = require('express');
 const { getConnectionState, getReplicaSetStatus } = require('../../common/database/connection');
 const { loadEnv } = require('../../config/env');
-const { globalHealth } = require('../../server');
+const { globalHealth } = require('../../infrastructure/globals');
 
 const router = express.Router();
 

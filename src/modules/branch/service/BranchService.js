@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const ApiFeatures = require('../../../../utils/apiFeatures');
 const AppError = require('../../../../utils/appError');
 const logger = require('../../../../utils/logger');
@@ -144,6 +145,7 @@ class BranchService {
    * ✅ REFACTORED: No longer blocks when table is occupied
    * ✅ Multiple customers can scan same QR and order independently
    * ✅ Uses SessionService to get or create active session
+   * ✅ P0-001: Enforces isActive: true for soft-delete safety
    */
   static async startTableSessionFromQr({ data, s: signature }) {
     if (!data || !signature) {
@@ -165,10 +167,14 @@ class BranchService {
     }
 
     // Verify QR signature
-    const branch = await BranchRepository.findBranchById(branchId).select('+qrSecretKey');
+    // ✅ P0-001: IDOR Fix - Verify branch belongs to the merchant from QR payload
+    const branch = await BranchRepository.findActiveBranchOne({
+      _id: branchId,
+      merchant: merchantId
+    }).select('+qrSecretKey');
 
     if (!branch || !branch.qrSecretKey) {
-      throw new AppError('Branch QR secret key missing. Contact support.', 404);
+      throw new AppError('Branch QR secret key missing or access denied', 404);
     }
 
     const payloadString = JSON.stringify({
@@ -186,15 +192,15 @@ class BranchService {
       throw new AppError('Fake QR code', 403);
     }
 
-    // Get table
-    const table = await BranchRepository.findTableOne({
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const table = await BranchRepository.findActiveTableOne({
       _id: tableId,
       branch: branchId,
       merchant: merchantId,
     });
     
     if (!table) {
-      throw new AppError('Table not found', 404);
+      throw new AppError('Table not found or inactive', 404);
     }
 
     // ✅ REMOVED: Occupancy check that was blocking second customer
@@ -232,22 +238,45 @@ class BranchService {
   }
 
   static async freeTable({ tableId, merchantId, branchId }) {
-    const table = await BranchRepository.findTableOne({
-      _id: tableId,
-      branch: branchId,
-      merchant: merchantId,
-    });
-    if (!table) throw new AppError('Table not found', 404);
+    // ✅ P0-003: Wrap in transaction for atomicity
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    await BranchRepository.updateCustomerSessionOne(
-      { table: table._id, branch: branchId, isActive: true },
-      { isActive: false, expiresAt: new Date() }
-    );
+    try {
+      // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+      const table = await BranchRepository.findActiveTableOne({
+        _id: tableId,
+        branch: branchId,
+        merchant: merchantId,
+      }).session(session);
 
-    table.status = 'available';
-    await table.save();
+      if (!table) throw new AppError('Table not found', 404);
 
-    return { tableNumber: table.tableNumber };
+      // End active session
+      await BranchRepository.updateCustomerSessionOne(
+        { table: table._id, branch: branchId, isActive: true },
+        { isActive: false, expiresAt: new Date() }
+      );
+
+      // Transition table to available (which also closes active session)
+      await BranchService.transitionTableStatus({
+        tableId,
+        merchantId,
+        branchId,
+        toStatus: 'available'
+      });
+
+      // Commit transaction
+      await session.commitTransaction();
+
+      return { tableNumber: table.tableNumber };
+    } catch (error) {
+      // Rollback on error
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   /* ---------- Table status transitions ---------- */
@@ -262,11 +291,11 @@ class BranchService {
   }
 
   static async validateTableForSession({ tableId, branchId, merchantId }) {
-    const table = await BranchRepository.findTableOne({
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const table = await BranchRepository.findActiveTableOne({
       _id: tableId,
       branch: branchId,
       merchant: merchantId,
-      isActive: true,
     });
 
     if (!table) throw new AppError('Table not found', 404);
@@ -285,24 +314,81 @@ class BranchService {
     });
   }
 
-  static async transitionTableStatus({ tableId, merchantId, branchId, toStatus }) {
-    const table = await BranchRepository.findTableOne({
+  static async transitionTableStatus({ tableId, merchantId, branchId, toStatus, expectedVersion }) {
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const table = await BranchRepository.findActiveTableOne({
       _id: tableId,
       merchant: merchantId,
       branch: branchId,
     });
     if (!table) throw new AppError('Table not found', 404);
 
+    // ✅ P1-002: Check version if provided (optimistic locking)
+    if (expectedVersion !== undefined && table.__v !== expectedVersion) {
+      throw new AppError(
+        'Table status was modified by another user. Please refresh and try again.',
+        409
+      );
+    }
+
     BranchService.validateTableTransition(table.status, toStatus);
     const previous = table.status;
     table.status = toStatus;
-    await table.save({ validateBeforeSave: false });
+    
+    try {
+      await table.save({ validateBeforeSave: false });
+    } catch (error) {
+      // ✅ P1-002: Handle VersionError on concurrent update
+      if (error.name === 'VersionError') {
+        throw new AppError(
+          'Table status was changed by another user. Please refresh and try again.',
+          409
+        );
+      }
+      throw error;
+    }
 
     logger.info('table.status.transition', {
       tableId: String(tableId),
       from: previous,
       to: toStatus,
     });
+
+    // ✅ SECURITY FIX: Close dining session when table transitions to 'available'
+    // This prevents session fixation attacks where a new customer's orders could
+    // attach to the previous customer's still-active session.
+    // 
+    // CRITICAL: Trigger on ANY transition to 'available', not just from 'needs-cleaning'
+    // because occupied→available transitions can happen directly in 3 places:
+    // 1. When payment completes (OrderService.markAsPaid)
+    // 2. When order status transitions to completed (OrderStateMachineService)
+    // 3. When payment is verified (PaymentCompletionService)
+    // All three bypass the 'needs-cleaning' state entirely.
+    if (toStatus === 'available') {
+      try {
+        const activeSession = await SessionService.getActiveSession(tableId);
+        if (activeSession && activeSession.status === 'active') {
+          await SessionService.endSession({
+            sessionId: activeSession._id,
+            closedBy: null,  // System action
+            force: true      // Force close even if unpaid (staff will handle payment separately)
+          });
+
+          logger.info('table.transition.auto_session_closed', {
+            tableId: String(tableId),
+            previousStatus: previous,
+            sessionId: activeSession._id.toString(),
+            reason: `Table transitioned from ${previous} to available`
+          });
+        }
+      } catch (error) {
+        // Log but don't fail the table transition if session close fails
+        logger.warn('table.transition.session_close_failed', {
+          tableId: String(tableId),
+          error: error.message
+        });
+      }
+    }
 
     return { table, previous };
   }
@@ -313,8 +399,42 @@ class BranchService {
     const merchantId = req.user.merchant._id;
     const { name, phone, city, subCity, specificArea, building, location, isMain } = req.body;
 
+    // ✅ P2-002: Enhanced input validation
     if (!name || !city || !location || !location.coordinates) {
       throw new AppError('Name, city, and coordinates are required', 400);
+    }
+
+    // Validate name
+    if (typeof name !== 'string' || name.trim().length === 0) {
+      throw new AppError('Branch name must be a non-empty string', 400);
+    }
+
+    if (name.length > 255) {
+      throw new AppError('Branch name must not exceed 255 characters', 400);
+    }
+
+    // Validate city
+    if (typeof city !== 'string' || city.trim().length === 0) {
+      throw new AppError('City must be a non-empty string', 400);
+    }
+
+    // Validate coordinates
+    const [lng, lat] = location.coordinates;
+    if (typeof lng !== 'number' || typeof lat !== 'number') {
+      throw new AppError('Coordinates must be numbers', 400);
+    }
+
+    if (lng < -180 || lng > 180) {
+      throw new AppError('Longitude must be between -180 and 180', 400);
+    }
+
+    if (lat < -90 || lat > 90) {
+      throw new AppError('Latitude must be between -90 and 90', 400);
+    }
+
+    // Validate phone format if provided
+    if (phone && !/^\+?251[79]\d{8}$/.test(phone.replace(/\s+/g, ''))) {
+      throw new AppError('Invalid Ethiopian phone number format', 400);
     }
 
     // Fetch a fresh Merchant document — don't trust req.user.merchant to carry
@@ -323,9 +443,8 @@ class BranchService {
     const merchant = await Merchant.findById(merchantId);
     if (!merchant) throw new AppError('Merchant not found', 404);
 
-    const existingBranchCount = await BranchRepository.findBranches({
+    const existingBranchCount = await BranchRepository.findActiveBranches({
       merchant: merchantId,
-      isActive: true,
     }).countDocuments();
 
     // First branch (their base location) is always free — every merchant gets
@@ -339,7 +458,7 @@ class BranchService {
     }
 
     if (isMain) {
-      const existingMain = await BranchRepository.findBranchOne({
+      const existingMain = await BranchRepository.findActiveBranchOne({
         merchant: merchantId,
         isMain: true,
       });
@@ -384,8 +503,10 @@ class BranchService {
       // Adjust this logic based on your system's business rules.
       throw new AppError('User is not associated with a merchant', 403);
     }
+    
+    // ✅ P0-001: Use findActiveBranches to enforce soft-delete
     const features = new ApiFeatures(
-      BranchRepository.findBranches({ merchant: merchantId }),
+      BranchRepository.findActiveBranches({ merchant: merchantId }),
       req.query
     )
       .filter()
@@ -401,7 +522,10 @@ class BranchService {
   }
 
   static async getBranch(id, origin = '') {
-    const query = id?.length === 6 ? { shortCode: id.toUpperCase() } : { _id: id };
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const query = id?.length === 6 
+      ? { shortCode: id.toUpperCase(), isActive: true } 
+      : { _id: id, isActive: true };
 
     const branch = await BranchRepository.findBranchOne(query)
       .select('-qrSecretKey')
@@ -441,7 +565,8 @@ class BranchService {
       );
     }
 
-    const branch = await BranchRepository.findOneAndUpdateBranch(
+    // ✅ P0-001: Use findOneAndUpdateActiveBranch to enforce soft-delete
+    const branch = await BranchRepository.findOneAndUpdateActiveBranch(
       { _id: req.params.id, merchant: merchantId },
       {
         name: req.body.name,
@@ -466,22 +591,81 @@ class BranchService {
 
   static async deleteBranch(req) {
     const merchantId = req.user.merchant._id;
+    const branchId = req.params.id;
 
-    const branch = await BranchRepository.findOneAndUpdateBranch(
-      { _id: req.params.id, merchant: merchantId },
-      { isActive: false },
-      { new: true }
-    );
+    // ✅ P0-003: Wrap in transaction for atomicity
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (!branch) throw new AppError('Branch not found or unauthorized', 404);
-    return branch;
+    try {
+      const Table = mongoose.model('Table');
+      const DiningSession = mongoose.model('DiningSession');
+
+      // Fetch branch to ensure it exists and belongs to merchant
+      const branch = await BranchRepository.findActiveBranchOne({
+        _id: branchId,
+        merchant: merchantId,
+      }).session(session);
+
+      if (!branch) {
+        throw new AppError('Branch not found or unauthorized', 404);
+      }
+
+      // Close all active sessions in this branch
+      const activeSessions = await DiningSession.find({
+        branch: branchId,
+        status: 'active',
+      }).session(session);
+
+      for (const activeSession of activeSessions) {
+        activeSession.status = 'closed';
+        activeSession.closedAt = new Date();
+        activeSession.closedBy = null; // System action
+        activeSession.closedReason = 'Branch deactivated';
+        await activeSession.save({ session });
+      }
+
+      // Mark all tables in branch as inactive
+      await Table.updateMany(
+        { branch: branchId, isActive: true },
+        { isActive: false, status: 'disabled' },
+        { session }
+      );
+
+      // End all staff assignments for this branch
+      const StaffAssignment = mongoose.model('StaffAssignment');
+      await StaffAssignment.updateMany(
+        { branch: branchId, isActive: true },
+        { isActive: false, endedAt: new Date() },
+        { session }
+      );
+
+      // Soft-delete the branch
+      branch.isActive = false;
+      await branch.save({ session, validateBeforeSave: false });
+
+      // Commit transaction
+      await session.commitTransaction();
+
+      return branch;
+    } catch (error) {
+      // Rollback on error
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   static async regenerateBranchQrCodes(req) {
     const merchantId = req.user.merchant._id;
     const branchId = req.params.id;
 
-    const branch = await BranchRepository.findBranchOne({ _id: branchId, merchant: merchantId });
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const branch = await BranchRepository.findActiveBranchOne({ 
+      _id: branchId, 
+      merchant: merchantId 
+    });
     if (!branch) throw new AppError('Branch not found', 404);
 
     branch.qrVersion += 1;
@@ -535,6 +719,17 @@ class BranchService {
 
   static async inviteBranchManager(req) {
     const { email, phone, branchId, firstName } = req.body;
+    const merchantId = req.user.merchant._id;
+
+    // ✅ P4-001: Verify branch belongs to merchant (prevents inviting managers to non-existent or other merchant's branches)
+    const branch = await BranchRepository.findActiveBranchOne({
+      _id: branchId,
+      merchant: merchantId
+    });
+    
+    if (!branch) {
+      throw new AppError('Branch not found or does not belong to your merchant', 404);
+    }
 
     const invitation = await Invitation.create({
       email,
@@ -558,19 +753,16 @@ class BranchService {
 
     const { id } = req.params;
 
-    const branch = await BranchRepository.findBranchOne({
+    // ✅ P0-001: Use findActiveBranchOne to enforce soft-delete
+    const branch = await BranchRepository.findActiveBranchOne({
       _id: id,
       merchant: merchantId,
     })
-      .select('name address isActive')
+      .select('name address')
       .lean();
 
     if (!branch) {
       throw new AppError('Branch not found or does not belong to your merchant', 404);
-    }
-
-    if (!branch.isActive) {
-      throw new AppError('This branch is currently inactive', 400);
     }
 
     const users = await BranchRepository.findUsers({
@@ -606,7 +798,28 @@ class BranchService {
       throw new AppError('Table number and capacity are required', 400);
     }
 
+    // ✅ P2-002: Enhanced input validation
+    // Validate table number
     const trimmedTableNumber = tableNumber.trim().toUpperCase();
+    if (trimmedTableNumber.length === 0 || trimmedTableNumber.length > 10) {
+      throw new AppError('Table number must be 1-10 characters', 400);
+    }
+
+    // Validate capacity
+    const capacityNum = Number(capacity);
+    if (isNaN(capacityNum) || capacityNum < 1 || capacityNum > 50) {
+      throw new AppError('Table capacity must be a number between 1 and 50', 400);
+    }
+
+    // Validate location if provided
+    if (location && !['indoor', 'outdoor', 'rooftop', 'terrace', 'vip', 'bar', 'window', 'balcony', 'garden'].includes(location)) {
+      throw new AppError('Invalid location. Allowed values: indoor, outdoor, rooftop, terrace, vip, bar, window, balcony, garden', 400);
+    }
+
+    // Validate status if provided
+    if (status && !['available', 'occupied', 'reserved', 'needs-cleaning', 'disabled'].includes(status)) {
+      throw new AppError('Invalid status. Allowed values: available, occupied, reserved, needs-cleaning, disabled', 400);
+    }
 
     const existingTable = await BranchRepository.findTableOne({
       tableNumber: trimmedTableNumber,
@@ -625,7 +838,7 @@ class BranchService {
     try {
       table = await BranchRepository.createTable({
         tableNumber: trimmedTableNumber,
-        capacity: Number(capacity),
+        capacity: capacityNum,
         location: location || 'indoor',
         section: section?.trim() || null,
         status: status || 'available',
@@ -645,6 +858,26 @@ class BranchService {
 
       return table;
     } catch (err) {
+      // ✅ P1-001: Handle E11000 duplicate key error gracefully
+      if (err.code === 11000) {
+        // Extract field name from error message
+        const field = Object.keys(err.keyPattern || {})[0] || 'table';
+        
+        // Log the conflict for debugging
+        logger.warn('table.create.duplicate_key_conflict', {
+          merchantId: merchantId.toString(),
+          branchId: targetBranchId.toString(),
+          tableNumber: trimmedTableNumber,
+          error: err.message,
+        });
+
+        // Return 409 Conflict with user-friendly message
+        throw new AppError(
+          `Table number "${trimmedTableNumber}" is already in use. Please choose a different number.`,
+          409
+        );
+      }
+
       if (table && table._id) {
         await BranchRepository.deleteTableOne({ _id: table._id }).catch(console.error);
       }
@@ -654,8 +887,9 @@ class BranchService {
 
   static async getAllTables(req) {
     console.log('user req', req);
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
     const features = new ApiFeatures(
-      BranchRepository.findTables({ merchant: req.user.merchant._id, isActive: true }),
+      BranchRepository.findActiveTables({ merchant: req.user.merchant._id }),
       req.query
     )
       .filter()
@@ -670,7 +904,8 @@ class BranchService {
   }
 
   static async getTable(req) {
-    const table = await BranchRepository.findTableOne({
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const table = await BranchRepository.findActiveTableOne({
       _id: req.params.id,
       merchant: req.user.merchant._id,
     }).populate({
@@ -704,7 +939,8 @@ class BranchService {
       throw new AppError('No valid fields provided to update', 400);
     }
 
-    const table = await BranchRepository.findOneAndUpdateTable(
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const table = await BranchRepository.findOneAndUpdateActiveTable(
       { _id: req.params.id, merchant: req.user.merchant._id },
       updates,
       { new: true, runValidators: true }
@@ -733,20 +969,50 @@ class BranchService {
   }
 
   static async deleteTable(req) {
-    const table = await BranchRepository.findOneAndUpdateTable(
-      { _id: req.params.id, merchant: req.user.merchant._id },
-      { isActive: false },
-      { new: true }
-    );
+    // ✅ P0-003: Wrap in transaction for atomicity
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (!table) throw new AppError('Table not found', 404);
+    try {
+      const tableId = req.params.id;
+      const merchantId = req.user.merchant._id;
 
-    await BranchRepository.updateManyStaffAssignments(
-      { 'tables.table': req.params.id, isActive: true },
-      { isActive: false, endedAt: new Date() }
-    );
+      // Soft-delete the table
+      const table = await BranchRepository.findOneAndUpdateActiveTable(
+        { _id: tableId, merchant: merchantId },
+        { isActive: false },
+        { new: true, session }
+      );
 
-    return table;
+      if (!table) {
+        throw new AppError('Table not found', 404);
+      }
+
+      // End all active staff assignments for this table
+      await BranchRepository.updateManyStaffAssignments(
+        { 'tables.table': tableId, isActive: true },
+        { isActive: false, endedAt: new Date() }
+      );
+
+      // Close any active sessions on this table
+      const DiningSession = mongoose.model('DiningSession');
+      await DiningSession.updateMany(
+        { table: tableId, status: 'active' },
+        { status: 'closed', closedAt: new Date(), closedReason: 'Table disabled' },
+        { session }
+      );
+
+      // Commit transaction
+      await session.commitTransaction();
+
+      return table;
+    } catch (error) {
+      // Rollback on error
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   static async changeTable(req) {
@@ -759,7 +1025,8 @@ class BranchService {
       throw new AppError('Current and new table must be different', 400);
     }
 
-    const currentTable = await BranchRepository.findTableOne({
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const currentTable = await BranchRepository.findActiveTableOne({
       _id: currentTableId,
       merchant: req.user.merchant._id,
     });
@@ -768,17 +1035,18 @@ class BranchService {
       throw new AppError('Current table not found or not authorized', 404);
     }
 
-    return currentTable.changeTable(newTableId);
+    // ✅ P0-003: Use the Table.moveTo method which now handles transactions
+    return currentTable.moveTo(newTableId);
   }
 
   static async regenerateTableQr(req) {
     const tableId = req.params.id;
     const merchantId = req.user.merchant._id;
 
-    const table = await BranchRepository.findTableOne({
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
+    const table = await BranchRepository.findActiveTableOne({
       _id: tableId,
       merchant: merchantId,
-      isActive: true,
     });
 
     if (!table) {
@@ -811,11 +1079,11 @@ class BranchService {
       throw new AppError('Branch ID is required', 400);
     }
 
+    // ✅ P0-001: Enforce soft-delete by requiring isActive: true
     const features = new ApiFeatures(
-      BranchRepository.findTables({
+      BranchRepository.findActiveTables({
         branch: id,
         merchant: merchantId,
-        isActive: true,
       }),
       req.query
     )

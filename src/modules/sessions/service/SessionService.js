@@ -527,8 +527,22 @@ class SessionService {
    * @param {ObjectId} tableId
    * @returns {Promise<Table>}
    */
-  static async validateTableForOrders(tableId) {
-    const table = await Table.findById(tableId);
+  /**
+   * Validate table exists and is available for orders.
+   * Optionally supports transactional context via session parameter.
+   * @param {string} tableId
+   * @param {object} session - Optional MongoDB session for transactional operations
+   * @returns {Promise<Table>}
+   */
+  static async validateTableForOrders(tableId, session = null) {
+    let query = Table.findById(tableId);
+    
+    // ✅ P0-003: If session provided (transactional context), use it
+    if (session) {
+      query = query.session(session);
+    }
+    
+    const table = await query;
     
     if (!table) {
       throw new AppError('Table not found', 404);
@@ -537,7 +551,7 @@ class SessionService {
     if (!table.isActive) {
       throw new AppError('Table is not available', 400);
     }
-    
+
     // ✅ DO NOT check if table.status === 'occupied'
     // Occupied tables should still accept QR orders!
     
