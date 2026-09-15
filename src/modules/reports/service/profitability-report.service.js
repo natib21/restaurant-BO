@@ -35,6 +35,7 @@ class ProfitabilityReportService {
     const matchStage = {
       merchant: new mongoose.Types.ObjectId(merchantId),
       paymentStatus: 'paid', // Only include paid orders for profitability
+      status: { $ne: 'canceled' }, // ✅ Exclude canceled orders
       placedAt: { 
         $gte: new Date(dateFrom), 
         $lte: new Date(dateTo) 
@@ -50,6 +51,8 @@ class ProfitabilityReportService {
     const summaryPipeline = [
       { $match: matchStage },
       { $unwind: '$items' }, // Expand items array to calculate per-item COGS
+      // ✅ Filter out voided items after unwinding
+      { $match: { 'items.voidedAt': null } },
       {
         $group: {
           _id: null,
@@ -184,6 +187,8 @@ class ProfitabilityReportService {
     const breakdownPipeline = [
       { $match: matchStage },
       { $unwind: '$items' },
+      // ✅ Filter out voided items after unwinding
+      { $match: { 'items.voidedAt': null } },
       {
         $group: {
           _id: groupByExpression,
@@ -339,6 +344,8 @@ class ProfitabilityReportService {
     const pipeline = [
       { $match: matchStage },
       { $unwind: '$items' },
+      // ✅ Filter out voided items after unwinding
+      { $match: { 'items.voidedAt': null } },
       {
         $match: {
           'items.unitCost': { $ne: null }

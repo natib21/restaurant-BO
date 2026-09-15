@@ -160,9 +160,9 @@ const exportJobRequestSchema = z.object({
     .optional()
     .describe('Optional branch ID to filter results'),
   
-  // Export format (csv, xlsx, pdf)
-  format: z.enum(['csv', 'xlsx', 'pdf'], {
-    errorMap: () => ({ message: 'format must be one of: csv, xlsx, pdf' })
+  // Export format (csv only - xlsx/pdf not implemented)
+  format: z.enum(['csv'], {
+    errorMap: () => ({ message: 'format must be: csv (xlsx and pdf are not yet supported)' })
   }).default('csv').describe('Export file format')
 }).refine(data => {
   // Validate that dateFrom comes before dateTo
