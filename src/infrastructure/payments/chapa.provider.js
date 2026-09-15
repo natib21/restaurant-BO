@@ -1,3 +1,17 @@
+/**
+ * ❌ DEPRECATED: Chapa payment integration
+ * 
+ * This file is kept for future reference but is not currently used.
+ * Manual payment only is supported at this time.
+ * 
+ * To re-enable:
+ * 1. Uncomment Chapa case in payment-provider.interface.js
+ * 2. Uncomment webhook route in subscriptions.routes.js
+ * 3. Implement real Chapa API calls below (currently placeholders)
+ * 4. Add Chapa environment variables
+ * 5. Re-add 'chapa' to PAYMENT_PROVIDER enum in env.js
+ */
+
 const axios = require('axios');
 
 function getChapaProvider() {

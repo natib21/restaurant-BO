@@ -9,7 +9,6 @@ const MenuGroup = require('../menu/model/MenuGroup.model');
 const AppError = require('../../common/errors');
 const sendEmail = require('../../../utils/email');
 const { loadEnv } = require('../../config/env');
-const { resolveBranchId } = require('../../common/guards/auth.guard');
 const { trialFeatureSet } = require('../subscriptions/dto/subscription.dto');
 const { seedDefaultMerchantRoles } = require('./default-roles.helper');
 
@@ -22,8 +21,15 @@ class AuthService {
     if (user.merchant?._id) payload.merchant = user.merchant._id.toString();
     else if (user.merchant) payload.merchant = user.merchant.toString();
 
-    const branchId = resolveBranchId(user.branch);
-    if (branchId) payload.branch = branchId;
+    // ✅ MULTI-BRANCH FIX: Include all branch IDs as an array (not just the first)
+    // Handles both single-branch (array of length 1) and multi-branch users
+    if (Array.isArray(user.branch) && user.branch.length > 0) {
+      payload.branches = user.branch.map(b => (b._id ? b._id.toString() : b.toString()));
+    } else if (user.branch) {
+      // Fallback for non-array branch (shouldn't happen with current schema, but safe)
+      const branchId = user.branch._id ? user.branch._id.toString() : user.branch.toString();
+      payload.branches = [branchId];
+    }
 
     if (user.role?.name) payload.role = user.role.name;
 

@@ -373,7 +373,7 @@ class OrderService {
 
     // Phase 0 — pre-transaction validation (read-only, fast-fail before opening a session)
     const { orderItems, subtotal } = await OrderService.buildOrderItems(items, merchantId);
-    const deductionPlan = await InventoryService.resolveDeductionPlan(orderItems, merchantId);
+    const deductionPlan = await InventoryService.resolveDeductionPlan(orderItems, merchantId, branchId);
 
     const mongoSession = await mongoose.startSession();
     let createdOrder;
@@ -459,7 +459,8 @@ class OrderService {
         await InventoryService.deductForOrder(
           {
             merchantId,
-            orderId: createdOrder._id,
+            branchId: createdOrder.branch,
+            orderId: createdOrder._id,  // ✅ NEW: Pass orderId for StockHistory audit trail
             orderNumber: createdOrder.orderNumber,
             plan: deductionPlan,
             performedBy,
@@ -1110,17 +1111,50 @@ class OrderService {
     // No additional status gate here — preparing/ready/out_for_delivery cancellations
     // are legitimate for the appropriate roles as defined in TRANSITION_ROLE_PERMISSIONS.
 
-    const result = await OrderStateMachineService.transitionOrderStatus({
-      orderId,
-      toStatus: 'canceled',
-      merchantQuery: merchantScopedQuery({}, req),
-      user: req.user || null,
-      actorType: req.user ? 'staff' : 'customer',
-      customerId: req.customerId,
-      reason,
-    });
+    // ← NEW: Restore stock for canceled order (atomically with state transition)
+    const merchantId = getMerchantId(req);
+    if (existing.branch) {
+      const session = await mongoose.startSession();
+      try {
+        return await session.withTransaction(async () => {
+          // Restore stock inside the transaction
+          await InventoryService.restoreOrderStock(
+            existing._id,
+            merchantId,
+            existing.branch,
+            session
+          );
 
-    return { order: result.order, alreadyCanceled: false };
+          // State transition happens inside the same transaction
+          const result = await OrderStateMachineService.transitionOrderStatus({
+            orderId,
+            toStatus: 'canceled',
+            merchantQuery: merchantScopedQuery({}, req),
+            user: req.user || null,
+            actorType: req.user ? 'staff' : 'customer',
+            customerId: req.customerId,
+            reason,
+            session,  // ← Pass session to ensure atomicity
+          });
+
+          return { order: result.order, alreadyCanceled: false };
+        });
+      } finally {
+        session.endSession();
+      }
+    } else {
+      // No branch — just transition status (backward compat)
+      const result = await OrderStateMachineService.transitionOrderStatus({
+        orderId,
+        toStatus: 'canceled',
+        merchantQuery: merchantScopedQuery({}, req),
+        user: req.user || null,
+        actorType: req.user ? 'staff' : 'customer',
+        customerId: req.customerId,
+        reason,
+      });
+      return { order: result.order, alreadyCanceled: false };
+    }
   }
 
   static async addItemToOrder(orderId, items, merchantId, userId) {

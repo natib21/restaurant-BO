@@ -26,6 +26,7 @@ const { z } = require('zod');
  */
 exports.adjustStockSchema = z.object({
   ingredientId: z.string().regex(/^[a-f0-9]{24}$/, 'Invalid ingredient ID'),
+  branchId: z.string().regex(/^[a-f0-9]{24}$/, 'Invalid branch ID'),
   quantity: z.number().min(0.01, 'Quantity must be greater than 0'),
   type: z.enum(['in', 'out', 'waste', 'adjustment']).describe('Stock movement type'),
   reason: z.string().min(3).max(200).optional().describe('Why stock is being adjusted'),
@@ -39,6 +40,7 @@ exports.adjustStockSchema = z.object({
  * Validates multiple stock adjustments in a single request
  */
 exports.batchAdjustStockSchema = z.object({
+  branchId: z.string().regex(/^[a-f0-9]{24}$/, 'Invalid branch ID'),
   adjustments: z
     .array(
       z.object({
@@ -123,7 +125,13 @@ exports.getStockMovementsSchema = z
       .string()
       .regex(/^[a-f0-9]{24}$/)
       .optional(),
-    type: z.enum(['in', 'out', 'waste', 'adjustment']).optional(),
+    // Accept either a single type or an array of types (via multiple ?type=x&type=y params)
+    type: z
+      .union([
+        z.enum(['in', 'out', 'waste', 'adjustment']),
+        z.array(z.enum(['in', 'out', 'waste', 'adjustment'])),
+      ])
+      .optional(),
     startDate: z.coerce.date().optional(),
     endDate: z.coerce.date().optional(),
     limit: z.coerce.number().min(1).max(100).default(20),

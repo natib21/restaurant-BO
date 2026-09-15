@@ -12,7 +12,14 @@ const { getMerchantId } = require('../../../common/utils/tenant-scope');
 // GET /api/v1/ingredients
 exports.getAllIngredients = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
-  const ingredients = await Ingredient.find({ merchant: merchantId, isActive: true })
+  const { branch } = req.query;  // ← Optional: filter by branch if provided
+
+  const query = { merchant: merchantId, isActive: true };
+  if (branch) {
+    query.branch = branch;  // ← Filter by branch if requested
+  }
+
+  const ingredients = await Ingredient.find(query)
     .populate('supplier', 'name')
     .sort({ name: 1 });
 
@@ -32,17 +39,35 @@ exports.getIngredient = catchAsync(async (req, res, next) => {
 });
 
 // POST /api/v1/ingredients
-exports.createIngredient = catchAsync(async (req, res) => {
+exports.createIngredient = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
-  const ingredient = await Ingredient.create({ ...req.body, merchant: merchantId });
+  const { branch } = req.body;
+
+  // ✅ NEW: Require branch for per-branch ingredient isolation
+  if (!branch) {
+    return next(new AppError('Branch is required when creating an ingredient', 400));
+  }
+
+  const ingredient = await Ingredient.create({ 
+    ...req.body, 
+    merchant: merchantId,
+    branch  // ← Explicitly set from request
+  });
+
   res.status(201).json({ status: 'success', data: { ingredient } });
 });
 
 // PATCH /api/v1/ingredients/:id
 exports.updateIngredient = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
+  const branchId = req.query.branchId || req.body.branch;
+
+  if (!branchId) {
+    return next(new AppError('Branch is required to update ingredient', 400));
+  }
+
   const ingredient = await Ingredient.findOneAndUpdate(
-    { _id: req.params.id, merchant: merchantId },
+    { _id: req.params.id, merchant: merchantId, branch: branchId },
     req.body,
     { new: true, runValidators: true }
   );
@@ -53,8 +78,14 @@ exports.updateIngredient = catchAsync(async (req, res, next) => {
 // DELETE /api/v1/ingredients/:id  (soft delete)
 exports.deleteIngredient = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
+  const branchId = req.query.branchId;
+
+  if (!branchId) {
+    return next(new AppError('Branch is required to delete ingredient', 400));
+  }
+
   const ingredient = await Ingredient.findOneAndUpdate(
-    { _id: req.params.id, merchant: merchantId },
+    { _id: req.params.id, merchant: merchantId, branch: branchId },
     { isActive: false },
     { new: true }
   );

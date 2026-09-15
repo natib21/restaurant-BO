@@ -5,8 +5,8 @@
  * - SUPER-ADMIN: isSystemRole=true, no tasks (relies on bypass)
  * - SUPER-MERCHANT-ADMIN: isSystemRole=false, all merchant-scoped tasks (isMerchant: true)
  * 
- * Total: 224 fine-grained tasks
- * - 199 merchant-scoped (isMerchant: true) - assigned to SUPER-MERCHANT-ADMIN
+ * Total: 227 fine-grained tasks
+ * - 202 merchant-scoped (isMerchant: true) - assigned to SUPER-MERCHANT-ADMIN
  * - 25 system-wide (isMerchant: false) - SUPER-ADMIN only (accessed via bypass)
  * 
  * Phase 1 KDS: Added 16 kitchen display system tasks (all merchant-scoped)
@@ -28,6 +28,10 @@
  * 
  * Phase 6 Payment Verification: Added 6 Ethiopian mobile payment verification tasks (all merchant-scoped)
  *   - Initiate verification (Telebirr/CBE), confirm, reject, list, read, upload receipt photo
+ * 
+ * Phase 7 Branch User Assignment: Added 3 user-branch assignment tasks (all merchant-scoped)
+ *   - Get user's assigned branches, assign branches to user, unassign branch from user
+ *   - Endpoints under /api/v1/users/:id/branches (not /api/v1/branch/:id/users)
  * 
  * Idempotent: Safe to re-run (uses upsert)
  * Target: Production database only (not test)
@@ -79,7 +83,7 @@ const ALL_TASKS = [
   { name: 'branches.assignMenuGroup', endpoint: '/api/v1/branch/:id/menu-groups', method: 'POST', description: 'Assign menu group to branch', isMerchant: true, hidden: false },
   { name: 'branches.listStaff', endpoint: '/api/v1/branch/:id/staff', method: 'GET', description: 'List branch staff', isMerchant: true, hidden: false },
 
-  // ========== CUSTOMERS MODULE (7 tasks - ALL merchant-scoped CRM) ==========
+  // ========== CUSTOMERS MODULE (8 tasks - ALL merchant-scoped CRM) ==========
   { name: 'customers.list', endpoint: '/api/v1/customer', method: 'GET', description: 'List all customers', isMerchant: true, hidden: false },
   { name: 'customers.listCrm', endpoint: '/api/v1/customer/crm', method: 'GET', description: 'List customers (CRM view)', isMerchant: true, hidden: false },
   { name: 'customers.read', endpoint: '/api/v1/customer/:id', method: 'GET', description: 'Get customer by ID', isMerchant: true, hidden: false },
@@ -89,12 +93,15 @@ const ALL_TASKS = [
   { name: 'customers.giveGift', endpoint: '/api/v1/customer/:id/gift', method: 'POST', description: 'Give gift to customer', isMerchant: true, hidden: false },
   { name: 'customers.addTagOrNote', endpoint: '/api/v1/customer/:id/tag', method: 'PATCH', description: 'Add tag or note to customer', isMerchant: true, hidden: false },
 
-  // ========== USERS MODULE (5 tasks - ALL merchant-scoped) ==========
+  // ========== USERS MODULE (8 tasks - ALL merchant-scoped) ==========
   { name: 'users.list', endpoint: '/api/v1/users', method: 'GET', description: 'List all users', isMerchant: true, hidden: false },
   { name: 'users.create', endpoint: '/api/v1/users', method: 'POST', description: 'Create user', isMerchant: true, hidden: false },
   { name: 'users.read', endpoint: '/api/v1/users/:id', method: 'GET', description: 'Get user by ID', isMerchant: true, hidden: false },
   { name: 'users.update', endpoint: '/api/v1/users/:id', method: 'PATCH', description: 'Update user', isMerchant: true, hidden: false },
   { name: 'users.delete', endpoint: '/api/v1/users/:id', method: 'DELETE', description: 'Delete user', isMerchant: true, hidden: false },
+  { name: 'users.branches.list', endpoint: '/api/v1/users/:id/branches', method: 'GET', description: 'Get user assigned branches', isMerchant: true, hidden: false },
+  { name: 'users.branches.assign', endpoint: '/api/v1/users/:id/branches', method: 'POST', description: 'Assign branches to user', isMerchant: true, hidden: false },
+  { name: 'users.branches.unassign', endpoint: '/api/v1/users/:id/branches/:branchId', method: 'DELETE', description: 'Unassign branch from user', isMerchant: true, hidden: false },
 
   // ========== TABLES MODULE (9 tasks) ==========
   { name: 'tables.list', endpoint: '/api/v1/table', method: 'GET', description: 'List all tables', isMerchant: true, hidden: false },
