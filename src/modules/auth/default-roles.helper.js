@@ -29,6 +29,11 @@ const DEFAULT_ROLE_TASKS = {
     'merchants.me.read',
     'merchants.me.update',
 
+    // User-branch assignment (under /api/v1/users/:id/branches)
+    'users.branches.list',
+    'users.branches.assign',
+    'users.branches.unassign',
+
     // Menu management
     'menus.list',
     'menus.create',

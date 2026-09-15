@@ -3,12 +3,32 @@ const { getMerchantId } = require('../../../common/utils/tenant-scope');
 const { BranchService } = require('../service/BranchService');
 
 exports.createBranch = catchAsync(async (req, res) => {
-  const branch = await BranchService.createBranch(req);
-  res.status(201).json({ status: 'success', data: { branch } });
+  const result = await BranchService.createBranch(req);
+  
+  // Handle new response format: { branch, refreshHint? }
+  // Note: With transaction support, there's no longer a "partial success" case
+  // (autoAssignWarning removed) — either all three writes succeed or all fail.
+  const response = { status: 'success', data: { branch: result.branch } };
+  
+  // Add refresh hint if present (user's branch array changed, JWT is stale)
+  if (result.refreshHint) {
+    response.refreshHint = result.refreshHint;
+  }
+  
+  res.status(201).json(response);
 });
 
 exports.getAllBranches = catchAsync(async (req, res) => {
   const branches = await BranchService.getAllBranches(req);
+  res.status(200).json({
+    status: 'success',
+    results: branches.length,
+    data: { branches },
+  });
+});
+
+exports.getUserBranches = catchAsync(async (req, res) => {
+  const branches = await BranchService.getUserBranches(req);
   res.status(200).json({
     status: 'success',
     results: branches.length,

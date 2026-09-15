@@ -17,7 +17,8 @@ const manualProvider = {
   },
 };
 
-const { getChapaProvider } = require('./chapa.provider');
+// ❌ DISABLED: Chapa integration removed (manual payment only for now)
+// const { getChapaProvider } = require('./chapa.provider');
 
 function getPaymentProvider(provider) {
   const normalized = String(provider || 'manual').toLowerCase();
@@ -25,10 +26,11 @@ function getPaymentProvider(provider) {
   switch (normalized) {
     case 'manual':
       return manualProvider;
-    case 'chapa':
-      return getChapaProvider();
+    // ❌ DISABLED: Chapa case removed - only manual payment supported
+    // case 'chapa':
+    //   return getChapaProvider();
     default:
-      throw new Error(`Unsupported payment provider: ${provider}`);
+      throw new Error(`Unsupported payment provider: ${provider}. Only 'manual' is currently supported.`);
   }
 }
 

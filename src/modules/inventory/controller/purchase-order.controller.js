@@ -4,10 +4,11 @@
  */
 
 const PurchaseOrder = require('../../../../models/PurchaseOrder');
+const Ingredient = require('../../../../models/Ingredient');  // ← NEW: For branch-scoped lookup
 const catchAsync = require('../../../../utils/catchAsync');
 const AppError = require('../../../../utils/appError');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
-const { InventoryService } = require('../service/inventory.service');
+const { InventoryService } = require('../service/InventoryService');
 
 exports.getAllPurchaseOrders = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
@@ -25,8 +26,9 @@ exports.getPurchaseOrder = catchAsync(async (req, res, next) => {
   const purchaseOrder = await PurchaseOrder.findOne({ _id: req.params.id, merchant: merchantId })
     .populate('supplier', 'name contactPerson phone')
     .populate('createdBy', 'firstName lastName')
-    .populate('approvedBy', 'firstName lastName')
-    .populate('items.ingredient', 'name unit');
+    .populate('approvedBy', 'firstName lastName');
+    // ✅ REMOVED: .populate('items.ingredient') — PO items reference by ID directly (not affected by recipe item format change)
+
   if (!purchaseOrder) return next(new AppError('Purchase order not found', 404));
   res.status(200).json({ status: 'success', data: { purchaseOrder } });
 });
@@ -70,11 +72,30 @@ exports.receivePurchaseOrder = catchAsync(async (req, res, next) => {
   if (purchaseOrder.status === 'received')
     return next(new AppError('Purchase order already received', 400));
 
+  // ✅ NEW: Extract branchId from PO for branch-level stock tracking
+  if (!purchaseOrder.branch) {
+    return next(new AppError('Purchase order missing branch context', 500));
+  }
+
   const { receivedItems } = req.body; // [{ ingredientId, receivedQuantity }]
 
   for (const item of receivedItems) {
     const poItem = purchaseOrder.items.find(i => i.ingredient.toString() === item.ingredientId);
     if (poItem) {
+      // ✅ NEW: Lookup ingredient by branch to ensure stock goes to correct branch
+      const ingredient = await Ingredient.findOne({
+        _id: item.ingredientId,
+        merchant: merchantId,
+        branch: purchaseOrder.branch  // ← Ensure stock received for THIS branch
+      });
+
+      if (!ingredient) {
+        return next(new AppError(
+          `Ingredient not found for this branch: ${item.ingredientId}`,
+          404
+        ));
+      }
+
       await InventoryService.adjustStock(
         merchantId,
         item.ingredientId,
@@ -83,7 +104,8 @@ exports.receivePurchaseOrder = catchAsync(async (req, res, next) => {
         'purchase',
         purchaseOrder.poNumber,
         req.user._id,
-        poItem.unitPrice
+        poItem.unitPrice,
+        purchaseOrder.branch  // ← Pass branch context
       );
     }
   }

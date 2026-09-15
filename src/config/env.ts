@@ -30,11 +30,13 @@ const envSchema = z.object({
   APP_URL: z.string().url().optional(),
   PUBLIC_API_BASE_URL: z.string().url().optional(),
 
-  PAYMENT_PROVIDER: z.enum(['manual', 'chapa', 'telebirr']).default('manual'),
-  CHAPA_API_KEY: z.string().optional(),
-  CHAPA_API_BASE_URL: z.string().url().default('https://api.chapa.co'),
-  CHAPA_WEBHOOK_SECRET: z.string().optional(),
-  CHAPA_WEBHOOK_URL: z.string().url().optional(),
+  // ❌ DISABLED: Chapa payment integration removed (manual payment only)
+  // Only 'manual' and 'telebirr' (future) providers supported
+  PAYMENT_PROVIDER: z.enum(['manual', 'telebirr']).default('manual'),
+  // CHAPA_API_KEY: z.string().optional(),  // Removed
+  // CHAPA_API_BASE_URL: z.string().url().default('https://api.chapa.co'),  // Removed
+  // CHAPA_WEBHOOK_SECRET: z.string().optional(),  // Removed
+  // CHAPA_WEBHOOK_URL: z.string().url().optional(),  // Removed
 
   SESSION_DURATION_HOURS: z.coerce.number().default(4),
   CORS_ORIGINS: z.string().optional(),

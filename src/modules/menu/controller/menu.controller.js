@@ -479,3 +479,59 @@ function formatMenuResponse(menu) {
     imageIds: imagesData.map(img => img.id),
   };
 }
+
+
+// ============================================
+// GET PRICE HISTORY FOR A MENU ITEM
+// ============================================
+exports.getPriceHistory = catchAsync(async (req, res) => {
+  const { getMerchantId } = require('../../../common/utils/tenant-scope');
+  const MenuRepository = require('../repository/menu.repository');
+  const PriceHistory = require('../../../models/PriceHistory');
+  const { isValidObjectId } = require('mongoose');
+  const AppError = require('../../../utils/appError');
+  const { sendResponse } = require('../../../utils/sendResponse');
+
+  const merchantId = getMerchantId(req);
+  const { menuItemId } = req.params;
+
+  if (!menuItemId || !isValidObjectId(menuItemId)) {
+    throw new AppError('Invalid menu item ID', 400);
+  }
+
+  // Verify menu item belongs to merchant
+  const menu = await MenuRepository.findOneMenu(
+    { _id: menuItemId, merchant: merchantId },
+    { select: '_id name price' }
+  );
+
+  if (!menu) {
+    throw new AppError('Menu item not found or does not belong to your merchant', 404);
+  }
+
+  // Fetch price history
+  const history = await PriceHistory.find({
+    menuItem: menuItemId,
+    merchant: merchantId,
+  })
+    .populate('changedBy', 'firstName lastName email')
+    .sort({ changedAt: -1 })
+    .lean();
+
+  const responseData = {
+    menuItem: {
+      id: menu._id,
+      name: menu.name,
+      currentPrice: menu.price,
+    },
+    priceHistory: history.map(entry => ({
+      oldPrice: entry.oldPrice,
+      newPrice: entry.newPrice,
+      changedBy: entry.changedBy,
+      changedAt: entry.changedAt,
+    })),
+    totalChanges: history.length,
+  };
+
+  sendResponse(res, 200, 'priceHistory', responseData);
+});

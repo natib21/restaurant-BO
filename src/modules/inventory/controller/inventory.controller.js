@@ -9,7 +9,7 @@
 const catchAsync = require('../../../../utils/catchAsync');
 const AppError = require('../../../../utils/appError');
 const { getMerchantId } = require('../../../common/utils/tenant-scope');
-const { InventoryService } = require('../service/inventory.service');
+const { InventoryService } = require('../service/InventoryService');
 
 /**
  * GET /api/v1/inventory/valuation
@@ -42,7 +42,7 @@ exports.getInventoryValuation = catchAsync(async (req, res) => {
  */
 exports.adjustStock = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
-  const { ingredientId, quantity, type, reason, reference, cost } = req.body;
+  const { ingredientId, branchId, quantity, type, reason, reference, cost } = req.body;
   const performedBy = req.user._id;
 
   const ingredient = await InventoryService.adjustStock(
@@ -53,7 +53,8 @@ exports.adjustStock = catchAsync(async (req, res) => {
     reason,
     reference,
     performedBy,
-    cost
+    cost,
+    branchId
   );
 
   res.status(200).json({
@@ -79,10 +80,10 @@ exports.adjustStock = catchAsync(async (req, res) => {
  */
 exports.batchAdjustStock = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
-  const { adjustments } = req.body;
+  const { branchId, adjustments } = req.body;
   const performedBy = req.user._id;
 
-  const results = await InventoryService.batchAdjustStock(merchantId, adjustments, performedBy);
+  const results = await InventoryService.batchAdjustStock(merchantId, adjustments, performedBy, branchId);
 
   const successful = results.filter(r => r.success).length;
   const failed = results.filter(r => !r.success).length;
@@ -104,7 +105,7 @@ exports.batchAdjustStock = catchAsync(async (req, res) => {
 exports.getLowStockItems = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
 
-  const items = await InventoryService.getLowStockItems(merchantId);
+  const items = await InventoryService.getLowStockAlerts(merchantId);
 
   res.status(200).json({
     status: 'success',
@@ -128,10 +129,16 @@ exports.getLowStockItems = catchAsync(async (req, res) => {
  * Get stock movement history (audit log)
  *
  * Query: { ingredientId?, type?, startDate?, endDate?, limit, offset }
+ * Note: type can be a single value or array (via ?type=in&type=out)
  */
 exports.getStockMovements = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
-  const { ingredientId, type, startDate, endDate, limit, offset } = req.query;
+  let { ingredientId, type, startDate, endDate, limit, offset } = req.query;
+
+  // Normalize type to array if it's a single value
+  if (type && !Array.isArray(type)) {
+    type = [type];
+  }
 
   const movements = await InventoryService.getStockMovements(
     merchantId,

@@ -98,15 +98,24 @@ router.get('/customers',
 /**
  * GET /api/v1/reports/delivery
  * 
- * Delivery Operations Report - Fees, duration, on-time delivery percentage
+ * ⛔ DELIVERY REPORTING IS OUT OF SCOPE FOR THIS LAUNCH
+ * This endpoint is intentionally disabled and returns 501 (Not Implemented).
  * 
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7
  * Security: 2.4, 2.5, 17.1, 17.2, 17.3
  */
 router.get('/delivery',
-  validate(reportQuerySchema, 'query'),
-  restrictTo('MERCHANT_ADMIN', 'SUPER_ADMIN'),
-  getDeliveryReport // Controller handler
+  (req, res) => {
+    const error = new AppError(
+      'Delivery reporting is not yet implemented. This feature is planned for a future release.',
+      501
+    );
+    res.status(501).json({
+      status: 'error',
+      statusCode: 501,
+      message: error.message
+    });
+  }
 );
 
 /**

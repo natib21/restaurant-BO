@@ -5,10 +5,12 @@ const auditPlugin = require('../utils/auditPlugin');
 
 const recipeItemSchema = new Schema(
   {
-    ingredient: {
-      type: Schema.Types.ObjectId,
-      ref: 'Ingredient',
+    // ✅ CHANGED: Store ingredient name instead of ObjectId for branch-level isolation
+    // This allows the same recipe to work across branches with their own ingredient stocks
+    ingredientName: {
+      type: String,
       required: true,
+      comment: 'Name of the ingredient (e.g., "Chicken", "Tomato") — resolved by merchant+name+unit at runtime'
     },
     quantity: {
       type: Number,
@@ -18,6 +20,8 @@ const recipeItemSchema = new Schema(
     unit: {
       type: String,
       required: true,
+      enum: ['kg', 'g', 'liter', 'ml', 'pieces', 'boxes', 'cans'],
+      comment: 'Must match the ingredient stock unit'
     },
   },
   { _id: false }
@@ -71,18 +75,18 @@ recipeSchema.pre('save', async function (next) {
   let totalCost = 0;
 
   for (const item of this.items) {
-    const ingredient = await mongoose.model('Ingredient').findById(item.ingredient);
+    // ✅ CHANGED: Lookup ingredient by name+unit instead of ObjectId
+    // This enables branch-level ingredient isolation
+    const ingredient = await mongoose.model('Ingredient').findOne({
+      merchant: this.merchant,
+      name: item.ingredientName,
+      unit: item.unit,
+      isActive: true,
+    });
     
     if (!ingredient) {
-      return next(new Error(`Ingredient ${item.ingredient} not found`));
-    }
-
-    // STAGE 7: Unit conversion validation
-    // Ensure recipe item unit matches ingredient unit (no conversion yet)
-    if (item.unit !== ingredient.unit) {
       return next(new Error(
-        `Unit mismatch: Recipe uses ${item.unit} but ingredient "${ingredient.name}" is stocked in ${ingredient.unit}. ` +
-        `Please use matching units or convert manually.`
+        `Ingredient "${item.ingredientName}" (${item.unit}) not found for this merchant`
       ));
     }
 
