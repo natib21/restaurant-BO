@@ -180,8 +180,53 @@ exports.voidItem = catchAsync(async (req, res, next) => {
         throw new AppError('Order not found', 404);
       }
 
+      const item = order.items.id(itemId);
+      if (!item) {
+        throw new AppError('Item not found in order', 404);
+      }
+
       // Void the item
       voidResult = await ItemStatusService.voidItem(order, itemId, reason, req.user, session);
+
+      // ✅ RESTORE STOCK: Look up what was deducted for this item via StockHistory
+      // (Only if merchant has inventory enabled and item had ingredients deducted)
+      const Merchant = require('../../../merchants/models/merchant.model');
+      const merchant = await Merchant.findById(order.merchant);
+      
+      if (merchant && merchant.hasFeature('inventory')) {
+        const StockHistory = require('../../../../models/StockHistory');
+        
+        // Find all USED entries for this order (represents deductions at placement)
+        const deductions = await StockHistory.find(
+          {
+            orderId: orderId,
+            action: 'USED',
+          },
+          null,
+          { session }
+        );
+
+        if (deductions && deductions.length > 0) {
+          const { InventoryService } = require('../../../inventory');
+
+          // Build refund request from actual deductions
+          const itemsToRefund = deductions.map(d => ({
+            ingredientId: d.ingredient,
+            quantity: d.quantity,
+          }));
+
+          // Restore stock atomically within same transaction
+          await InventoryService.refundOrderItems(
+            orderId,
+            order.merchant,
+            order.branch,
+            itemsToRefund,
+            `Order item voided: ${reason}`,
+            req.user?._id,
+            session
+          );
+        }
+      }
 
       // Optionally create replacement
       if (createReplacement) {

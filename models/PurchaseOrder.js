@@ -35,6 +35,14 @@ const purchaseOrderSchema = new Schema(
       required: true,
       index: true,
     },
+    // ✅ NEW: Branch-level stock tracking
+    branch: {
+      type: Schema.Types.ObjectId,
+      ref: 'Branch',
+      required: true,
+      index: true,
+      comment: 'Which branch this purchase order is for — determines where received stock goes'
+    },
     supplier: {
       type: Schema.Types.ObjectId,
       ref: 'Supplier',
@@ -85,7 +93,7 @@ const purchaseOrderSchema = new Schema(
 );
 
 // Indexes
-purchaseOrderSchema.index({ merchant: 1, status: 1 });
+purchaseOrderSchema.index({ merchant: 1, branch: 1, status: 1 });  // ← UPDATED: Include branch
 purchaseOrderSchema.index({ merchant: 1, supplier: 1 });
 purchaseOrderSchema.index({ poNumber: 1 });
 

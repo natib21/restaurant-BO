@@ -131,6 +131,9 @@ class InventoryRepository {
 
   /**
    * Find active recipe for menu item
+   * 
+   * ✅ FIXED: Removed dead .populate('items.ingredient') since recipe items store ingredientName (String), not ingredient (ObjectId).
+   * Ingredient resolution now happens at deduction time via branch-scoped lookup in getIngredientUsageForMenuItem().
    */
   static findActiveRecipeForMenuItem(menuItemId, merchantId, options = {}) {
     const { session } = options;
@@ -138,7 +141,8 @@ class InventoryRepository {
       menuItem: menuItemId,
       merchant: merchantId,
       isActive: true,
-    }).populate('items.ingredient');
+    });
+    // ✅ REMOVED: .populate('items.ingredient') — field is ingredientName (String), not ObjectId
 
     if (session) query = query.session(session);
     return query.exec();
@@ -149,18 +153,24 @@ class InventoryRepository {
    * Used by deductStockItems for order processing
    *
    * @param {string} ingredientId
+   * @param {string} merchantId - ✅ SECURITY: Required to prevent cross-merchant deductions
    * @param {number} quantity - Amount to deduct (positive number)
    * @param {Object} options - { session }
    * @returns {Object} Updated ingredient document
    */
-  static async deductStock(ingredientId, quantity, options = {}) {
+  static async deductStock(ingredientId, merchantId, quantity, options = {}) {
     const { session } = options;
 
-    let query = Ingredient.findByIdAndUpdate(
-      ingredientId,
+    let query = Ingredient.findOneAndUpdate(
+      {
+        _id: ingredientId,
+        merchant: merchantId,  // ← IDOR fix: Ensure ingredient belongs to this merchant
+      },
       { $inc: { currentStock: -quantity } },
-      { new: true, session }
+      { new: true }
     );
+    
+    if (session) query = query.session(session);
 
     return query.exec();
   }

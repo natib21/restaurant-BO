@@ -90,4 +90,11 @@ router
   )
   .delete(menuController.deleteMenu);
 
+// ── 4. Price History (audit trail) ────────────────────────────────────────────
+router.get(
+  '/:menuItemId/price-history',
+  requireCapability(CAPABILITIES.MENU_MANAGE),
+  menuController.getPriceHistory
+);
+
 module.exports = router;

@@ -5,7 +5,8 @@ const AppError = require('../../../../utils/appError');
 const logger = require('../../../../utils/logger');
 const { generateSecureQR } = require('../../../../utils/secureQR');
 const Role = require('../../../../models/roleModel');
-const Merchant =require('../../../../models/merchantModel')
+const Merchant = require('../../../../models/merchantModel');
+const User = require('../../../../models/userModel');
 const { BranchRepository } = require('../repository/BranchRepository');
 const { BranchControlService } = require('../branch-control.service');
 const { QrTokenService } = require('../qr-token.service');
@@ -465,32 +466,94 @@ class BranchService {
       if (existingMain) throw new AppError('Only one main branch allowed', 400);
     }
 
-    const branch = await BranchRepository.createBranch({
-      name,
-      merchant: merchantId,
-      phone,
-      location: {
-        type: 'Point',
-        coordinates: location.coordinates,
-        city,
-        subCity,
-        specificArea,
-        building,
-        formattedAddress: `${specificArea || ''}, ${subCity || ''}, ${city}`
-          .replace(/^,\s*/, '')
-          .trim(),
-      },
-      isMain: isMain || false,
-      isActive: req.body.isActive ?? true,
-      settings: req.body.settings || {},
-      branding: req.body.branding || {},
-    });
+    // ✅ P5-003: Wrap in transaction for atomicity
+    // Multi-document write: Branch creation + Merchant.branchCounter + User.branch auto-assign
+    // If any step fails, abort transaction so no partial state is left.
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Keep branchCounter meaningful now that it's actually enforced against
-    merchant.branchCounter = existingBranchCount + 1;
-    await merchant.save({ validateBeforeSave: false });
+    try {
+      // Create the branch (note: Branch.create() with session requires array syntax)
+      const branchDocs = await BranchRepository.createBranch(
+        [{ // Array format for create() with session
+          name,
+          merchant: merchantId,
+          phone,
+          location: {
+            type: 'Point',
+            coordinates: location.coordinates,
+            city,
+            subCity,
+            specificArea,
+            building,
+            formattedAddress: `${specificArea || ''}, ${subCity || ''}, ${city}`
+              .replace(/^,\s*/, '')
+              .trim(),
+          },
+          isMain: isMain || false,
+          isActive: req.body.isActive ?? true,
+          settings: req.body.settings || {},
+          branding: req.body.branding || {},
+        }],
+        { session } // Session options as second argument
+      );
+      
+      const branch = branchDocs[0];
 
-    return branch;
+      // Increment merchant branch counter
+      merchant.branchCounter = existingBranchCount + 1;
+      await merchant.save({ session, validateBeforeSave: false });
+
+      // ✅ P5-001: AUTO-ASSIGN BRANCH TO CREATING USER (UNCONDITIONAL)
+      // After successful branch creation, auto-assign the new branch to the creating user's
+      // branch array. Uses $addToSet to avoid duplicates.
+      // Now wrapped in transaction: if this fails, entire branch creation aborts.
+      await User.findByIdAndUpdate(
+        req.user._id,
+        { $addToSet: { branch: branch._id } },
+        { session, new: false }
+      );
+
+      logger.info('branch.create.auto_assign_success', {
+        userId: req.user._id.toString(),
+        branchId: branch._id.toString(),
+        branchName: branch.name,
+        merchantId: merchantId.toString(),
+        userRole: req.user.role?.name || 'UNKNOWN',
+      });
+
+      // Commit transaction — all writes succeed or all fail
+      await session.commitTransaction();
+
+      // ✅ P5-002: JWT STALENESS HINT
+      // User's branch array has changed, so the JWT token they're holding is now stale.
+      // The auth guard's branchIdsInclude() check will reject it on the next request.
+      // Include a hint so frontend can proactively refresh (call /me or re-login).
+      const refreshHint = {
+        code: 'BRANCH_ARRAY_UPDATED',
+        message: 'Your branch access list has been updated. Your current JWT is stale. Please call /me to refresh your user context or re-login to get a fresh token.',
+      };
+
+      return {
+        branch,
+        refreshHint,
+      };
+    } catch (error) {
+      // Rollback on error — no partial state
+      await session.abortTransaction();
+      
+      logger.error('branch.create.transaction_failed', {
+        userId: req.user._id.toString(),
+        merchantId: merchantId.toString(),
+        branchName: name,
+        error: error.message,
+        errorCode: error.code,
+      });
+
+      throw error;
+    } finally {
+      session.endSession();
+    }
   }
 
   static async getAllBranches(req) {
@@ -517,6 +580,44 @@ class BranchService {
     const branches = await features.query
       .select('-qrSecretKey')
       .populate('merchant');
+
+    return branches.map(branch => enrichBranchWithMerchantMedia(branch, origin));
+  }
+
+  /**
+   * Get branches assigned to the current authenticated user
+   * Returns only branches in the user's `branch` array (populated with full details)
+   * 
+   * @param {Object} req - Express request with req.user populated by auth guard
+   * @returns {Array} Array of branch objects the user has access to
+   */
+  static async getUserBranches(req) {
+    const merchantId = req.user.merchant?._id;
+    const origin = `${req.protocol}://${req.get('host')}`;
+
+    if (!merchantId) {
+      throw new AppError('User is not associated with a merchant', 403);
+    }
+
+    // Get user's branch IDs (could be array or single value depending on schema)
+    const userBranchIds = Array.isArray(req.user.branch) 
+      ? req.user.branch.map(b => b._id || b)
+      : req.user.branch 
+        ? [req.user.branch._id || req.user.branch]
+        : [];
+
+    if (userBranchIds.length === 0) {
+      return [];
+    }
+
+    // Fetch only branches that are in user's access list AND active
+    const branches = await BranchRepository.findActiveBranches({
+      _id: { $in: userBranchIds },
+      merchant: merchantId,
+    })
+      .select('-qrSecretKey')
+      .populate('merchant')
+      .sort({ isMain: -1, name: 1 }); // Main branch first, then alphabetical
 
     return branches.map(branch => enrichBranchWithMerchantMedia(branch, origin));
   }

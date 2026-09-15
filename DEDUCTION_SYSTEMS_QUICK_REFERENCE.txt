@@ -1,0 +1,197 @@
+================================================================================
+INVENTORY DEDUCTION SYSTEMS: QUICK REFERENCE
+================================================================================
+
+Three deduction systems exist in codebase. TWO are dead code.
+
+================================================================================
+SYSTEM 1: ACTIVE (Currently Used for All Order Placement)
+================================================================================
+
+PATH: OrderTransactionService.executePlaceOrder()
+      → InventoryService.resolveDeductionPlan()       [pre-compute]
+      → InventoryService.deductForOrder()             [deduct in txn]
+        → InventoryService.adjustStockAtomic()        [per-ingredient]
+
+ENTRY POINTS:
+  ✅ OrderTransactionService.executePlaceOrder() [line 138]  - Customer QR orders
+  ✅ OrderService.staffPlaceOrder() [line 459]               - Staff orders
+
+CHARACTERISTICS:
+  ✅ Direct single-step deduction (no reservation state)
+  ✅ Atomic: Check + deduct in one operation
+  ✅ Transaction: All within MongoDB session
+  ✅ Merchant-scoped: Every query includes merchant filter
+  ✅ Audit trail: StockMovement per ingredient deduction
+  ✅ Fail-fast: Entire transaction rolls back if any ingredient insufficient
+
+CURRENTLY DOES:
+  ✅ Deduct stock from global ingredient pool
+  ✅ Track merchant context
+  ❌ NO branch context (all branches share same stock)
+
+FOR BRANCH ISOLATION:
+  ❌ NEEDS UPDATE: Add branchId parameter to adjustStockAtomic()
+  ❌ NEEDS UPDATE: Pass order.branch from deductForOrder()
+  ⚠️  Surface area: 2 methods, ~15 lines
+
+FILES:
+  - src/modules/inventory/service/InventoryService.js (lines 139-270)
+  - src/modules/order/service/OrderTransactionService.js (lines 77, 138)
+  - src/modules/order/service/OrderService.js (lines 376, 459)
+
+================================================================================
+SYSTEM 2: DEAD CODE (inventory.service.js)
+================================================================================
+
+PATH: (never called from production)
+      inventory.service.js.deductStockItems()
+      → InventoryRepository.deductStock()
+
+METHODS DEFINED:
+  ❌ deductStockItems() - Would deduct from items array
+  ⚠️  adjustStock() - Generic adjustment (used for manual/receipts, not orders)
+  ⚠️  batchAdjustStock() - Batch version of adjustStock()
+
+CALL SITES IN PRODUCTION:
+  ❌ NONE (tests only)
+
+WHY DEAD:
+  - Module index.js exports the capitalized InventoryService.js (not this one)
+  - Never imported in OrderService or OrderTransactionService
+  - Only used in tests (inventory-unified-api.test.js, inventory-deduction.test.js)
+
+FOR BRANCH ISOLATION:
+  ⚠️  NO ACTION NEEDED (dead code)
+  ⚠️  If resurrected, would need similar updates as System 1
+
+FILES:
+  - src/modules/inventory/service/inventory.service.js (lines 25-318)
+  - src/modules/inventory/index.js (exports capitalized version)
+
+================================================================================
+SYSTEM 3: DEAD CODE (stock.service.js)
+================================================================================
+
+PATH: (never called from production)
+      stock.service.js.reserveIngredients()
+      stock.service.js.deductIngredients()
+      stock.service.js.finalizeIngredients()
+
+THREE-STAGE PATTERN:
+  Stage 3: reserveIngredients()     - Increment reservedStock (pessimistic lock)
+  Stage 4: deductIngredients()      - Direct deduction alternative
+  Stage 5: finalizeIngredients()    - Convert reserved → consumed
+
+SUPPORTING FUNCTIONS:
+  - reserveIngredientAtomic() / releaseReservations()
+  - deductIngredientAtomic() / rollbackDeductions()
+  - finalizeIngredientAtomic() / rollbackFinalizations()
+
+CALL SITES IN PRODUCTION:
+  ❌ NONE (tests only)
+
+WHY DEAD:
+  - Never imported in production code
+  - No integration points in OrderTransactionService or OrderService
+  - Appears to be a design exploration that was replaced by simpler System 1
+  - Only used in tests (inventory-stage*.test.js)
+
+INTERESTING FACT:
+  ✅ ALREADY HAS BRANCH SCOPING (from your earlier implementation!)
+  - reserveIngredientAtomic() requires branchId in context
+  - deductIngredientAtomic() requires branchId in context
+  - finalizeIngredientAtomic() requires branchId in context
+  - All create StockHistory with branch: branchId
+  
+  If this pattern is ever activated, it's already branch-aware.
+
+FOR BRANCH ISOLATION:
+  ⚠️  NO ACTION NEEDED (dead code, already branch-scoped)
+  ✅ Ready to go if production ever switches to this pattern
+
+FILES:
+  - src/modules/inventory/service/stock.service.js (lines 27-610)
+
+================================================================================
+SUMMARY TABLE
+================================================================================
+
+System | Path | Used By | Status | Branch-Ready | Action
+-------|------|---------|--------|--------------|--------
+1      | deductForOrder → adjustStockAtomic | OrderService | ✅ ACTIVE | ❌ NO | UPDATE
+2      | deductStockItems → deductStock | (none) | ❌ DEAD | (N/A) | IGNORE
+3      | reserve/deduct/finalize pattern | (none) | ❌ DEAD | ✅ YES | IGNORE*
+
+* If System 3 is ever activated in production, no additional branch work needed
+
+================================================================================
+ANSWER TO KEY QUESTIONS
+================================================================================
+
+Q1: Which deduction system is called by OrderTransactionService?
+A:  ONLY System 1 (InventoryService.deductForOrder → adjustStockAtomic)
+
+Q2: Is there a second active path, or dead code?
+A:  Both System 2 and System 3 are DEAD CODE
+    - System 2: Never called, orphaned module
+    - System 3: Never called, experimental design that was replaced
+
+Q3: If both are live, do they both need branch-scoping?
+A:  N/A - Only System 1 is live
+    - System 1 needs branch updates (2 methods)
+    - System 2 is dead (no action)
+    - System 3 is dead but already branch-scoped (no action)
+
+Q4: Single surface area for branch-scoping?
+A:  YES - Only System 1 (2 methods, ~15 lines total)
+
+================================================================================
+BRANCH ISOLATION ACTION ITEMS
+================================================================================
+
+FOR PRODUCTION ORDER PLACEMENT:
+  Required: Update InventoryService.deductForOrder()
+    - Extract branchId from order
+    - Pass to adjustStockAtomic()
+
+  Required: Update InventoryService.adjustStockAtomic()
+    - Accept branchId parameter
+    - Include in StockMovement audit record
+
+  Optional: Clean up dead code (System 2 & 3)
+    - Document as "unused experimental patterns"
+    - Or remove if not needed for future
+
+EFFORT:
+  - 2 methods to update
+  - ~15 lines of code
+  - Low risk (only affects order placement, easily testable)
+
+================================================================================
+FILES TO MODIFY FOR BRANCH ISOLATION
+================================================================================
+
+1. src/modules/inventory/service/InventoryService.js
+   - Modify: InventoryService.deductForOrder() (line 165)
+     Action: Extract order.branch, pass to adjustStockAtomic()
+   
+   - Modify: InventoryService.adjustStockAtomic() (line 212)
+     Action: Add branchId parameter, include in StockMovement
+
+FILES TO IGNORE (DEAD CODE):
+  - src/modules/inventory/service/inventory.service.js (System 2)
+  - src/modules/inventory/service/stock.service.js (System 3 - already branch-scoped)
+
+================================================================================
+CONCLUSION
+================================================================================
+
+✅ Single active path (no duplication risk)
+✅ Clear integration points (2 methods to update)
+✅ Low surface area for branch-scoping (15 lines)
+✅ Dead code won't interfere (never called)
+✅ System 3 already branch-aware if ever activated
+
+Go ahead with branch-level Ingredient model migration.
+Only need to update the 2 methods in active InventoryService path.

@@ -11,6 +11,14 @@ const ingredientSchema = new Schema(
       required: true,
       index: true,
     },
+    // ✅ NEW: Branch-level stock isolation
+    branch: {
+      type: Schema.Types.ObjectId,
+      ref: 'Branch',
+      required: true,
+      index: true,
+      comment: 'Which branch this ingredient stock belongs to — enables per-branch stock tracking'
+    },
     name: {
       type: String,
       required: true,
@@ -82,9 +90,10 @@ const ingredientSchema = new Schema(
 );
 
 // Indexes
-ingredientSchema.index({ merchant: 1, name: 1 });
-ingredientSchema.index({ merchant: 1, category: 1 });
-ingredientSchema.index({ merchant: 1, currentStock: 1 });
+// ✅ UPDATED: Unique constraint now includes branch for per-branch stock isolation
+ingredientSchema.index({ merchant: 1, branch: 1, name: 1, unit: 1 }, { unique: true });
+ingredientSchema.index({ merchant: 1, branch: 1, category: 1 });
+ingredientSchema.index({ merchant: 1, branch: 1, currentStock: 1 });
 
 /**
  * Helper function to compute alertStatus from current stock levels

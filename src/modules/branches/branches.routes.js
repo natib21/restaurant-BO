@@ -27,6 +27,9 @@ router.use(restrictTo());
 
 router.route('/').get(branchController.getAllBranches).post(branchController.createBranch);
 
+// ✅ Get branches assigned to the authenticated user (from user.branch array)
+router.get('/me/assigned', branchController.getUserBranches);
+
 router.route('/:id').patch(branchController.updateBranch).delete(branchController.deleteBranch);
 
 router.patch('/:id/regenerate-qr', branchController.regenerateQRCodes);

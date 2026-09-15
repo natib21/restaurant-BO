@@ -427,6 +427,10 @@ class MenuService {
 
   static async updateMenu(req) {
     const merchantId = req.user.merchant._id;
+    const userId = req.user._id;
+    
+    const priceUpdated = req.body.price !== undefined && req.body.price !== null;
+    const currentVersion = req.body.__v;  // Client-sent version for optimistic locking
 
     const jsonFields = ['variants', 'ingredients', 'allergens', 'tags'];
     jsonFields.forEach(field => {
@@ -458,6 +462,93 @@ class MenuService {
       delete req.body.ingredients;
     }
 
+    // ✅ PRICE CHANGE TRACKING WITH ATOMIC OPTIMISTIC LOCKING
+    if (priceUpdated) {
+      const mongoose = require('mongoose');
+      const PriceHistory = require('../../../models/PriceHistory');
+
+      const session = await mongoose.startSession();
+      let updatedMenu;
+
+      try {
+        await session.withTransaction(async () => {
+          const Menu = require('../model/MenuItem.model');
+
+          // ✅ ATOMIC: Fetch current price BEFORE attempting update
+          // (to know oldPrice for PriceHistory)
+          const currentMenu = await Menu.findOne(
+            { _id: req.params.id, merchant: merchantId }
+          ).select('+priceVersion').session(session);
+
+          if (!currentMenu) {
+            throw new AppError('Menu item not found.', 404);
+          }
+
+          const oldPrice = currentMenu.price;
+          const newPrice = req.body.price;
+
+          // Determine which version to use in the filter
+          let filterVersion = 0;  // default for first edit
+          if (currentVersion !== undefined && currentVersion !== null) {
+            filterVersion = currentVersion;
+          } else {
+            filterVersion = currentMenu.priceVersion;
+          }
+
+          // Only create history if prices actually differ
+          if (oldPrice !== newPrice) {
+            await PriceHistory.create(
+              [
+                {
+                  menuItem: req.params.id,
+                  merchant: merchantId,
+                  oldPrice,
+                  newPrice,
+                  changedBy: userId,
+                  changedAt: new Date(),
+                },
+              ],
+              { session, ordered: true }
+            );
+          }
+
+          // ✅ ATOMIC UPDATE: Version check is part of the filter
+          // If priceVersion doesn't match, findOneAndUpdate returns null → 409
+          const updatePayload = { ...req.body };
+          delete updatePayload.priceVersion;  // Don't allow client to set version
+
+          updatedMenu = await MenuRepository.findOneAndUpdateMenu(
+            {
+              _id: req.params.id,
+              merchant: merchantId,
+              priceVersion: filterVersion,  // ✅ Version check IN the filter
+            },
+            {
+              $set: updatePayload,
+              $inc: { priceVersion: 1 },  // ✅ Atomic increment
+            },
+            { new: true, runValidators: true, session }
+          ).select('+priceVersion');  // Include priceVersion in response for next edit
+
+          // If result is null, version mismatch or item not found
+          if (!updatedMenu) {
+            throw new AppError(
+              'Menu item was modified by another user. Please refresh and try again.',
+              409
+            );
+          }
+        });
+      } catch (error) {
+        if (error.statusCode === 409) throw error;
+        throw new AppError('Failed to update menu item price. Please try again.', 500);
+      } finally {
+        await session.endSession();
+      }
+
+      return updatedMenu;
+    }
+    
+    // ✅ NON-PRICE UPDATE: Direct update without transaction (existing behavior)
     const updatedMenu = await MenuRepository.findOneAndUpdateMenu(
       { _id: req.params.id, merchant: merchantId },
       req.body,

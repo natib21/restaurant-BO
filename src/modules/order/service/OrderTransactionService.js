@@ -138,6 +138,7 @@ class OrderTransactionService {
         const { ingredients } = await InventoryService.deductForOrder(
           {
             merchantId,
+            branchId: createdOrder.branch,
             orderId: createdOrder._id,
             orderNumber,
             plan: deductionPlan,
