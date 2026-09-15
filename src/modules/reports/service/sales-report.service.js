@@ -33,6 +33,7 @@ class SalesReportService {
     const matchStage = {
       merchant: new mongoose.Types.ObjectId(merchantId),
       paymentStatus: 'paid', // Only include paid orders for revenue calculation
+      status: { $ne: 'canceled' }, // ✅ Exclude canceled orders
       placedAt: { 
         $gte: new Date(dateFrom), 
         $lte: new Date(dateTo) 

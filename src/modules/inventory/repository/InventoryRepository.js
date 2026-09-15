@@ -43,7 +43,9 @@ class InventoryRepository {
       menuItem: menuItemId,
       merchant: merchantId,
       isActive: true,
-    }).populate('items.ingredient');
+    });
+    // ✅ REMOVED: .populate('items.ingredient') — field is ingredientName (String), not ingredient (ObjectId)
+    // Ingredient resolution happens at deduction time via branch-scoped lookup
   }
 
   static getLowStockItems(merchantId) {

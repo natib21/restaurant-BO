@@ -8,22 +8,51 @@ const { setUser } = require('../../../utils/request-context');
 
 const verifyJwt = promisify(jwt.verify);
 
-function resolveBranchId(branch) {
-  if (!branch) return null;
+// ✅ MULTI-BRANCH FIX: Resolve "active" branch from token or user object
+// For multi-branch users, defaults to first branch (or can be overridden via header)
+// For single-branch users, returns that single branch
+function resolveBranchId(branch, decodedBranches) {
+  if (!branch && !decodedBranches) return null;
+  
+  // New format: multi-branch token with array of branch IDs
+  if (Array.isArray(decodedBranches) && decodedBranches.length > 0) {
+    return decodedBranches[0]; // Default to first branch for request scoping
+  }
+  
+  // User object with branch array
   if (Array.isArray(branch)) {
     const first = branch[0];
     return first?._id?.toString() ?? first?.toString() ?? null;
   }
+  
+  // Fallback to single branch ID
   return branch._id?.toString() ?? branch.toString();
 }
 
-function branchIdsInclude(userBranch, decodedBranch) {
-  if (!decodedBranch) return true;
+// ✅ MULTI-BRANCH FIX: Check if user's current branch array matches token's branch list
+// Supports both old single-branch tokens (payload.branch) and new multi-branch tokens (payload.branches array)
+function branchIdsInclude(userBranch, decodedBranch, decodedBranches) {
+  if (!decodedBranch && !decodedBranches) return true;
   if (!userBranch) return false;
-  if (Array.isArray(userBranch)) {
-    return userBranch.some(b => (b._id ?? b).toString() === decodedBranch);
+  
+  const userBranchIds = Array.isArray(userBranch)
+    ? userBranch.map(b => (b._id ?? b).toString())
+    : [(userBranch._id ?? userBranch).toString()];
+  
+  // Check against new multi-branch token format (array)
+  if (Array.isArray(decodedBranches) && decodedBranches.length > 0) {
+    // User's branch assignment changed if arrays don't match
+    // (exact same set of branches)
+    if (decodedBranches.length !== userBranchIds.length) return false;
+    return decodedBranches.every(b => userBranchIds.includes(b));
   }
-  return userBranch.toString() === decodedBranch;
+  
+  // Fallback to old single-branch token format for backward compatibility
+  if (decodedBranch) {
+    return userBranchIds.includes(decodedBranch);
+  }
+  
+  return true;
 }
 
 function syncStaffContext(req) {
@@ -31,7 +60,7 @@ function syncStaffContext(req) {
   req.ctx.actorType = 'staff';
   req.ctx.actorId = req.user._id;
   req.ctx.merchantId = req.user.merchant?._id ?? req.user.merchant;
-  const branchId = resolveBranchId(req.user.branch);
+  const branchId = resolveBranchId(req.user.branch, req.user.decoded?.branches);
   if (branchId) req.ctx.branchId = branchId;
   
   // ✅ PHASE 1: Sync user to AsyncLocalStorage context
@@ -41,7 +70,7 @@ function syncStaffContext(req) {
 function setSyncedAuthContext(req) {
   // ✅ Set request-level properties for guards and handlers
   req.merchantId = req.user.merchant?._id ?? req.user.merchant;
-  req.branchId = resolveBranchId(req.user.branch);
+  req.branchId = resolveBranchId(req.user.branch, req.user.decoded?.branches);
 }
 
 /**
@@ -87,7 +116,7 @@ const protect = catchAsync(async (req, res, next) => {
     }
   }
 
-  if (decoded.branch && !branchIdsInclude(currentUser.branch, decoded.branch)) {
+  if (decoded.branch && !branchIdsInclude(currentUser.branch, decoded.branch, decoded.branches)) {
     return next(
       new AppError('You have been reassigned to a different branch. Please log in again.', 401)
     );
@@ -105,6 +134,9 @@ const protect = catchAsync(async (req, res, next) => {
     },
     { path: 'branch', select: 'name branchCode shortCode isMain isActive' },
   ]);
+
+  // ✅ Store decoded token on user for access to multi-branch info
+  currentUser.decoded = decoded;
 
   req.user = currentUser;
   syncStaffContext(req);

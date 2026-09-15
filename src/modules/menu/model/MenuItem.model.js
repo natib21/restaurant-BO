@@ -278,7 +278,15 @@ const menuItemSchema = new mongoose.Schema(
     tags: [String],
 
     // Common fields (isActive, createdBy, updatedBy, deletedBy, deletedAt)
-    ...commonFields
+    ...commonFields,
+    
+    // ✅ Optimistic locking for price updates (concurrency control)
+    // Dedicated field to avoid collision with Mongoose's internal __v
+    priceVersion: {
+      type: Number,
+      default: 0,
+      select: false,  // Don't expose version to API responses
+    },
   },
   {
     timestamps: true,

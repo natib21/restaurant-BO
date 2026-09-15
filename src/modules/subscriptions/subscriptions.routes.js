@@ -29,12 +29,15 @@ const {
 /**
  * POST /api/v1/subscriptions/webhook/:provider
  * Payment provider webhook handler - raw body for signature verification
+ * 
+ * ❌ DISABLED: Payment webhooks disabled (manual payment only for now)
+ * Future payment integrations (Chapa, Stripe, etc.) can re-enable this route
  */
-router.post(
-  '/webhook/:provider',
-  express.raw({ type: 'application/json' }), // Raw body for signature verification
-  subscriptionController.handlePaymentWebhook
-);
+// router.post(
+//   '/webhook/:provider',
+//   express.raw({ type: 'application/json' }), // Raw body for signature verification
+//   subscriptionController.handlePaymentWebhook
+// );
 
 router.get('/catalog', subscriptionController.getFeatureCatalog);
 // ============================================================

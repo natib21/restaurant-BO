@@ -12,8 +12,8 @@ exports.getAllRecipes = catchAsync(async (req, res) => {
   const merchantId = getMerchantId(req);
   const recipes = await Recipe.find({ merchant: merchantId, isActive: true })
     .populate('menuItem', 'name')
-    .populate('items.ingredient', 'name unit')
     .sort({ name: 1 });
+  // ✅ REMOVED: .populate('items.ingredient') — now resolved at deduction time via ingredientName lookup
 
   res.status(200).json({ status: 'success', results: recipes.length, data: { recipes } });
 });
@@ -21,8 +21,8 @@ exports.getAllRecipes = catchAsync(async (req, res) => {
 exports.getRecipe = catchAsync(async (req, res, next) => {
   const merchantId = getMerchantId(req);
   const recipe = await Recipe.findOne({ _id: req.params.id, merchant: merchantId })
-    .populate('menuItem', 'name')
-    .populate('items.ingredient', 'name unit currentStock');
+    .populate('menuItem', 'name');
+  // ✅ REMOVED: .populate('items.ingredient') — now resolved at deduction time via ingredientName lookup
 
   if (!recipe) return next(new AppError('Recipe not found', 404));
   res.status(200).json({ status: 'success', data: { recipe } });

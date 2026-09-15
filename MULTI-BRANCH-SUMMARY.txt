@@ -1,0 +1,176 @@
+================================================================================
+MULTI-BRANCH INVENTORY ARCHITECTURE — EXECUTIVE SUMMARY
+================================================================================
+
+QUESTION: Does Ingredient model have a branch field?
+ANSWER: NO — Ingredient is merchant-wide only.
+
+================================================================================
+CURRENT DATA MODEL STRUCTURE
+================================================================================
+
+INGREDIENT (Merchant-Scoped)
+  ✓ Fields: merchant (req), currentStock (global), reservedStock (global), ...
+  ✗ No branch field
+  → Stock is centralized. All branches share the same ingredient pool.
+
+MENUITEM (Merchant-Scoped)
+  ✓ Fields: merchant (req), price, recipe (ref), variants, ...
+  ✗ No branch field
+  → MenuItems are shared. Both branches can sell the same item.
+
+RECIPE (Merchant-Scoped)
+  ✓ Fields: merchant (req), menuItem (req), items (ingredients), ...
+  ✗ No branch field
+  → Recipes are shared. All branches use the same ingredient amounts.
+
+ORDER (Branch-Aware)
+  ✓ Fields: merchant (req), branch (req), items, ...
+  ✓ Has branch field
+  → Orders know their branch, but don't control stock allocation.
+
+BRANCHMENU (Branch-Specific Overrides)
+  ✓ Fields: branch (req), menuItem (ref), overridePrice, isAvailable, ...
+  ✗ Does NOT control stock
+  → Allows per-branch customization (price, visibility) but not inventory.
+
+STOCKHISTORY (Audit Trail)
+  ✓ Fields: merchant (req), branch (req), action, quantity, ...
+  ✓ Has branch field for auditing
+  → Records which branch caused deductions (post-fact tracking).
+
+================================================================================
+HOW MULTI-BRANCH SYSTEMS ARE AFFECTED
+================================================================================
+
+SCENARIO: Merchant with Branch A (Downtown) and Branch B (Mall)
+  - Both branches sell "Burger" (same MenuItem)
+  - Burger recipe requires 0.5kg Patty per unit
+  - Global Patty stock: 100kg
+
+TIMELINE:
+  Day 1:
+    Branch A orders 100 Burgers
+    → Deducts: 0.5kg × 100 = 50kg
+    → Global Patty stock: 100kg → 50kg
+    ✓ Order succeeds
+  
+  Day 2:
+    Branch B orders 150 Burgers
+    → Needs: 0.5kg × 150 = 75kg
+    → Check: Global stock >= 75kg? (50kg >= 75kg? NO)
+    ✗ Order FAILS: "Insufficient stock"
+    
+RESULT: Branch B cannot order, even though branches should be independent.
+        All branches compete for the same global stock pool.
+
+================================================================================
+TECHNICAL DETAILS: STOCK DEDUCTION FLOW
+================================================================================
+
+1. Order placed at Branch B
+2. Order has: branch: Branch._id, items: [{menuItem: Burger, qty: 150}]
+3. System fetches Recipe for Burger (merchant-scoped)
+4. System finds Patty ingredient in recipe (requires 0.5kg per burger)
+5. Deduction query:
+   Ingredient.findOneAndUpdate(
+     { _id: Patty._id, merchant: merchantId },  ← MERCHANT filter only
+     { $inc: { currentStock: -75 } }
+   )
+6. No BRANCH filter in the query ← This is the problem
+7. Global Patty stock is decremented (affects all branches)
+8. StockHistory record created with branch: Branch_B (for audit only)
+
+BRANCH FIELD IS USED FOR:
+  • StockHistory audit trail (which branch caused deduction)
+  • Order context (which branch placed order)
+  
+BRANCH FIELD IS NOT USED FOR:
+  • Scoping stock deductions
+  • Isolating inventory per branch
+  • Preventing cross-branch contention
+
+================================================================================
+IS THIS A BUG?
+================================================================================
+
+DEPENDS ON BUSINESS MODEL:
+
+✓ CORRECT FOR:
+  - Single-location merchants (no branch conflict)
+  - Merged/centralized inventory (intentional sharing)
+  - Corporate operations wanting global visibility
+
+✗ INCORRECT FOR:
+  - Franchise models (each location is independent)
+  - Branch autonomy (each location owns its stock)
+  - Multi-location restaurants with separate inventories
+
+CURRENT SYSTEM ASSUMES: All branches share inventory intentionally.
+
+================================================================================
+WHAT NEEDS TO CHANGE?
+================================================================================
+
+IF merchants want per-branch inventory isolation:
+
+OPTION 1 (Simplest): Add branch field to Ingredient schema
+  - Each branch has its own Ingredient record
+  - Stock deduction filters by: merchant + branch
+  - Breaking change: Data migration required
+  - Impact: Simple model, clear isolation
+
+OPTION 2 (Backward Compatible): Create BranchIngredient model
+  - Keep Ingredient merchant-scoped
+  - Add optional BranchIngredient per branch
+  - Query logic: Check both tables (fallback to Ingredient if no Branch variant)
+  - Impact: More complex, fully backward compatible
+
+OPTION 3 (Most Flexible): Stock allocation pool
+  - Keep Ingredient global
+  - Create StockAllocation per branch
+  - Query: Check (allocated - used) >= needed
+  - Impact: Complex business logic, dynamic reallocation
+
+================================================================================
+CURRENT STATUS
+================================================================================
+
+🔴 CRITICAL ISSUE: No branch-level stock isolation
+   → Branches can't safely operate independently
+   → Orders at one branch affect stock availability at other branches
+   → Audit trail exists but can't prevent cross-branch contention
+
+⚠️  MEDIUM ISSUE: Branch field exists but unused
+   → branch field on Order and StockHistory is decorative
+   → Doesn't control stock behavior
+   → Could mislead developers into thinking branches are isolated
+
+✓ WORKING AS DESIGNED: Shared merchant-wide inventory
+   → MenuItem, Recipe are merchant-scoped (shared across branches)
+   → Recipes reference merchant ingredients (shared stock pool)
+   → Backward compatible with current data
+
+================================================================================
+RECOMMENDATION
+================================================================================
+
+BEFORE FIXING:
+1. Confirm whether merchants need per-branch inventory or shared inventory
+2. Decide if all branches should use the same recipes
+3. Define whether PurchaseOrders should allocate to specific branches
+
+IF PER-BRANCH INVENTORY REQUIRED:
+  → Choose implementation option (1, 2, or 3 above)
+  → Plan data migration strategy
+  → Update stock deduction queries to filter by branch
+
+IF SHARED INVENTORY IS INTENTIONAL:
+  → Document this architecture decision
+  → Add business logic to allocate stock fairly (quota system)
+  → Use StockHistory branch field for capacity planning
+
+CURRENT SYSTEM: WORKS FOR SHARED INVENTORY ONLY
+================================================================================
+
+See MULTI-BRANCH-INVENTORY-ARCHITECTURE-ANALYSIS.md for detailed technical analysis.
