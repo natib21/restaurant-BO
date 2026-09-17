@@ -111,15 +111,23 @@ export function getMongoUri(): string {
   const env = loadEnv();
   const isProd = env.NODE_ENV === 'production';
   console.log('Loading MongoDB URI for env', env.NODE_ENV);
+  
+  // Priority 1: DATABASE_SECOND (production failover with password)
   if (isProd && env.DATABASE_SECOND && env.DATABASE_PASSWORD_SECOND) {
     console.log(process.env.MONGO_URI);
     return env.DATABASE_SECOND.replace('<PASSWORD>', env.DATABASE_PASSWORD_SECOND);
   }
-  if (isProd && env.DATABASE && env.DATABASE_PASSWORD) {
-    console.log(process.env.MONGO_URI);
-    return env.DATABASE.replace('<PASSWORD>', env.DATABASE_PASSWORD);
+  
+  // Priority 2: DATABASE (production primary)
+  // If DATABASE_PASSWORD is set, replace placeholder; otherwise use DATABASE as-is
+  if (isProd && env.DATABASE) {
+    if (env.DATABASE_PASSWORD) {
+      return env.DATABASE.replace('<PASSWORD>', env.DATABASE_PASSWORD);
+    }
+    return env.DATABASE;
   }
 
+  // Priority 3: Development/test fallback
   return env.DATABASE_LOCAL || env.LOCAL_DATABASE || 'mongodb://127.0.0.1:27017/restaurant-bo';
 }
 
