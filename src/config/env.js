@@ -18,7 +18,12 @@ exports.getCorsOrigins = getCorsOrigins;
 var zod_1 = require("zod");
 var dotenv_1 = __importDefault(require("dotenv"));
 var path_1 = __importDefault(require("path"));
-dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), 'config.env') });
+// Load environment-specific .env file (e.g., .env.development, .env.production)
+// Falls back to .env if no environment-specific file exists
+var envFile = process.env.NODE_ENV
+    ? ".env.".concat(process.env.NODE_ENV)
+    : '.env';
+dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), envFile) });
 var envSchema = zod_1.z.object({
     NODE_ENV: zod_1.z.enum(['development', 'production', 'test']).default('development'),
     PORT: zod_1.z.coerce.number().default(3000),
@@ -51,6 +56,39 @@ var envSchema = zod_1.z.object({
     CORS_ORIGINS: zod_1.z.string().optional(),
     TRUST_PROXY: zod_1.z.coerce.boolean().default(false),
     REDIS_URL: zod_1.z.string().optional(),
+    // Feature flags and capability enforcement
+    CAPABILITY_ENFORCEMENT: zod_1.z.string().optional(),
+    BRANCH_ACCESS_ENFORCEMENT: zod_1.z.coerce.boolean().default(false),
+    // System integrity audit
+    INTEGRITY_CRON_ENABLED: zod_1.z.string().optional(),
+    INTEGRITY_CRON_INTERVAL_MS: zod_1.z.coerce.number().optional(),
+    INTEGRITY_SAMPLE_LIMIT: zod_1.z.coerce.number().optional(),
+    INTEGRITY_MAX_ISSUES_PER_AUDITOR: zod_1.z.coerce.number().optional(),
+    // Subscription trial scheduler
+    SUBSCRIPTION_TRIAL_CRON_ENABLED: zod_1.z.string().optional(),
+    SUBSCRIPTION_TRIAL_CRON_INTERVAL_MS: zod_1.z.coerce.number().optional(),
+    // Transactional outbox worker
+    OUTBOX_WORKER_ENABLED: zod_1.z.string().optional(),
+    OUTBOX_POLL_INTERVAL_MS: zod_1.z.coerce.number().optional(),
+    OUTBOX_BATCH_SIZE: zod_1.z.coerce.number().optional(),
+    OUTBOX_MAX_RETRIES: zod_1.z.coerce.number().optional(),
+    OUTBOX_LOCK_TIMEOUT_MS: zod_1.z.coerce.number().optional(),
+    // Order idempotency
+    ORDER_IDEMPOTENCY_PROCESSING_TTL_MINUTES: zod_1.z.coerce.number().optional(),
+    ORDER_IDEMPOTENCY_RETENTION_HOURS: zod_1.z.coerce.number().optional(),
+    ORDER_IDEMPOTENCY_WAIT_TIMEOUT_SEC: zod_1.z.coerce.number().optional(),
+    // Payment verification flags
+    TELEBIRR_AUTO_LOOKUP_ENABLED: zod_1.z.coerce.boolean().default(false),
+    CHAPA_API_KEY: zod_1.z.string().optional(),
+    CHAPA_API_BASE_URL: zod_1.z.string().url().optional(),
+    CHAPA_WEBHOOK_SECRET: zod_1.z.string().optional(),
+    CHAPA_WEBHOOK_URL: zod_1.z.string().url().optional(),
+    // Sentry error tracking
+    SENTRY_DSN: zod_1.z.string().optional(),
+    SENTRY_ENVIRONMENT: zod_1.z.string().optional(),
+    // Seeder
+    SUPER_ADMIN_EMAIL: zod_1.z.string().optional(),
+    SUPER_ADMIN_PASSWORD: zod_1.z.string().optional(),
 });
 var cached = null;
 function loadEnv() {

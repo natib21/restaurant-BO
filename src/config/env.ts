@@ -2,7 +2,13 @@ import { z } from 'zod';
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({ path: path.resolve(process.cwd(), 'config.env') });
+// Load environment-specific .env file (e.g., .env.development, .env.production)
+// Falls back to .env if no environment-specific file exists
+const envFile = process.env.NODE_ENV 
+  ? `.env.${process.env.NODE_ENV}` 
+  : '.env';
+
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -42,6 +48,47 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   TRUST_PROXY: z.coerce.boolean().default(false),
   REDIS_URL: z.string().optional(),
+
+  // Feature flags and capability enforcement
+  CAPABILITY_ENFORCEMENT: z.string().optional(),
+  BRANCH_ACCESS_ENFORCEMENT: z.coerce.boolean().default(false),
+  
+  // System integrity audit
+  INTEGRITY_CRON_ENABLED: z.string().optional(),
+  INTEGRITY_CRON_INTERVAL_MS: z.coerce.number().optional(),
+  INTEGRITY_SAMPLE_LIMIT: z.coerce.number().optional(),
+  INTEGRITY_MAX_ISSUES_PER_AUDITOR: z.coerce.number().optional(),
+  
+  // Subscription trial scheduler
+  SUBSCRIPTION_TRIAL_CRON_ENABLED: z.string().optional(),
+  SUBSCRIPTION_TRIAL_CRON_INTERVAL_MS: z.coerce.number().optional(),
+  
+  // Transactional outbox worker
+  OUTBOX_WORKER_ENABLED: z.string().optional(),
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().optional(),
+  OUTBOX_BATCH_SIZE: z.coerce.number().optional(),
+  OUTBOX_MAX_RETRIES: z.coerce.number().optional(),
+  OUTBOX_LOCK_TIMEOUT_MS: z.coerce.number().optional(),
+  
+  // Order idempotency
+  ORDER_IDEMPOTENCY_PROCESSING_TTL_MINUTES: z.coerce.number().optional(),
+  ORDER_IDEMPOTENCY_RETENTION_HOURS: z.coerce.number().optional(),
+  ORDER_IDEMPOTENCY_WAIT_TIMEOUT_SEC: z.coerce.number().optional(),
+  
+  // Payment verification flags
+  TELEBIRR_AUTO_LOOKUP_ENABLED: z.coerce.boolean().default(false),
+  CHAPA_API_KEY: z.string().optional(),
+  CHAPA_API_BASE_URL: z.string().url().optional(),
+  CHAPA_WEBHOOK_SECRET: z.string().optional(),
+  CHAPA_WEBHOOK_URL: z.string().url().optional(),
+  
+  // Sentry error tracking
+  SENTRY_DSN: z.string().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+  
+  // Seeder
+  SUPER_ADMIN_EMAIL: z.string().optional(),
+  SUPER_ADMIN_PASSWORD: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
