@@ -1,13 +1,4 @@
 "use strict";
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -15,16 +6,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadEnv = loadEnv;
 exports.getMongoUri = getMongoUri;
 exports.getCorsOrigins = getCorsOrigins;
-var zod_1 = require("zod");
-var dotenv_1 = __importDefault(require("dotenv"));
-var path_1 = __importDefault(require("path"));
+const zod_1 = require("zod");
+const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 // Load environment-specific .env file (e.g., .env.development, .env.production)
 // Falls back to .env if no environment-specific file exists
-var envFile = process.env.NODE_ENV
-    ? ".env.".concat(process.env.NODE_ENV)
+const envFile = process.env.NODE_ENV
+    ? `.env.${process.env.NODE_ENV}`
     : '.env';
 dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), envFile) });
-var envSchema = zod_1.z.object({
+const envSchema = zod_1.z.object({
     NODE_ENV: zod_1.z.enum(['development', 'production', 'test']).default('development'),
     PORT: zod_1.z.coerce.number().default(3000),
     LOG_LEVEL: zod_1.z.enum(['error', 'warn', 'info', 'http', 'debug']).default('info'),
@@ -90,13 +81,13 @@ var envSchema = zod_1.z.object({
     SUPER_ADMIN_EMAIL: zod_1.z.string().optional(),
     SUPER_ADMIN_PASSWORD: zod_1.z.string().optional(),
 });
-var cached = null;
+let cached = null;
 function loadEnv() {
     if (cached)
         return cached;
-    var parsed = envSchema.safeParse(process.env);
+    const parsed = envSchema.safeParse(process.env);
     if (!parsed.success) {
-        var formatted = parsed.error.flatten().fieldErrors;
+        const formatted = parsed.error.flatten().fieldErrors;
         console.error('Invalid environment configuration:', formatted);
         throw new Error('Environment validation failed');
     }
@@ -104,22 +95,28 @@ function loadEnv() {
     return cached;
 }
 function getMongoUri() {
-    var env = loadEnv();
-    var isProd = env.NODE_ENV === 'production';
+    const env = loadEnv();
+    const isProd = env.NODE_ENV === 'production';
     console.log('Loading MongoDB URI for env', env.NODE_ENV);
+    // Priority 1: DATABASE_SECOND (production failover with password)
     if (isProd && env.DATABASE_SECOND && env.DATABASE_PASSWORD_SECOND) {
         console.log(process.env.MONGO_URI);
         return env.DATABASE_SECOND.replace('<PASSWORD>', env.DATABASE_PASSWORD_SECOND);
     }
-    if (isProd && env.DATABASE && env.DATABASE_PASSWORD) {
-        console.log(process.env.MONGO_URI);
-        return env.DATABASE.replace('<PASSWORD>', env.DATABASE_PASSWORD);
+    // Priority 2: DATABASE (production primary)
+    // If DATABASE_PASSWORD is set, replace placeholder; otherwise use DATABASE as-is
+    if (isProd && env.DATABASE) {
+        if (env.DATABASE_PASSWORD) {
+            return env.DATABASE.replace('<PASSWORD>', env.DATABASE_PASSWORD);
+        }
+        return env.DATABASE;
     }
+    // Priority 3: Development/test fallback
     return env.DATABASE_LOCAL || env.LOCAL_DATABASE || 'mongodb://127.0.0.1:27017/restaurant-bo';
 }
 function getCorsOrigins() {
-    var env = loadEnv();
-    var defaults = [
+    const env = loadEnv();
+    const defaults = [
         'http://localhost:5173',
         'http://127.0.0.1:5173',
         'http://localhost:5175',
@@ -131,7 +128,10 @@ function getCorsOrigins() {
     ];
     if (!env.CORS_ORIGINS)
         return defaults;
-    return __spreadArray(__spreadArray([], defaults, true), env.CORS_ORIGINS.split(',')
-        .map(function (s) { return s.trim(); })
-        .filter(Boolean), true);
+    return [
+        ...defaults,
+        ...env.CORS_ORIGINS.split(',')
+            .map(s => s.trim())
+            .filter(Boolean),
+    ];
 }
