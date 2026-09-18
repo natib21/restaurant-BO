@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 const Merchant = require('../../../../models/merchantModel');
 const Customer = require('../../../../models/customerModule');
-const TelegramMessage = require('../../../../models/TelegramMessage');
+const TelegramMessage = require('../../../../models/telegramMessage');
 const {
   resolveStart,
   sendMessage,
