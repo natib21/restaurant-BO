@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const TelegramLinkToken = require('../../../../models/telegramLinkTokenModel');
 const Customer = require('../../../../models/customerModule');
 const Merchant = require('../../../../models/merchantModel');
-const TelegramMessage = require('../../../../models/TelegramMessage');
+const TelegramMessage = require('../../../../models/telegramMessage');
 
 const TELEGRAM_API = 'https://api.telegram.org/bot';
 const MINI_APP_BASE_URL = process.env.MINI_APP_BASE_URL; // e.g. https://app.menuroom.et
