@@ -92,7 +92,7 @@ function createApp() {
 
   const apiLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: env.NODE_ENV === 'production' ? 500 : 2000,
+    max: env.NODE_ENV === 'production' ? 5000 : 2000,
     message: 'Too many requests from this IP, please try again later',
     standardHeaders: true,
     legacyHeaders: false,
