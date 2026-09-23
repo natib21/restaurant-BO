@@ -3,6 +3,7 @@ const { parseTelebirrHTML } = require('./parsers/telebirr-parser');
 const AppError = require('../../../../../utils/appError');
 const logger = require('../../../../../utils/logger');
 const { loadEnv } = require('../../../../config/env');
+const { generateTelebirrPDF } = require('../../utils/telebirr-pdf-generator');
 
 class TelebirrProvider extends BaseProvider {
   constructor(options = {}) {
@@ -108,6 +109,59 @@ class TelebirrProvider extends BaseProvider {
         lookupError: isTLSError
           ? 'Provider certificate validation failed. Manual verification required for security.'
           : error.message,
+      };
+    }
+  }
+  
+  /**
+   * Enhanced verification with PDF generation (for QR-based or manual workflow)
+   * 
+   * @param {string} receiptNumber - Validated Telebirr receipt ID
+   * @param {object} options
+   * @param {number} options.orderAmount - Expected order amount
+   * @param {boolean} options.generatePDF - Whether to generate PDF receipt
+   * @returns {Promise<object>} Verification result with optional PDF buffer
+   */
+  async verifyWithPDF(receiptNumber, { orderAmount, generatePDF: shouldGeneratePDF = false }) {
+    // Get standard verification result first (HTML parsing)
+    const verificationResult = await this.verify(receiptNumber, { orderAmount });
+    
+    // If verification failed or PDF not requested, return as-is
+    if (!shouldGeneratePDF || verificationResult.parseQuality === 'failed') {
+      return verificationResult;
+    }
+    
+    // Generate PDF receipt using Puppeteer
+    try {
+      logger.info('telebirr.pdf_generation_requested', { receiptNumber });
+      
+      const pdfBuffer = await generateTelebirrPDF(receiptNumber, {
+        timeout: 30000,
+      });
+      
+      logger.info('telebirr.pdf_generated_success', {
+        receiptNumber,
+        size: pdfBuffer.length,
+      });
+      
+      return {
+        ...verificationResult,
+        pdfBuffer,
+        pdfDownloaded: true,
+      };
+      
+    } catch (pdfError) {
+      // PDF generation failed - don't fail the entire verification
+      // HTML parsing succeeded, PDF is nice-to-have
+      logger.warn('telebirr.pdf_generation_failed', {
+        receiptNumber,
+        error: pdfError.message,
+      });
+      
+      return {
+        ...verificationResult,
+        pdfDownloaded: false,
+        pdfError: pdfError.message,
       };
     }
   }
