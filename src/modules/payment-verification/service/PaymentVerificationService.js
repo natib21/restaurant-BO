@@ -172,7 +172,12 @@ class PaymentVerificationService {
         pdfDownloaded: result.pdfDownloaded || false,
       });
       
-      return verification[0];
+      // ✅ Populate receiptFileRef so frontend gets file URL
+      const populatedVerification = await PaymentVerificationRepository.findById(verification[0]._id)
+        .populate('receiptFileRef', 'url filename mimeType sizeBytes')
+        .lean();
+      
+      return populatedVerification || verification[0];
       
     } catch (error) {
       await session.abortTransaction();
@@ -680,7 +685,12 @@ class PaymentVerificationService {
         pdfDownloaded: result.pdfDownloaded,
       });
       
-      return verification;
+      // ✅ Populate receiptFileRef so frontend gets file URL
+      const populatedVerification = await PaymentVerificationRepository.findById(verification._id)
+        .populate('receiptFileRef', 'url filename mimeType sizeBytes')
+        .lean();
+      
+      return populatedVerification || verification;
       
     } catch (error) {
       await session.abortTransaction();
