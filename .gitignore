@@ -12,10 +12,6 @@ pnpm-lock.yaml
 # ───────────────────────────────
 # Environment Variables
 # ───────────────────────────────
-.env
-.env.local
-.env.development
-.env.production
 config.env
 config.env*
 !.env.example
@@ -49,7 +45,6 @@ Thumbs.db
 *~
 .project
 .settings/
-.vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
@@ -99,3 +94,4 @@ public/uploads/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
